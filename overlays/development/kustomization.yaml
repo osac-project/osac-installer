@@ -42,9 +42,9 @@ secretGenerator:
   options:
     disableNameSuffixHash: true
   literals:
-    - AAP_EE_IMAGE=ghcr.io/innabox/cloudkit-aap:6439ee8191b9508c8463f275e4732f28ef0eb847
-    - AAP_PROJECT_GIT_URL="https://github.com/innabox/cloudkit-aap"
-    - AAP_PROJECT_GIT_BRANCH="6439ee8"
+    - AAP_EE_IMAGE=ghcr.io/osac-project/osac-aap:05d9dffc1392bb96a20618f2c900f65a2ac48cca
+    - AAP_PROJECT_GIT_URL="https://github.com/osac-project/osac-aap"
+    - AAP_PROJECT_GIT_BRANCH="05d9dff"
 
 - name: cluster-fulfillment-ig
   options:
@@ -58,12 +58,18 @@ secretGenerator:
     - CLOUDKIT_TEMPLATE_COLLECTIONS=osac.templates,osac.massopencloud
 
 images:
-  - name: ghcr.io/innabox/cloudkit-operator
-    digest: sha256:5daf32e67621704713aa156e7d7b4c646d01c557cf72ac4121dbb2a746a69164
-  - name: ghcr.io/innabox/fulfillment-service
-    newTag: v0.0.30
-  - name: ghcr.io/innabox/fulfillment-controller
-    newTag: v0.0.30
+  - name: ghcr.io/innabox/cloudkit-operator:latest
+    newName: ghcr.io/osac-project/osac-operator
+    digest: sha256:28e7b7999b12243f38a5fd363fce7d8718056b199e8d7e529704a77d5d231e5f
+  - name: ghcr.io/innabox/cloudkit-aap:latest
+    newName: ghcr.io/osac-project/osac-aap
+    digest: sha256:9e8c3549484a8d93a005bf8d544fb7e16e99a67483c1c1cc9125c0e478a6e9d1
+  - name: ghcr.io/innabox/fulfillment-service:main
+    newName: ghcr.io/osac-project/fulfillment-service
+    newTag: v0.0.35
+  - name: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+    newName: quay.io/openshift/origin-cli
+    newTag: "4.20.0"
 
 patches:
   - patch: |
@@ -99,13 +105,13 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: CLOUDKIT_VM_CREATE_WEBHOOK
-          value: http://innabox-eda-service:5000/create-vm
+          name: CLOUDKIT_COMPUTE_INSTANCE_CREATE_WEBHOOK
+          value: http://innabox-eda-service:5000/create-compute-instance
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: CLOUDKIT_VM_DELETE_WEBHOOK
-          value: http://innabox-eda-service:5000/delete-vm
+          name: CLOUDKIT_COMPUTE_INSTANCE_DELETE_WEBHOOK
+          value: http://innabox-eda-service:5000/delete-compute-instance
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
@@ -256,33 +262,3 @@ patches:
                 allow {
                   is_jwt_admin
                 }
-  - patch: |
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: fulfillment-service
-      spec:
-        template:
-          spec:
-            containers:
-              - name: server
-                imagePullPolicy: Always
-                command:
-                - /usr/local/bin/fulfillment-service
-                - start
-                - server
-                - --log-level=debug
-                - --log-headers=true
-                - --log-bodies=true
-                - "--db-url=postgres://client@fulfillment-database:5432/service?\
-                  sslmode=verify-full&\
-                  sslcert=/secrets/cert/tls.crt&\
-                  sslkey=/secrets/cert/tls.key&\
-                  sslrootcert=/secrets/cert/ca.crt"
-                - --grpc-listener-network=unix
-                - --grpc-listener-address=/run/sockets/server.socket
-                # - --grpc-authn-type=guest
-                # - --tenancy-logic=guest
-                - --grpc-authn-trusted-token-issuers=https://keycloak.keycloak.svc.cluster.local/realms/innabox
-                - --grpc-authn-type=external
-                - --tenancy-logic=default

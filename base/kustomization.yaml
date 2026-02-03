@@ -6,7 +6,7 @@ metadata:
   name: cloudkit-base
 
 resources:
-  - cloudkit-aap
+  - osac-aap/config/base
   - osac-operator/config/default
   - osac-fulfillment-service/manifests/overlays/openshift
   - hub-access

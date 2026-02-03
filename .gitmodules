@@ -1,6 +1,9 @@
 [submodule "base/osac-operator"]
 	path = base/osac-operator
-	url = https://github.com/innabox/cloudkit-operator.git
+	url = https://github.com/osac-project/osac-operator.git
 [submodule "base/osac-fulfillment-service"]
 	path = base/osac-fulfillment-service
-	url = https://github.com/innabox/fulfillment-service
+	url = https://github.com/osac-project/fulfillment-service.git
+[submodule "base/osac-aap"]
+	path = base/osac-aap
+	url = https://github.com/osac-project/osac-aap.git

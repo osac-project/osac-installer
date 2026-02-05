@@ -9,6 +9,10 @@ server_url=$(
 server_name=${server_url#*.}
 server_name=${server_name%%.*}
 
+ca_data=$(
+  oc config view --minify --raw --output jsonpath="{.clusters[*].cluster.certificate-authority-data}"
+)
+
 namespace=$(
   oc config view --minify --output jsonpath="{.contexts[*].context.namespace}"
 )
@@ -21,6 +25,7 @@ cat <<EOF >kubeconfig.hub-access
 apiVersion: v1
 clusters:
 - cluster:
+    certificate-authority-data: $ca_data
     server: "$server_url"
   name: "$server_name"
 contexts:

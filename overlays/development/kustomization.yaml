@@ -105,12 +105,12 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: CLOUDKIT_COMPUTE_INSTANCE_CREATE_WEBHOOK
+          name: CLOUDKIT_COMPUTE_INSTANCE_PROVISION_WEBHOOK
           value: http://innabox-eda-service:5000/create-compute-instance
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: CLOUDKIT_COMPUTE_INSTANCE_DELETE_WEBHOOK
+          name: CLOUDKIT_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK
           value: http://innabox-eda-service:5000/delete-compute-instance
       - op: add
         path: /spec/template/spec/containers/0/env/-

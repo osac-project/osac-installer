@@ -1,0 +1,255 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: osac-e2e-ci
+
+# This applies a name prefix to cluster-scoped resources (ClusterRoles,
+# ClusterRoleBindings) but does not modify namespaced resources.
+transformers:
+- prefixTransformer.yaml
+
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/managed-by: kustomize
+    environment: ci
+
+resources:
+- ../../base
+- ./ca-trust-bundle.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+secretGenerator:
+# This expects to find quay credentials in
+# files/quay-pull-secret.json.
+- name: quay-pull-secret
+  files:
+  - .dockerconfigjson=files/quay-pull-secret.json
+  type: kubernetes.io/dockerconfigjson
+
+# This expects to find an AAP license manifest
+# in files/license.zip.
+- name: config-as-code-manifest-ig
+  files:
+    - license.zip=files/license.zip
+  options:
+    labels:
+      osac.openshift.io/project: osac-aap
+
+- name: config-as-code-ig
+  options:
+    disableNameSuffixHash: true
+  literals:
+    - AAP_EE_IMAGE=ghcr.io/osac-project/osac-aap:latest
+    - AAP_PROJECT_GIT_URL="https://github.com/osac-project/osac-aap"
+    - AAP_PROJECT_GIT_BRANCH="main"
+
+- name: cluster-fulfillment-ig
+  options:
+    labels:
+      osac.openshift.io/project: osac-aap
+  literals:
+    - OSAC_VM_OPERATIONS_STORAGE_CLASS="lvms-vg1"
+
+- name: publish-templates-ig
+  literals:
+    - OSAC_TEMPLATE_COLLECTIONS=osac.templates,osac.massopencloud
+
+images:
+  - name: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+    newName: quay.io/openshift/origin-cli
+    newTag: "4.20.0"
+
+patches:
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fulfillment-controller
+      spec:
+        template:
+          spec:
+            containers:
+              - name: controller
+                imagePullPolicy: Always
+  - target:
+      kind: Deployment
+      name: osac-operator-controller-manager
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_CLUSTER_CREATE_WEBHOOK
+          value: http://osac-eda-service:5000/create-hosted-cluster
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_CLUSTER_DELETE_WEBHOOK
+          value: http://osac-eda-service:5000/delete-hosted-cluster
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_MINIMUM_REQUEST_INTERVAL
+          value: "2m"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_COMPUTE_INSTANCE_PROVISION_WEBHOOK
+          value: http://osac-eda-service:5000/create-compute-instance
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK
+          value: http://osac-eda-service:5000/delete-compute-instance
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_FULFILLMENT_SERVER_ADDRESS
+          value: fulfillment-api:8000
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_FULFILLMENT_TOKEN_FILE
+          value: /var/run/secrets/kubernetes.io/serviceaccount/token
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - patch: |
+      apiVersion: operator.authorino.kuadrant.io/v1beta1
+      kind: Authorino
+      metadata:
+        name: authorino
+      spec:
+        volumes:
+          items:
+          - name: ca-bundle
+            configMaps:
+            - ca-bundle
+            items:
+            - key: bundle.pem
+              path: ca-bundle.crt
+            mountPath: /etc/pki/tls/certs
+  # Override issuerUrl (base has :8001, we use port 443 via service mapping)
+  # and admin_subjects for osac-e2e-ci namespace
+  - patch: |
+      apiVersion: authorino.kuadrant.io/v1beta3
+      kind: AuthConfig
+      metadata:
+        name: fulfillment-service
+      spec:
+        authentication:
+          keycloak-jwt:
+            jwt:
+              issuerUrl: https://keycloak.keycloak.svc.cluster.local/realms/osac
+        authorization:
+          fulfillment-api:
+            opa:
+              rego: |
+                import future.keywords.in
+
+                # Define admin subjects for osac-e2e-ci namespace:
+                admin_subjects := {
+                  "system:serviceaccount:osac-e2e-ci:admin",
+                  "system:serviceaccount:osac-e2e-ci:controller",
+                  "system:serviceaccount:osac-e2e-ci:template-publisher",
+                  "system:serviceaccount:osac-e2e-ci:osac-operator-controller-manager",
+                }
+
+                # Get the gRPC method:
+                grpc_method := input.context.request.http.path
+
+                # Get the subject name:
+                subject_name = input.auth.identity.user.username {
+                  input.auth.identity.authnMethod == "serviceaccount"
+                }
+                subject_name = input.auth.identity.username {
+                  input.auth.identity.authnMethod == "jwt"
+                }
+
+                # Get the groups (for JWT users):
+                subject_groups = input.auth.identity.user.groups {
+                  input.auth.identity.authnMethod == "serviceaccount"
+                }
+                subject_groups = input.auth.identity.groups {
+                  input.auth.identity.authnMethod == "jwt"
+                }
+
+                # Function to check if an account is an admin account:
+                is_admin {
+                  subject_name in admin_subjects
+                }
+
+                # Function to check if a JWT user is an admin (in admins group or has tenant-admin role):
+                is_jwt_admin {
+                  input.auth.identity.authnMethod == "jwt"
+                  "admins" in subject_groups
+                }
+                is_jwt_admin {
+                  input.auth.identity.authnMethod == "jwt"
+                  "tenant-admin" in input.auth.identity.realm_access.roles
+                }
+
+                # Function to check if an account is a client account:
+                is_client {
+                  not is_admin
+                  not is_jwt_admin
+                }
+
+                # Allow metadata, reflection and health to everyone:
+                allow {
+                  startswith(grpc_method, "/metadata.")
+                }
+                allow {
+                  startswith(grpc_method, "/grpc.reflection.")
+                }
+                allow {
+                  startswith(grpc_method, "/grpc.health.")
+                }
+
+                # Allow specific methods to clients:
+                allow {
+                  is_client
+                  grpc_method in {
+                    "/events.v1/Watch",
+                    "/fulfillment.v1.ClusterTemplates/Get",
+                    "/fulfillment.v1.ClusterTemplates/List",
+                    "/fulfillment.v1.Clusters/Create",
+                    "/fulfillment.v1.Clusters/Delete",
+                    "/fulfillment.v1.Clusters/Get",
+                    "/fulfillment.v1.Clusters/GetKubeconfig",
+                    "/fulfillment.v1.Clusters/GetKubeconfigViaHttp",
+                    "/fulfillment.v1.Clusters/GetPassword",
+                    "/fulfillment.v1.Clusters/GetPasswordViaHttp",
+                    "/fulfillment.v1.Clusters/List",
+                    "/fulfillment.v1.Clusters/Update",
+                    "/fulfillment.v1.HostClasses/Get",
+                    "/fulfillment.v1.HostClasses/List",
+                    "/fulfillment.v1.HostPools/Create",
+                    "/fulfillment.v1.HostPools/Delete",
+                    "/fulfillment.v1.HostPools/Get",
+                    "/fulfillment.v1.HostPools/List",
+                    "/fulfillment.v1.HostPools/Update",
+                    "/fulfillment.v1.Hosts/Create",
+                    "/fulfillment.v1.Hosts/Delete",
+                    "/fulfillment.v1.Hosts/Get",
+                    "/fulfillment.v1.Hosts/List",
+                    "/fulfillment.v1.Hosts/Update",
+                    "/fulfillment.v1.VirtualMachineTemplates/Get",
+                    "/fulfillment.v1.VirtualMachineTemplates/List",
+                    "/fulfillment.v1.VirtualMachines/Create",
+                    "/fulfillment.v1.VirtualMachines/Delete",
+                    "/fulfillment.v1.VirtualMachines/Get",
+                    "/fulfillment.v1.VirtualMachines/List",
+                    "/fulfillment.v1.VirtualMachines/Update",
+                  }
+                }
+
+                # Allow everything to admins (service accounts or JWT users in admins group):
+                allow {
+                  is_admin
+                }
+                allow {
+                  is_jwt_admin
+                }

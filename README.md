@@ -9,7 +9,7 @@ platform, providing a fulfillment service framework for clusters and virtual mac
 
 ## Overview
 
-OSAC (OpenShift Self-service Advanced Clusters) provides a streamlined, self-service
+OSAC (Open Sovereign AI Cloud) provides a streamlined, self-service
 framework for provisioning and managing OpenShift clusters and virtual machines. This
 installer repository contains the Kubernetes/OpenShift deployment configurations needed
 to deploy OSAC components on your infrastructure.

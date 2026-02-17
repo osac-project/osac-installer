@@ -1,0 +1,10 @@
+apiVersion: builtin
+kind: PrefixSuffixTransformer
+metadata:
+  name: custom-prefixer
+prefix: "osac-e2e-ci-"
+fieldSpecs:
+  - kind: ClusterRole
+    path: metadata/name
+  - kind: ClusterRoleBinding
+    path: metadata/name

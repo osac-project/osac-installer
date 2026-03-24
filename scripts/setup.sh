@@ -5,8 +5,9 @@ set -o errexit
 set -o pipefail
 
 
-INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-"osac-devel"}
 INSTALLER_KUSTOMIZE_OVERLAY=${INSTALLER_KUSTOMIZE_OVERLAY:-"development"}
+INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')}
+[[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: Could not determine namespace from overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" && exit 1
 INSTALLER_VM_TEMPLATE=${INSTALLER_VM_TEMPLATE:-"osac.templates.ocp_virt_vm"}
 
 # Retry a condition until it succeeds or times out, optionally running a command each iteration
@@ -126,5 +127,41 @@ fulfillment-cli create hub --kubeconfig=kubeconfig.hub-access --id hub --namespa
 # Wait for computeinstancetemplate to exist
 retry_until 1200 5 '[[ -n "$(fulfillment-cli get computeinstancetemplate -o json | jq -r --arg tpl ${INSTALLER_VM_TEMPLATE} '"'"'select(.id == $tpl)'"'"' 2> /dev/null)" ]]' || {
     echo "Timed out waiting for computeinstancetemplate to exist"
+    exit 1
+}
+
+# Create AAP token and configure the operator for direct AAP integration
+AAP_PASSWORD=$(oc get secret osac-aap-admin-password -n ${INSTALLER_NAMESPACE} -o jsonpath='{.data.password}' | base64 -d)
+[[ -z "${AAP_PASSWORD}" ]] && echo "ERROR: Failed to get AAP password from secret osac-aap-admin-password" && exit 1
+
+AAP_TOKEN=$(oc exec deployment/fulfillment-grpc-server -n ${INSTALLER_NAMESPACE} -- \
+    sh -c "curl -sf -X POST http://osac-aap:80/api/controller/v2/tokens/ \
+    -u admin:${AAP_PASSWORD} -H 'Content-Type: application/json' -d '{}'" | jq -r '.token')
+[[ -z "${AAP_TOKEN}" || "${AAP_TOKEN}" == "null" ]] && echo "ERROR: Failed to create AAP token" && exit 1
+
+oc set env deployment/osac-operator-controller-manager -n ${INSTALLER_NAMESPACE} \
+    OSAC_AAP_URL="http://osac-aap:80/api/controller" \
+    OSAC_AAP_TOKEN="${AAP_TOKEN}" \
+    OSAC_AAP_PROVISION_TEMPLATE="osac-create-compute-instance" \
+    OSAC_AAP_DEPROVISION_TEMPLATE="osac-delete-compute-instance"
+
+# Create Tenant CR
+cat <<EOF | oc apply -f -
+apiVersion: osac.openshift.io/v1alpha1
+kind: Tenant
+metadata:
+  name: ${INSTALLER_NAMESPACE}
+  namespace: ${INSTALLER_NAMESPACE}
+spec: {}
+EOF
+
+# Label default StorageClass for the tenant
+DEFAULT_SC=$(oc get sc -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}')
+[[ -z "${DEFAULT_SC}" ]] && echo "ERROR: No default StorageClass found — Tenant requires a labeled SC to reach Ready" && exit 1
+oc label sc "${DEFAULT_SC}" "osac.openshift.io/tenant=${INSTALLER_NAMESPACE}" --overwrite
+
+# Wait for Tenant to be Ready
+retry_until 120 5 '[[ "$(oc get tenant ${INSTALLER_NAMESPACE} -n ${INSTALLER_NAMESPACE} -o jsonpath='"'"'{.status.phase}'"'"' 2>/dev/null)" == "Ready" ]]' || {
+    echo "Timed out waiting for Tenant to be Ready"
     exit 1
 }

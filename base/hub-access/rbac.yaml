@@ -40,12 +40,6 @@ rules:
     verbs:
       - get
   - apiGroups:
-      - osac.openshift.io
-    resources:
-      - tenants
-    verbs:
-      - get
-  - apiGroups:
       - ""
     resources:
       - secrets

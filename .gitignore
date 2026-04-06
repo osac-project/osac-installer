@@ -30,3 +30,9 @@ local/
 **/dockerconfig.json
 **/*pull-secret.json
 [lL]icense.zip
+
+# Claude.md file
+CLAUDE.md
+
+# kubeconfig files
+kubeconfig.hub-access

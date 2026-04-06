@@ -17,6 +17,7 @@ labels:
 resources:
 - ../../base
 - ./ca-trust-bundle.yaml
+- ./capi-provider-role.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -42,9 +43,9 @@ secretGenerator:
   options:
     disableNameSuffixHash: true
   literals:
-    - AAP_EE_IMAGE=ghcr.io/osac-project/osac-aap:4f1ba397a8b6c9ef6fa8abe504baafceec8009db
+    - AAP_EE_IMAGE=ghcr.io/osac-project/osac-aap:latest
     - AAP_PROJECT_GIT_URI="https://github.com/osac-project/osac-aap"
-    - AAP_PROJECT_GIT_BRANCH=4f1ba39
+    - AAP_PROJECT_GIT_BRANCH=main
 
 - name: cluster-fulfillment-ig
   options:
@@ -58,12 +59,6 @@ secretGenerator:
     - OSAC_TEMPLATE_COLLECTIONS=osac.templates,osac.massopencloud
 
 images:
-  - name: ghcr.io/osac-project/osac-operator:latest
-    digest: sha256:831ea9f34ac727ae42870daf69754e6308b85b11fb982fe11c0dae3331281fcd
-  - name: ghcr.io/osac-project/osac-aap:latest
-    digest: sha256:01c0157b308726a576f7087328347490b70794cfef9733539bbb21fbf2b30329
-  - name: ghcr.io/osac-project/fulfillment-service:main
-    newTag: v0.0.39
   - name: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
     newName: quay.io/openshift/origin-cli
     newTag: "4.20.0"
@@ -87,28 +82,47 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: OSAC_CLUSTER_CREATE_WEBHOOK
-          value: http://osac-eda-service:5000/create-hosted-cluster
+          name: OSAC_PROVISIONING_PROVIDER
+          value: "aap"
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: OSAC_CLUSTER_DELETE_WEBHOOK
-          value: http://osac-eda-service:5000/delete-hosted-cluster
+          name: OSAC_AAP_TEMPLATE_PREFIX
+          value: osac
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_AAP_PROVISION_TEMPLATE
+          value: osac-create-virtual-network
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_AAP_URL
+          value: "https://osac-aap.osac-devel.apps.<cluster-name>.<base-domain>/api/controller"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_AAP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: osac-aap-api-token
+              key: token
+              optional: true
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_AAP_INSECURE_SKIP_VERIFY
+          value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OSAC_AAP_STATUS_POLL_INTERVAL
+          value: "30s"
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
           name: OSAC_MINIMUM_REQUEST_INTERVAL
           value: "2m"
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OSAC_COMPUTE_INSTANCE_PROVISION_WEBHOOK
-          value: http://osac-eda-service:5000/create-compute-instance
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: OSAC_COMPUTE_INSTANCE_DEPROVISION_WEBHOOK
-          value: http://osac-eda-service:5000/delete-compute-instance
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:

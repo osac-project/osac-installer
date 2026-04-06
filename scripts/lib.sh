@@ -19,6 +19,22 @@ retry_until() {
     done
 }
 
+# Wait for a namespace to finish terminating if it exists in Terminating state
+# Usage: wait_for_namespace_cleanup <namespace> [timeout_seconds]
+wait_for_namespace_cleanup() {
+    local namespace="$1"
+    local timeout="${2:-300}"
+
+    if oc get namespace "${namespace}" &>/dev/null && \
+       [[ "$(oc get namespace "${namespace}" -o jsonpath='{.status.phase}')" == "Terminating" ]]; then
+        echo "Waiting for namespace ${namespace} to finish terminating..."
+        oc wait --for=delete "namespace/${namespace}" --timeout="${timeout}s" || {
+            echo "ERROR: namespace ${namespace} stuck in Terminating state. You may need to manually remove finalizers."
+            exit 1
+        }
+    fi
+}
+
 # Wait for a namespace to exist and a resource within it to match a condition
 # Usage: wait_for_resource <resource> <condition> [timeout_seconds] [namespace]
 wait_for_resource() {

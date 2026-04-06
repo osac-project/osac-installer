@@ -11,19 +11,27 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-
-resources:
-- cert-manager/
-- ca-issuer.yaml
-- trust-manager.yaml
-- authorino-operator.yaml
-- keycloak
-- nfs-subdir-provisioner/overlays/lab
-- aap-installation.yaml
-- metallb/
-- lvms/
-- cnv/
-- mce/
+# AgentServiceConfig to deploy the infrastructure operator (assisted-service)
+apiVersion: agent-install.openshift.io/v1beta1
+kind: AgentServiceConfig
+metadata:
+  name: agent
+spec:
+  databaseStorage:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Gi
+  filesystemStorage:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 20Gi
+  imageStorage:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 50Gi

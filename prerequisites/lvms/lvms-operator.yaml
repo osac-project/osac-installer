@@ -11,19 +11,29 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-
-resources:
-- cert-manager/
-- ca-issuer.yaml
-- trust-manager.yaml
-- authorino-operator.yaml
-- keycloak
-- nfs-subdir-provisioner/overlays/lab
-- aap-installation.yaml
-- metallb/
-- lvms/
-- cnv/
-- mce/
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-storage
+  labels:
+    openshift.io/cluster-monitoring: "true"
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: lvms-operator
+  namespace: openshift-storage
+spec:
+  targetNamespaces:
+    - openshift-storage
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: lvms-operator
+  namespace: openshift-storage
+spec:
+  name: lvms-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

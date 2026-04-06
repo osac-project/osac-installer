@@ -14,16 +14,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-
 resources:
-- cert-manager/
-- ca-issuer.yaml
-- trust-manager.yaml
-- authorino-operator.yaml
-- keycloak
-- nfs-subdir-provisioner/overlays/lab
-- aap-installation.yaml
-- metallb/
-- lvms/
-- cnv/
-- mce/
+  - metallb-operator.yaml
+  - metallb-config.yaml

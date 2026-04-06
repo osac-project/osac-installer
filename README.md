@@ -121,10 +121,15 @@ Use Kustomize to manage your environment-specific configurations.
    ```
 
 4. **Update Critical Configuration:**
-   You **must** update these two configuration values to match your `<project-name>`:
+   You **must** update these configuration values to match your environment:
 
    - In `kustomization.yaml`: Update the `namespace` field to `<project-name>`
    - In `prefixTransformer.yaml`: Update the `prefix` field to `<project-name>-`
+   - In `ca-trust-bundle.yaml`: Update the `values` field element
+     to `<project-name>`.
+   - In `kustomization.yaml`: Replace `<cluster-name>.<base-domain>` in the `OSAC_AAP_URL`
+     value with your cluster's actual domain (e.g., `mgmt.example.devcluster.openshift.com`).
+     You can find it by running: `oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'`
 
    These changes ensure your installation uses a unique namespace and prevents resource
    name conflicts with other OSAC installations.
@@ -136,6 +141,66 @@ Use Kustomize to manage your environment-specific configurations.
 > For more information on structuring overlays and patches, please consult the [official
 > Kustomize documentation.](https://kubectl.docs.kubernetes.io/references/kustomize/)
 
+
+### Using Custom Component Versions
+
+By default, the installer uses the latest commit from each submodule (via
+`git submodule update --init --recursive --remote`) and the latest container images
+defined in `base/kustomization.yaml`.
+
+To test a specific revision of a component, you need to:
+
+1. **Check out the desired code in the submodule:**
+
+   ```bash
+   cd base/<submodule>
+   git checkout <branch-or-commit>
+   cd ../..
+   ```
+
+2. **Build and push a custom container image:**
+
+   Build the image from the checked-out code and push it to a registry accessible by
+   your cluster.
+
+3. **Override the image in your overlay's `kustomization.yaml`:**
+
+   ```yaml
+   images:
+     - name: <component-image-name>
+       newName: <your-registry>/<your-image>
+       newTag: <your-tag>
+   ```
+
+   The component image names used in the base are:
+
+   | Component | Image name |
+   |-----------|-----------|
+   | Fulfillment Service | `fulfillment-service` |
+   | OSAC Operator | `osac-operator` |
+   | OSAC AAP | `osac-aap` |
+
+#### OSAC AAP Customization
+
+For osac-aap, in addition to the image override, you must also update the AAP
+configuration secrets in your overlay's `kustomization.yaml`:
+
+```yaml
+secretGenerator:
+- name: config-as-code-ig
+  options:
+    disableNameSuffixHash: true
+  literals:
+    - AAP_EE_IMAGE=<your-registry>/osac-aap:<your-tag>
+    - AAP_PROJECT_GIT_URI=<your-git-repo-url>
+    - AAP_PROJECT_GIT_BRANCH=<your-branch>
+```
+
+- `AAP_EE_IMAGE`: The Execution Environment image used by AAP to run automation jobs.
+  This should match the container image override above.
+- `AAP_PROJECT_GIT_URI`: The Git repository URL for the AAP project (playbooks and
+  configuration).
+- `AAP_PROJECT_GIT_BRANCH`: The Git branch to use for the AAP project.
 
 ### Obtaining an AAP License (Subscription Manifest)
 
@@ -163,7 +228,7 @@ The OSAC installer relies on external components managed as Git submodules. Befo
 running Kustomize, you must pull the manifest files into your local directory:
 
 ```bash
-$ git submodule update --init --recursive
+$ git submodule update --init --recursive --remote
 ```
 
 ### 2. Populate Local Secrets
@@ -180,6 +245,7 @@ Ensure your overlay contains the necessary secret files that are excluded from G
 The `scripts/setup.sh` script automates the entire installation process, including:
 
 - Installing prerequisite operators (cert-manager, trust-manager, Authorino, Keycloak, AAP)
+- Optionally installing LVMS (storage service), MetalLB (ingress service), Multicluster Engine (MCE + infrastructure operator), and OpenShift Virtualization (CNV)
 - Setting up the CA issuer and network attachment definitions
 - Applying the Kustomize overlay
 - Waiting for the AAP bootstrap job to complete
@@ -193,7 +259,26 @@ $ ./scripts/setup.sh
 
 # Or customize the namespace and overlay
 $ INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/setup.sh
+
+# Install with all optional services (storage, ingress, virtualization, MCE)
+$ EXTRA_SERVICES=true \
+    INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/setup.sh
+
+# Or selectively enable specific services
+$ INGRESS_SERVICE=true STORAGE_SERVICE=true \
+    INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/setup.sh
 ```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KUBECONFIG` | `~/.kube/config` | Path to the target cluster's kubeconfig file |
+| `INSTALLER_NAMESPACE` | from overlay | Target namespace for the OSAC deployment |
+| `INSTALLER_KUSTOMIZE_OVERLAY` | `development` | Kustomize overlay directory to use |
+| `EXTRA_SERVICES` | `false` | Enable all optional services (sets all below to `true`) |
+| `INGRESS_SERVICE` | `false` | Install MetalLB as the ingress/LoadBalancer service |
+| `STORAGE_SERVICE` | `false` | Install LVMS and create a default StorageClass (`lvms-vg1`) |
+| `VIRT_SERVICE` | `false` | Install OpenShift Virtualization |
+| `MCE_SERVICE` | `false` | Install Multicluster Engine and infrastructure operator |
 
 > **Note:** The script requires `fulfillment-cli` to be installed and available in your
 > `PATH` (see [Fulfillment CLI: Setup & Usage](#fulfillment-cli-setup--usage) below for
@@ -231,6 +316,28 @@ $ oc apply -k prerequisites/keycloak/
 
 # Install AAP operator
 $ oc apply -f prerequisites/aap-installation.yaml
+
+# Install MetalLB (optional - ingress/LoadBalancer service)
+$ oc apply -f prerequisites/metallb/metallb-operator.yaml
+# Wait for MetalLB operator to be ready, then apply config:
+$ oc apply -f prerequisites/metallb/metallb-config.yaml
+
+# Install LVMS (optional - storage service)
+$ oc apply -f prerequisites/lvms/lvms-operator.yaml
+# Wait for LVMS operator to be ready, then apply config:
+$ oc apply -f prerequisites/lvms/lvms-config.yaml
+# Set lvms-vg1 as default StorageClass:
+$ oc annotate sc lvms-vg1 storageclass.kubernetes.io/is-default-class=true --overwrite
+
+# Install Multicluster Engine (optional - MCE + infrastructure operator)
+$ oc apply -f prerequisites/mce/mce-operator.yaml
+# Wait for MCE operator to be ready, then create MultiClusterEngine and AgentServiceConfig:
+$ oc apply -f prerequisites/mce/mce-config.yaml
+
+# Install OpenShift Virtualization (optional - CNV/KubeVirt)
+$ oc apply -f prerequisites/cnv/cnv-operator.yaml
+# Wait for CNV operator to be ready, then apply HyperConverged config:
+$ oc apply -f prerequisites/cnv/cnv-config.yaml
 ```
 
 > **Tip:** Wait for each operator deployment to become available before proceeding to
@@ -349,6 +456,24 @@ $ oc extract secret/osac-aap-admin-password -n <project-name> --to -
 - Username: `admin`
 - Password: (from the previous step)
 
+### Create an AAP API Token for the OSAC Operator
+
+The OSAC operator requires an API token to communicate with AAP. The `scripts/create-aap-token.sh`
+script automates this by authenticating with the AAP gateway using the admin password and
+creating a write-scoped token. The automated setup script (`setup.sh`) calls this automatically.
+
+For manual deployments, run it after the AAP bootstrap job completes:
+
+```bash
+$ INSTALLER_NAMESPACE=<project-name> ./scripts/create-aap-token.sh
+```
+
+This script will:
+- Retrieve the AAP admin password from the `osac-aap-admin-password` secret
+- Create an API token via the AAP gateway (`/api/gateway/v1/tokens/`)
+- Store the token in a `osac-aap-api-token` secret
+- Set the correct `OSAC_AAP_URL` on the operator deployment
+
 ### Using AAP Interface
 
 From the AAP web interface, you can:
@@ -357,6 +482,51 @@ From the AAP web interface, you can:
 - Manage job templates and automation workflows
 - Configure additional automation tasks
 - View inventory and host information
+
+## Tearing Down OSAC
+
+To completely remove an OSAC deployment and all its prerequisites, use the teardown script:
+
+```bash
+# Using defaults (namespace: osac-devel, overlay: development)
+$ ./scripts/teardown.sh
+
+# Or specify your namespace and overlay
+$ INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/teardown.sh
+
+# Include all optional services in teardown (must match what was used during setup)
+$ EXTRA_SERVICES=true \
+    INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/teardown.sh
+
+# Or selectively match what was used during setup
+$ INGRESS_SERVICE=true STORAGE_SERVICE=true \
+    INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/teardown.sh
+```
+
+The script removes resources in reverse order:
+1. StorageClass OSAC labels
+2. Kustomize overlay resources and project namespace
+3. Keycloak (before storage, since its PVCs depend on the storage class)
+4. AAP operator
+5. Multicluster Engine and AgentServiceConfig (if `MCE_SERVICE=true`)
+6. LVMS storage service (if `STORAGE_SERVICE=true`)
+7. MetalLB ingress service (if `INGRESS_SERVICE=true`)
+8. OpenShift Virtualization (if `VIRT_SERVICE=true`)
+9. Authorino operator
+10. CA issuer, trust-manager, and cert-manager
+11. Stale API services cleanup
+12. NetworkAttachmentDefinition
+13. Local `kubeconfig.hub-access` file
+
+The script waits for all namespaces to be fully deleted before completing.
+
+> **Warning:** This removes **all** prerequisite operators and their namespaces. If other
+> workloads on the cluster depend on these operators (e.g., cert-manager, MetalLB), do not
+> run this script. Instead, manually delete only the OSAC-specific resources:
+> ```bash
+> $ oc delete -k overlays/<project-name>
+> $ oc delete namespace <project-name>
+> ```
 
 ## Troubleshooting
 

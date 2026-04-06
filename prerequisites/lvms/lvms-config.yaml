@@ -11,19 +11,18 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-
-resources:
-- cert-manager/
-- ca-issuer.yaml
-- trust-manager.yaml
-- authorino-operator.yaml
-- keycloak
-- nfs-subdir-provisioner/overlays/lab
-- aap-installation.yaml
-- metallb/
-- lvms/
-- cnv/
-- mce/
+# LVMCluster instance with a default volume group using all available disks.
+apiVersion: lvm.topolvm.io/v1alpha1
+kind: LVMCluster
+metadata:
+  name: lvms-cluster
+  namespace: openshift-storage
+spec:
+  storage:
+    deviceClasses:
+      - name: vg1
+        default: true
+        thinPoolConfig:
+          name: thin-pool-1
+          sizePercent: 90
+          overprovisionRatio: 10

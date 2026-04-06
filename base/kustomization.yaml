@@ -26,7 +26,7 @@ images:
   newTag: latest
 - name: fulfillment-service
   newName: ghcr.io/osac-project/fulfillment-service
-  newTag: latest
+  newTag: main
 - name: osac-aap
   newName: ghcr.io/osac-project/osac-aap
   newTag: latest

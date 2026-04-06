@@ -239,16 +239,6 @@ patches:
                     "/osac.public.v1.Events/Watch",
                     "/osac.public.v1.HostClasses/Get",
                     "/osac.public.v1.HostClasses/List",
-                    "/osac.public.v1.HostPools/Create",
-                    "/osac.public.v1.HostPools/Delete",
-                    "/osac.public.v1.HostPools/Get",
-                    "/osac.public.v1.HostPools/List",
-                    "/osac.public.v1.HostPools/Update",
-                    "/osac.public.v1.Hosts/Create",
-                    "/osac.public.v1.Hosts/Delete",
-                    "/osac.public.v1.Hosts/Get",
-                    "/osac.public.v1.Hosts/List",
-                    "/osac.public.v1.Hosts/Update",
                   }
                 }
 

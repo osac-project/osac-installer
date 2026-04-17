@@ -21,7 +21,7 @@ token=$(oc -n "$namespace" extract secret/hub-access --keys token --to - 2>/dev/
 
 echo "generating a kubeconfig for hub-access serviceaccount in $namespace namespace on $server_url"
 
-cat <<EOF >kubeconfig.hub-access
+cat <<EOF >/tmp/kubeconfig.hub-access
 apiVersion: v1
 clusters:
 - cluster:

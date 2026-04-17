@@ -167,11 +167,17 @@ wait_for_resource deployment/cert-manager-webhook condition=Available 300 cert-m
 wait_for_resource deployment/cert-manager-cainjector condition=Available 300 cert-manager
 
 # Apply trust-manager prerequisites and wait for it to be ready
-oc apply -f prerequisites/trust-manager.yaml
+retry_until 60 5 'oc apply -f prerequisites/trust-manager.yaml 2>/dev/null' || {
+    echo "Failed to apply trust-manager prerequisites"
+    exit 1
+}
 wait_for_resource deployment/trust-manager condition=Available 300 cert-manager
 
 # Apply CA issuer prerequisites and wait for it to be ready
-oc apply -f prerequisites/ca-issuer.yaml
+retry_until 60 5 'oc apply -f prerequisites/ca-issuer.yaml 2>/dev/null' || {
+    echo "Failed to apply CA issuer prerequisites"
+    exit 1
+}
 wait_for_resource clusterissuer/default-ca condition=Ready 300
 
 # Apply authorino prerequisites and wait for it to be ready

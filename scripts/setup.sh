@@ -256,6 +256,11 @@ wait_for_namespace_cleanup "${INSTALLER_NAMESPACE}"
 # Apply kustomize overlay
 oc apply -k overlays/${INSTALLER_KUSTOMIZE_OVERLAY}
 
+# Apply cluster-fulfillment-ig configmap/secret overrides from environment variables
+INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
+INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \
+    ./scripts/aap-configuration.sh
+
 # Wait for AAP bootstrap job to complete
 echo "Waiting for AAP bootstrap job to complete (this may take up to 40 minutes)..."
 wait_for_resource job/aap-bootstrap condition=complete 2400 ${INSTALLER_NAMESPACE}

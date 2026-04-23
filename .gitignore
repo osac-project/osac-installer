@@ -30,6 +30,7 @@ local/
 **/dockerconfig.json
 **/*pull-secret.json
 [lL]icense.zip
+**/osac-aap-secrets.env
 
 # Claude.md file
 CLAUDE.md

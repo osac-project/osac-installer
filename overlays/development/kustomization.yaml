@@ -56,6 +56,24 @@ secretGenerator:
   literals:
     - OSAC_TEMPLATE_COLLECTIONS=osac.templates,osac.massopencloud
 
+# Base defaults for the cluster-fulfillment-ig ConfigMap.
+# scripts/aap-configuration.sh may override these with values
+# from files/osac-aap-configuration.env after oc apply -k.
+configMapGenerator:
+- name: cluster-fulfillment-ig
+  options:
+    labels:
+      osac.openshift.io/project: osac-aap
+  literals:
+    - NETWORK_CLASS=esi
+    - NETWORK_STEPS_COLLECTION=massopencloud.steps
+    - EXTERNAL_ACCESS_BASE_DOMAIN=box.massopen.cloud
+    - EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS=box.massopen.cloud
+    - EXTERNAL_ACCESS_API_INTERNAL_NETWORK=hypershift
+    - HOSTED_CLUSTER_BASE_DOMAIN=box.massopen.cloud
+    - HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY=HighlyAvailable
+    - HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY=HighlyAvailable
+
 images:
   - name: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
     newName: quay.io/openshift/origin-cli

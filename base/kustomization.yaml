@@ -24,15 +24,13 @@ images:
 - name: postgres
   newName: quay.io/sclorg/postgresql-15-c9s
   newTag: latest
-- name: fulfillment-service
-  newName: ghcr.io/osac-project/fulfillment-service
-  newTag: latest
+- name: ghcr.io/osac-project/fulfillment-service
+  newTag: sha-f2cd619
 - name: osac-aap
   newName: ghcr.io/osac-project/osac-aap
-  newTag: latest
-- name: osac-operator
-  newName: ghcr.io/osac-project/osac-operator
-  newTag: latest
+  newTag: sha-ffe8959
+- name: ghcr.io/osac-project/osac-operator
+  newTag: sha-fe83a9f
 - name: envoy
   newName: docker.io/envoyproxy/envoy
   newTag: v1.33.0

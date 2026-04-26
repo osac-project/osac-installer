@@ -1,0 +1,18 @@
+name: Check image tags match submodules
+
+on:
+  pull_request:
+
+concurrency:
+  group: "check-image-tags-${{ github.head_ref || github.run_id }}"
+  cancel-in-progress: true
+
+jobs:
+  check-image-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Verify image tags match submodule commits
+        run: bash scripts/sync-image-tags.sh

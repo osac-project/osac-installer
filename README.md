@@ -50,7 +50,7 @@ The OSAC platform relies on three core components to deliver governed self-servi
 > * Red Hat OpenShift Advanced Cluster Management (RHACM)
 > * Red Hat OpenShift Virtualization (OCP-Virt) - **Optional**: Only required for VM as a Service (VMaaS) support
 > * Red Hat Ansible Automation Platform (AAP)
-> * ESI (Elastic System Infrastructure) - Required for bare metal provisioning
+> * A network backend for bare metal provisioning: either **ESI** (Elastic System Infrastructure) or **Netris** (see [Network Backend Configuration](#network-backend-configuration-caas))
 
 **Configuration Manifests**
 
@@ -279,6 +279,32 @@ $ INGRESS_SERVICE=true STORAGE_SERVICE=true \
 | `STORAGE_SERVICE` | `false` | Install LVMS and create a default StorageClass (`lvms-vg1`) |
 | `VIRT_SERVICE` | `false` | Install OpenShift Virtualization |
 | `MCE_SERVICE` | `false` | Install Multicluster Engine and infrastructure operator |
+
+#### AAP Configuration
+
+The automation backend (AAP) is configured via two env files in your overlay's
+`files/` directory:
+
+- **`osac-aap-configuration.env`** — non-sensitive settings (network class, domains,
+  connection details). Tracked in git. The `development` and `caas-ci` overlays
+  ship with Netris defaults; customize for your environment.
+- **`osac-aap-secrets.env`** — sensitive credentials (passwords, SSH keys, AWS keys).
+  Gitignored, you create this file.
+
+Edit these files to match your environment, then run `setup.sh` — the script
+applies them automatically via `scripts/aap-configuration.sh`.
+
+See [docs/aap-configuration.md](docs/aap-configuration.md) for the full variable
+reference.
+
+#### Network Backend Configuration (CaaS)
+
+By default the network backend is **ESI**. To switch to **Netris**, set
+`NETWORK_CLASS=netris` in your overlay's `osac-aap-configuration.env` and fill in
+the Netris-specific connection details and credentials.
+
+See [docs/network-backend.md](docs/network-backend.md) for Netris-specific
+variables and the `NETRIS_RESOURCE_CLASS_MAP` format.
 
 > **Note:** The script requires `osac` to be installed and available in your
 > `PATH` (see [OSAC CLI: Setup & Usage](#osac-cli-setup--usage) below for

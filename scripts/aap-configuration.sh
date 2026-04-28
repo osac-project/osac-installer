@@ -57,8 +57,14 @@ CM_VARS=(
 
 SECRET_VARS=(
     NETRIS_PASSWORD
-    SERVER_SSH_KEY SERVER_SSH_BASTION_KEY
     AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+)
+
+# SSH keys are read from files rather than env vars so that multi-line
+# PEM content does not need to be collapsed into a single line.
+SSH_KEY_FILES=(
+    "SERVER_SSH_KEY=server-ssh-key"
+    "SERVER_SSH_BASTION_KEY=server-ssh-bastion-key"
 )
 
 # --- ConfigMap overrides ---
@@ -88,6 +94,18 @@ has_secret_overrides=false
 for var in "${SECRET_VARS[@]}"; do
     if [[ -n "${!var:-}" ]]; then
         encoded=$(printf '%s' "${!var}" | base64 | tr -d '\n')
+        [[ "${has_secret_overrides}" == "true" ]] && secret_patch+=","
+        secret_patch+="\"${var}\":\"${encoded}\""
+        has_secret_overrides=true
+    fi
+done
+
+for entry in "${SSH_KEY_FILES[@]}"; do
+    var="${entry%%=*}"
+    filename="${entry#*=}"
+    filepath="${OVERLAY_FILES}/${filename}"
+    if [[ -f "${filepath}" ]]; then
+        encoded=$(base64 < "${filepath}" | tr -d '\n')
         [[ "${has_secret_overrides}" == "true" ]] && secret_patch+=","
         secret_patch+="\"${var}\":\"${encoded}\""
         has_secret_overrides=true

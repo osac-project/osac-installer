@@ -43,8 +43,13 @@ Values must be plaintext — the script base64-encodes them automatically.
 | Variable | Description |
 |----------|-------------|
 | `NETRIS_PASSWORD` | Netris API password |
-| `SERVER_SSH_KEY` | Private key for SSH to bare-metal servers |
-| `SERVER_SSH_BASTION_KEY` | Private key for SSH to the bastion host |
+
+### SSH Key Files (place in overlay `files/` directory)
+
+| File | Description |
+|------|-------------|
+| `server-ssh-key` | Private key for SSH to bare-metal servers |
+| `server-ssh-bastion-key` | Private key for SSH to the bastion host |
 
 ### `NETRIS_RESOURCE_CLASS_MAP` Format
 

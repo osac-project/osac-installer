@@ -59,10 +59,10 @@ Kubernetes Secret. Do not pre-encode them.
 Additional variables are added by specific network backends — see
 [Network Backend Configuration](network-backend.md).
 
-> **Note on SSH keys:** The env file parser reads one line at a time. For
-> multi-line values like SSH private keys, replace newlines with literal `\n`
-> on a single line — the script unescapes them back to real newlines before
-> storing. Alternatively, pass them via shell environment variables.
+> **Note on SSH keys:** SSH private keys are read from files in the overlay's
+> `files/` directory (`server-ssh-key` and `server-ssh-bastion-key`), not from
+> the env file. Place the key files there and the script base64-encodes them
+> automatically.
 
 ## Reference
 

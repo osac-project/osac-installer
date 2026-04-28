@@ -108,11 +108,6 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
-          name: OSAC_AAP_PROVISION_TEMPLATE
-          value: osac-create-virtual-network
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
           name: OSAC_AAP_URL
           value: "https://osac-aap.osac-devel.apps.<cluster-name>.<base-domain>/api/controller"
       - op: add

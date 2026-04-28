@@ -31,6 +31,8 @@ local/
 **/*pull-secret.json
 [lL]icense.zip
 **/osac-aap-secrets.env
+**/server-ssh-key
+**/server-ssh-bastion-key
 
 # Claude.md file
 CLAUDE.md

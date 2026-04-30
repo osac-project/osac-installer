@@ -306,6 +306,18 @@ the Netris-specific connection details and credentials.
 See [docs/network-backend.md](docs/network-backend.md) for Netris-specific
 variables and the `NETRIS_RESOURCE_CLASS_MAP` format.
 
+#### DNS Backend Configuration (CaaS)
+
+DNS record management uses a pluggable backend. The default is **AWS Route 53**
+(`DNS_CLASS=dns.route53.dns`), which requires AWS credentials in
+`osac-aap-secrets.env`. No changes are needed for existing deployments.
+
+To use a different DNS provider, set `DNS_CLASS` to a custom backend driver
+role in your overlay's `osac-aap-configuration.env`.
+
+See [docs/dns-backend.md](docs/dns-backend.md) for backend details, the
+interface contract, and how to add a new provider.
+
 > **Note:** The script requires `osac` to be installed and available in your
 > `PATH` (see [OSAC CLI: Setup & Usage](#osac-cli-setup--usage) below for
 > installation instructions).

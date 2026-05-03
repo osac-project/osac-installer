@@ -15,9 +15,12 @@ INSTALLER_VM_TEMPLATE=${INSTALLER_VM_TEMPLATE:-}
 # Create hub access kubeconfig
 ./scripts/create-hub-access-kubeconfig.sh
 
-# Login to fulfillment API and create hub
-FULFILLMENT_API_URL=https://$(oc get route -n ${INSTALLER_NAMESPACE} fulfillment-api -o jsonpath='{.status.ingress[0].host}')
-osac login --insecure --private --token-script "oc create token -n ${INSTALLER_NAMESPACE} admin" --address ${FULFILLMENT_API_URL}
+# Login to fulfillment internal API and create hub.
+# The private API (osac.private.v1.*) is only available via the internal listener
+# (fulfillment-internal-api route, port 8001). The external listener
+# (fulfillment-api route, port 8000) only routes public API methods.
+FULFILLMENT_INTERNAL_API_URL=https://$(oc get route -n ${INSTALLER_NAMESPACE} fulfillment-internal-api -o jsonpath='{.status.ingress[0].host}')
+osac login --insecure --private --token-script "oc create token -n ${INSTALLER_NAMESPACE} admin" --address ${FULFILLMENT_INTERNAL_API_URL}
 osac create hub --kubeconfig=/tmp/kubeconfig.hub-access --id hub --namespace ${INSTALLER_NAMESPACE}
 
 if [[ -n "${INSTALLER_VM_TEMPLATE}" ]]; then

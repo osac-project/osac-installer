@@ -256,6 +256,14 @@ wait_for_namespace_cleanup "${INSTALLER_NAMESPACE}"
 # Apply kustomize overlay
 oc apply -k overlays/${INSTALLER_KUSTOMIZE_OVERLAY}
 
+# Create fulfillment-controller OAuth credentials from the Keycloak realm config
+FC_CLIENT_SECRET=$(jq -r '.clients[] | select(.clientId == "fulfillment-controller") | .secret' prerequisites/keycloak/service/files/realm.json)
+oc create secret generic fulfillment-controller-credentials \
+    --from-literal=client-id=fulfillment-controller \
+    --from-literal=client-secret="${FC_CLIENT_SECRET}" \
+    -n ${INSTALLER_NAMESPACE} \
+    --dry-run=client -o yaml | oc apply -f -
+
 # Apply cluster-fulfillment-ig configmap/secret overrides from environment variables
 INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
 INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \

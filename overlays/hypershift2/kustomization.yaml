@@ -31,7 +31,7 @@ patches:
               - name: OSAC_MINIMUM_REQUEST_INTERVAL
                 value: "2m"
               - name: OSAC_FULFILLMENT_SERVER_ADDRESS
-                value: fulfillment-api:8000
+                value: fulfillment-internal-api:8001
 
 secretGenerator:
   - name: config-as-code-ig

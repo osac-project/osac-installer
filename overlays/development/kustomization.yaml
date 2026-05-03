@@ -138,7 +138,7 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: OSAC_FULFILLMENT_SERVER_ADDRESS
-          value: fulfillment-api:8000
+          value: fulfillment-internal-api:8001
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:

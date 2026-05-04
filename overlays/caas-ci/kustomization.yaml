@@ -169,7 +169,7 @@ patches:
             jwt:
               issuerUrl: https://keycloak.keycloak.svc.cluster.local/realms/osac
         authorization:
-          fulfillment-api:
+          default:
             opa:
               rego: |
                 import future.keywords.in

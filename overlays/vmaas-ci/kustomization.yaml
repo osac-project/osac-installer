@@ -74,6 +74,54 @@ patches:
             containers:
               - name: controller
                 imagePullPolicy: Always
+                command:
+                - /usr/local/bin/fulfillment-service
+                - start
+                - controller
+                - --log-level=info
+                - --log-headers=false
+                - --log-bodies=false
+                - --ca-file=/etc/fulfillment-controller/tls/cas
+                - --auth-issuer-url=https://keycloak.keycloak.svc.cluster.local/realms/osac
+                - --auth-client-id-file=/etc/fulfillment-controller/credentials/client-id
+                - --auth-client-secret-file=/etc/fulfillment-controller/credentials/client-secret
+                - --idp-provider=keycloak
+                - --idp-url=https://keycloak.keycloak.svc.cluster.local
+                - --idp-client-id-file=/etc/fulfillment-controller/idp/client-id
+                - --idp-client-secret-file=/etc/fulfillment-controller/idp/client-secret
+                - --grpc-server-address=fulfillment-internal-api:8001
+                - --grpc-keep-alive=5m
+                - --grpc-listener-address=0.0.0.0:8000
+                - --grpc-listener-tls-crt=/etc/fulfillment-controller/tls/tls.crt
+                - --grpc-listener-tls-key=/etc/fulfillment-controller/tls/tls.key
+                - --metrics-listener-address=0.0.0.0:8002
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fulfillment-grpc-server
+      spec:
+        template:
+          spec:
+            containers:
+              - name: grpc-server
+                command:
+                - /usr/local/bin/fulfillment-service
+                - start
+                - grpc-server
+                - --log-level=info
+                - --log-headers=false
+                - --log-bodies=false
+                - --ca-file=/etc/fulfillment-grpc-server/tls/cas
+                - --db-url=postgres://client@fulfillment-database:5432/service?sslmode=verify-full&sslcert=/secrets/cert/tls.crt&sslkey=/secrets/cert/tls.key&sslrootcert=/secrets/cert/ca.crt
+                - --grpc-listener-address=0.0.0.0:8000
+                - --grpc-listener-tls-crt=/etc/fulfillment-grpc-server/tls/tls.crt
+                - --grpc-listener-tls-key=/etc/fulfillment-grpc-server/tls/tls.key
+                - --grpc-authn-trusted-token-issuers=https://keycloak.keycloak.svc.cluster.local/realms/osac
+                - --grpc-authn-type=external
+                - --grpc-authn-external-address=authorino-authorino-authorization:50051
+                - --tenancy-logic=default
+                - --metrics-listener-address=0.0.0.0:8002
   - target:
       kind: Deployment
       name: osac-operator-controller-manager

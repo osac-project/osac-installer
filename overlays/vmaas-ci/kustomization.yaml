@@ -51,6 +51,11 @@ secretGenerator:
     labels:
       osac.openshift.io/project: osac-aap
 
+- name: network-fulfillment-ig
+  options:
+    labels:
+      osac.openshift.io/project: osac-aap
+
 configMapGenerator:
 - name: publish-templates-ig
   literals:

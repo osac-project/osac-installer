@@ -123,3 +123,59 @@ if [[ "${has_cm_overrides}" == "true" ]] || [[ "${has_secret_overrides}" == "tru
 else
     echo "No cluster-fulfillment-ig overrides detected, using kustomize defaults"
 fi
+
+# --- network-fulfillment-ig ---
+# The networking-operations-ig instance group uses a separate ConfigMap/Secret
+# for Netris credentials. The values are sourced from the same env files.
+
+NET_CM_VARS=(
+    NETRIS_CONTROLLER_URL NETRIS_USERNAME
+    NETRIS_SITE_ID NETRIS_TENANT_ID NETRIS_TENANT_NAME
+)
+
+NET_SECRET_VARS=(
+    NETRIS_PASSWORD
+)
+
+net_patch_file=$(mktemp)
+has_net_cm_overrides=false
+
+echo "data:" > "${net_patch_file}"
+for var in "${NET_CM_VARS[@]}"; do
+    if [[ -n "${!var:-}" ]]; then
+        escaped="${!var//\'/\'\'}"
+        printf "  %s: '%s'\n" "${var}" "${escaped}" >> "${net_patch_file}"
+        has_net_cm_overrides=true
+    fi
+done
+
+if [[ "${has_net_cm_overrides}" == "true" ]]; then
+    echo "Applying network-fulfillment-ig configmap overrides..."
+    oc patch configmap/network-fulfillment-ig -n "${INSTALLER_NAMESPACE}" \
+        --patch-file="${net_patch_file}" --type=merge
+fi
+rm -f "${net_patch_file}"
+
+net_secret_patch=""
+has_net_secret_overrides=false
+
+for var in "${NET_SECRET_VARS[@]}"; do
+    if [[ -n "${!var:-}" ]]; then
+        encoded=$(printf '%s' "${!var}" | base64 | tr -d '\n')
+        [[ "${has_net_secret_overrides}" == "true" ]] && net_secret_patch+=","
+        net_secret_patch+="\"${var}\":\"${encoded}\""
+        has_net_secret_overrides=true
+    fi
+done
+
+if [[ "${has_net_secret_overrides}" == "true" ]]; then
+    echo "Applying network-fulfillment-ig secret overrides..."
+    oc patch secret/network-fulfillment-ig -n "${INSTALLER_NAMESPACE}" \
+        -p "{\"data\":{${net_secret_patch}}}" --type=merge
+fi
+
+if [[ "${has_net_cm_overrides}" == "true" ]] || [[ "${has_net_secret_overrides}" == "true" ]]; then
+    echo "network-fulfillment-ig configuration applied"
+else
+    echo "No network-fulfillment-ig overrides detected, using kustomize defaults"
+fi

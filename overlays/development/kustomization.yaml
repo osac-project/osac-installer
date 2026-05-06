@@ -52,6 +52,11 @@ secretGenerator:
     labels:
       osac.openshift.io/project: osac-aap
 
+- name: network-fulfillment-ig
+  options:
+    labels:
+      osac.openshift.io/project: osac-aap
+
 # Base defaults for the cluster-fulfillment-ig ConfigMap.
 # scripts/aap-configuration.sh may override these with values
 # from files/osac-aap-configuration.env after oc apply -k.
@@ -73,6 +78,16 @@ configMapGenerator:
     - HOSTED_CLUSTER_BASE_DOMAIN=box.massopen.cloud
     - HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY=HighlyAvailable
     - HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY=HighlyAvailable
+- name: network-fulfillment-ig
+  options:
+    labels:
+      osac.openshift.io/project: osac-aap
+  literals:
+    - NETRIS_CONTROLLER_URL=https://redhat-ctl.netris.io
+    - NETRIS_USERNAME=netris
+    - NETRIS_SITE_ID=5
+    - NETRIS_TENANT_ID=1
+    - NETRIS_TENANT_NAME=Admin
 
 images:
   - name: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest

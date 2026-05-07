@@ -174,16 +174,29 @@ To test a specific revision of a component, you need to:
 
    The component image names used in the base are:
 
-   | Component | Image name |
-   |-----------|-----------|
-   | Fulfillment Service | `fulfillment-service` |
-   | OSAC Operator | `osac-operator` |
-   | OSAC AAP | `osac-aap` |
+   | Component | Image name | Description |
+   |-----------|-----------|-------------|
+   | Fulfillment Service | `fulfillment-service` | API server for cluster/VM management |
+   | OSAC Operator | `osac-operator` | Kubernetes operator for reconciliation |
+   | OSAC AAP | `osac-aap` | Execution Environment image used by the AAP bootstrap job and AAP job templates |
 
 #### OSAC AAP Customization
 
-For osac-aap, in addition to the image override, you must also update the AAP
-configuration secrets in your overlay's `kustomization.yaml`:
+The `osac-aap` image is the Execution Environment (EE) image. It is used in two
+places: as the container image for the **bootstrap job** during installation, and
+as the EE image configured in **AAP for running job templates** after installation.
+When overriding this image, you must update both the Kustomize `images` section
+and the `AAP_EE_IMAGE` secret literal to keep them in sync:
+
+```yaml
+images:
+  - name: osac-aap
+    newName: <your-registry>/osac-aap
+    newTag: <your-tag>
+```
+
+You must also update the AAP configuration secrets in your overlay's
+`kustomization.yaml`:
 
 ```yaml
 secretGenerator:

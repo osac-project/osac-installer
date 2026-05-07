@@ -49,6 +49,9 @@ configMapGenerator:
       - OSAC_FULFILLMENT_SERVICE_URI=https://fulfillment-internal-api:8001
 
 images:
+  - name: osac-aap
+    newName: ghcr.io/osac-project/osac-aap
+    newTag: latest
   - name: ghcr.io/osac-project/osac-operator
     digest: sha256:9b271b405219e6be4c61259b8ebfcb3b41a7fa58ecccd6ada93c10d046f510a8
   - name: ghcr.io/osac-project/fulfillment-service

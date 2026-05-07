@@ -93,6 +93,9 @@ configMapGenerator:
     - NETRIS_TENANT_NAME=Admin
 
 images:
+  - name: osac-aap
+    newName: ghcr.io/osac-project/osac-aap
+    newTag: sha-6f5dbdd
   - name: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
     newName: quay.io/openshift/origin-cli
     newTag: "4.20.0"

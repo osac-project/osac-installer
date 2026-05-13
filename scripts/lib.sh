@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Retry a condition until it succeeds or times out, optionally running a command each iteration
 # Usage: retry_until <timeout_seconds> <interval_seconds> <condition_command> [loop_command]
@@ -53,10 +53,10 @@ wait_for_resource() {
         }
     fi
 
-    retry_until 300 5 '[[ -n "$(oc get "${resource}" --ignore-not-found "${ns_args[@]}")" ]]' || {
+    retry_until 300 5 '[[ -n "$(oc get "${resource}" --ignore-not-found ${ns_args[@]+"${ns_args[@]}"})" ]]' || {
         echo "Timed out waiting for ${resource} to exist"
         exit 1
     }
 
-    oc wait --for="${condition}" "${resource}" "${ns_args[@]}" --timeout="${timeout}s"
+    oc wait --for="${condition}" "${resource}" ${ns_args[@]+"${ns_args[@]}"} --timeout="${timeout}s"
 }

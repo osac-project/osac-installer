@@ -1,0 +1,30 @@
+name: PR Checklist
+
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+
+jobs:
+  check-pr-checklist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR checklist
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ -z "$PR_BODY" ]; then
+            echo "::error::PR body is empty. Please use the PR template and check all boxes."
+            exit 1
+          fi
+
+          unchecked=$(echo "$PR_BODY" | grep -c '\- \[ \]' || true)
+
+          if [ "$unchecked" -gt 0 ]; then
+            echo "::error::Found $unchecked unchecked checkbox(es) in the PR body. Please check all boxes before merging."
+            echo ""
+            echo "Unchecked items:"
+            echo "$PR_BODY" | grep '\- \[ \]'
+            exit 1
+          fi
+
+          echo "All checklist items are checked."

@@ -12,18 +12,43 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          if [ -z "$PR_BODY" ]; then
-            echo "::error::PR body is empty. Please use the PR template and check all boxes."
-            exit 1
+          CHECKS=(
+            "I have added tests for this change, or verified they are not applicable"
+            "I have opened an E2E PR in osac-test-infra, or verified it is not applicable"
+          )
+
+          missing=()
+          unchecked=()
+
+          for check in "${CHECKS[@]}"; do
+            if echo "$PR_BODY" | grep -qF -- "- [x] $check"; then
+              continue
+            elif echo "$PR_BODY" | grep -qF -- "- [ ] $check"; then
+              unchecked+=("$check")
+            else
+              missing+=("$check")
+            fi
+          done
+
+          failed=false
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required checklist items. Do not remove items from the PR template."
+            for item in "${missing[@]}"; do
+              echo "  - $item"
+            done
+            failed=true
           fi
 
-          unchecked=$(echo "$PR_BODY" | grep -c '\- \[ \]' || true)
+          if [ ${#unchecked[@]} -gt 0 ]; then
+            echo "::error::Unchecked checklist items:"
+            for item in "${unchecked[@]}"; do
+              echo "  - [ ] $item"
+            done
+            failed=true
+          fi
 
-          if [ "$unchecked" -gt 0 ]; then
-            echo "::error::Found $unchecked unchecked checkbox(es) in the PR body. Please check all boxes before merging."
-            echo ""
-            echo "Unchecked items:"
-            echo "$PR_BODY" | grep '\- \[ \]'
+          if [ "$failed" = true ]; then
             exit 1
           fi
 

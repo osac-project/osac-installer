@@ -43,9 +43,17 @@ if [[ -f prerequisites/keycloak/service/password-setup-job.yaml ]]; then
 fi
 
 echo "[3/10] Recreating fulfillment controller credentials..."
-FC_CLIENT_ID=$(jq -er '.clients[] | select(.serviceAccountsEnabled == true) | .clientId' prerequisites/keycloak/service/files/realm.json)
-FC_CLIENT_SECRET=$(jq -er ".clients[] | select(.clientId == \"${FC_CLIENT_ID}\") | .secret // empty" prerequisites/keycloak/service/files/realm.json)
-[[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for ${FC_CLIENT_ID} in realm.json" >&2; exit 1; }
+KC_ADMIN_TOKEN=$(curl -sk "https://keycloak.${KEYCLOAK_NS}.svc:443/realms/master/protocol/openid-connect/token" \
+    -d "client_id=admin-cli" -d "username=admin" -d "password=admin" -d "grant_type=password" | jq -r '.access_token')
+[[ -n "${KC_ADMIN_TOKEN}" && "${KC_ADMIN_TOKEN}" != "null" ]] || { echo "ERROR: Could not get Keycloak admin token" >&2; exit 1; }
+FC_CLIENT_ID=$(curl -sk -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" \
+    "https://keycloak.${KEYCLOAK_NS}.svc:443/admin/realms/osac/clients?first=0&max=100" | \
+    jq -er '[.[] | select(.serviceAccountsEnabled == true)][0].clientId')
+[[ -n "${FC_CLIENT_ID}" && "${FC_CLIENT_ID}" != "null" ]] || { echo "ERROR: Could not find service account client in Keycloak" >&2; exit 1; }
+FC_CLIENT_SECRET=$(curl -sk -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" \
+    "https://keycloak.${KEYCLOAK_NS}.svc:443/admin/realms/osac/clients?clientId=${FC_CLIENT_ID}" | \
+    jq -er '.[0].secret')
+[[ -n "${FC_CLIENT_SECRET}" && "${FC_CLIENT_SECRET}" != "null" ]] || { echo "ERROR: Could not get secret for client ${FC_CLIENT_ID}" >&2; exit 1; }
 oc delete secret fulfillment-controller-credentials -n "${INSTALLER_NAMESPACE}" --ignore-not-found
 oc create secret generic fulfillment-controller-credentials \
     --from-literal=client-id="${FC_CLIENT_ID}" \

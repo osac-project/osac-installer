@@ -36,6 +36,11 @@ oc create configmap keycloak-realm \
     -n "${KEYCLOAK_NS}" --dry-run=client -o yaml | oc apply -f -
 oc rollout restart deploy/keycloak-service -n "${KEYCLOAK_NS}"
 oc rollout status deploy/keycloak-service -n "${KEYCLOAK_NS}" --timeout=300s
+if [[ -f prerequisites/keycloak/service/password-setup-job.yaml ]]; then
+    oc delete job keycloak-set-passwords -n "${KEYCLOAK_NS}" --ignore-not-found
+    oc apply -f prerequisites/keycloak/service/password-setup-job.yaml -n "${KEYCLOAK_NS}"
+    oc wait --for=condition=Complete job/keycloak-set-passwords -n "${KEYCLOAK_NS}" --timeout=120s
+fi
 
 echo "[3/10] Recreating fulfillment controller credentials..."
 FC_CLIENT_ID=$(jq -er '.clients[] | select(.serviceAccountsEnabled == true) | .clientId' prerequisites/keycloak/service/files/realm.json)

@@ -19,7 +19,7 @@ echo "Overlay: ${INSTALLER_KUSTOMIZE_OVERLAY}"
 echo "Cluster domain: ${CLUSTER_DOMAIN}"
 echo ""
 
-echo "[1/8] Patching stale routes with new domain..."
+echo "[1/10] Patching stale routes with new domain..."
 OLD_DOMAIN=$(oc get route osac-aap -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.spec.host}' 2>/dev/null | sed "s/^osac-aap-${INSTALLER_NAMESPACE}\.//")
 echo "  Old domain: ${OLD_DOMAIN}"
 echo "  New domain: ${CLUSTER_DOMAIN}"
@@ -29,18 +29,37 @@ for route in $(oc get routes -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.items[*]
     oc patch route "${route}" -n "${INSTALLER_NAMESPACE}" --type=merge -p "{\"spec\":{\"host\":\"${NEW_HOST}\"}}"
 done
 
-echo "[2/8] Applying kustomize overlay..."
+echo "[2/10] Updating Keycloak realm..."
+KEYCLOAK_NS="keycloak"
+oc create configmap keycloak-realm \
+    --from-file=realm.json=prerequisites/keycloak/service/files/realm.json \
+    -n "${KEYCLOAK_NS}" --dry-run=client -o yaml | oc apply -f -
+oc rollout restart deploy/keycloak-service -n "${KEYCLOAK_NS}"
+oc rollout status deploy/keycloak-service -n "${KEYCLOAK_NS}" --timeout=300s
+
+echo "[3/10] Recreating fulfillment controller credentials..."
+FC_CLIENT_ID=$(jq -er '.clients[] | select(.serviceAccountsEnabled == true) | .clientId' prerequisites/keycloak/service/files/realm.json)
+FC_CLIENT_SECRET=$(jq -er ".clients[] | select(.clientId == \"${FC_CLIENT_ID}\") | .secret // empty" prerequisites/keycloak/service/files/realm.json)
+[[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for ${FC_CLIENT_ID} in realm.json" >&2; exit 1; }
+oc delete secret fulfillment-controller-credentials -n "${INSTALLER_NAMESPACE}" --ignore-not-found
+oc create secret generic fulfillment-controller-credentials \
+    --from-literal=client-id="${FC_CLIENT_ID}" \
+    --from-literal=client-secret="${FC_CLIENT_SECRET}" \
+    -n "${INSTALLER_NAMESPACE}"
+echo "  Credentials created for client: ${FC_CLIENT_ID}"
+
+echo "[4/10] Applying kustomize overlay..."
 oc delete job -n "${INSTALLER_NAMESPACE}" --all --ignore-not-found
 oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}"
 
-echo "[3/8] Applying AAP configuration..."
+echo "[5/10] Applying AAP configuration..."
 INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
 INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \
     ./scripts/aap-configuration.sh
 
 oc config set-context --current --namespace="${INSTALLER_NAMESPACE}"
 
-echo "[4/8] Waiting for AAP controller..."
+echo "[6/10] Waiting for AAP controller..."
 retry_until 300 10 '[[ "$(oc get automationcontroller osac-aap-controller -n '"${INSTALLER_NAMESPACE}"' -o jsonpath='"'"'{.status.conditions[?(@.type=="Running")].status}'"'"' 2>/dev/null)" == "True" ]]' || {
     echo "Timed out waiting for AAP controller to be Running"
     exit 1
@@ -51,13 +70,13 @@ retry_until 120 5 '[[ "$(curl -sk -o /dev/null -w %{http_code} https://'"${AAP_R
     exit 1
 }
 
-echo "[5/8] Configuring AAP access..."
+echo "[7/10] Configuring AAP access..."
 ./scripts/prepare-aap.sh
 
-echo "[6/8] Configuring fulfillment service..."
+echo "[8/10] Configuring fulfillment service..."
 ./scripts/prepare-fulfillment-service.sh
 
-echo "[7/8] Restarting fulfillment pods..."
+echo "[9/10] Restarting fulfillment pods..."
 oc rollout restart deploy/fulfillment-controller -n "${INSTALLER_NAMESPACE}"
 oc rollout restart deploy/fulfillment-grpc-server -n "${INSTALLER_NAMESPACE}"
 oc rollout restart deploy/fulfillment-rest-gateway -n "${INSTALLER_NAMESPACE}"
@@ -67,7 +86,7 @@ oc rollout status deploy/fulfillment-grpc-server -n "${INSTALLER_NAMESPACE}" --t
 oc rollout status deploy/fulfillment-rest-gateway -n "${INSTALLER_NAMESPACE}" --timeout=120s
 oc rollout status deploy/fulfillment-ingress-proxy -n "${INSTALLER_NAMESPACE}" --timeout=120s
 
-echo "[8/8] Configuring tenant..."
+echo "[10/10] Configuring tenant..."
 ./scripts/prepare-tenant.sh
 
 echo ""

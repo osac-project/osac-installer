@@ -23,10 +23,12 @@ echo "[1/10] Patching stale routes with new domain..."
 OLD_DOMAIN=$(oc get route osac-aap -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.spec.host}' 2>/dev/null | sed "s/^osac-aap-${INSTALLER_NAMESPACE}\.//")
 echo "  Old domain: ${OLD_DOMAIN}"
 echo "  New domain: ${CLUSTER_DOMAIN}"
-for route in $(oc get routes -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.items[*].metadata.name}'); do
-    OLD_HOST=$(oc get route "${route}" -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.spec.host}')
-    NEW_HOST=$(echo "${OLD_HOST}" | sed "s/${OLD_DOMAIN}/${CLUSTER_DOMAIN}/")
-    oc patch route "${route}" -n "${INSTALLER_NAMESPACE}" --type=merge -p "{\"spec\":{\"host\":\"${NEW_HOST}\"}}"
+for ns in "${INSTALLER_NAMESPACE}" keycloak; do
+    for route in $(oc get routes -n "${ns}" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+        OLD_HOST=$(oc get route "${route}" -n "${ns}" -o jsonpath='{.spec.host}')
+        NEW_HOST=$(echo "${OLD_HOST}" | sed "s/${OLD_DOMAIN}/${CLUSTER_DOMAIN}/")
+        oc patch route "${route}" -n "${ns}" --type=merge -p "{\"spec\":{\"host\":\"${NEW_HOST}\"}}"
+    done
 done
 
 echo "[2/10] Updating Keycloak realm..."
@@ -43,15 +45,16 @@ if [[ -f prerequisites/keycloak/service/password-setup-job.yaml ]]; then
 fi
 
 echo "[3/10] Recreating fulfillment controller credentials..."
-KC_ADMIN_TOKEN=$(curl -sk "https://keycloak.${KEYCLOAK_NS}.svc:443/realms/master/protocol/openid-connect/token" \
+KC_URL="https://$(oc get route keycloak -n "${KEYCLOAK_NS}" -o jsonpath='{.spec.host}')"
+KC_ADMIN_TOKEN=$(curl -sk "${KC_URL}/realms/master/protocol/openid-connect/token" \
     -d "client_id=admin-cli" -d "username=admin" -d "password=admin" -d "grant_type=password" | jq -r '.access_token')
-[[ -n "${KC_ADMIN_TOKEN}" && "${KC_ADMIN_TOKEN}" != "null" ]] || { echo "ERROR: Could not get Keycloak admin token" >&2; exit 1; }
+[[ -n "${KC_ADMIN_TOKEN}" && "${KC_ADMIN_TOKEN}" != "null" ]] || { echo "ERROR: Could not get Keycloak admin token from ${KC_URL}" >&2; exit 1; }
 FC_CLIENT_ID=$(curl -sk -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" \
-    "https://keycloak.${KEYCLOAK_NS}.svc:443/admin/realms/osac/clients?first=0&max=100" | \
+    "${KC_URL}/admin/realms/osac/clients?first=0&max=100" | \
     jq -er '[.[] | select(.serviceAccountsEnabled == true)][0].clientId')
 [[ -n "${FC_CLIENT_ID}" && "${FC_CLIENT_ID}" != "null" ]] || { echo "ERROR: Could not find service account client in Keycloak" >&2; exit 1; }
 FC_CLIENT_SECRET=$(curl -sk -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" \
-    "https://keycloak.${KEYCLOAK_NS}.svc:443/admin/realms/osac/clients?clientId=${FC_CLIENT_ID}" | \
+    "${KC_URL}/admin/realms/osac/clients?clientId=${FC_CLIENT_ID}" | \
     jq -er '.[0].secret')
 [[ -n "${FC_CLIENT_SECRET}" && "${FC_CLIENT_SECRET}" != "null" ]] || { echo "ERROR: Could not get secret for client ${FC_CLIENT_ID}" >&2; exit 1; }
 oc delete secret fulfillment-controller-credentials -n "${INSTALLER_NAMESPACE}" --ignore-not-found

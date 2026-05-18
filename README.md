@@ -129,8 +129,10 @@ Use Kustomize to manage your environment-specific configurations.
 
    - In `kustomization.yaml`: Update the `namespace` field to `<project-name>`
    - In `prefixTransformer.yaml`: Update the `prefix` field to `<project-name>-`
-   - In `ca-trust-bundle.yaml`: Update the `values` field element
-     to `<project-name>`.
+   - In `ca-trust-bundle.yaml`: Update `metadata.name` to `ca-bundle-<project-name>`
+     and update the `values` field element to `<project-name>`.
+     The Bundle is cluster-scoped, so each overlay must use a unique name to avoid
+     overwriting other developers' Bundles on shared clusters.
    - In `kustomization.yaml`: Replace `<cluster-name>.<base-domain>` in the `OSAC_AAP_URL`
      value with your cluster's actual domain (e.g., `mgmt.example.devcluster.openshift.com`).
      You can find it by running: `oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'`

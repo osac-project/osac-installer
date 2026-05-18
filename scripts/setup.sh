@@ -243,6 +243,13 @@ wait_for_namespace_cleanup "${INSTALLER_NAMESPACE}"
 # Apply kustomize overlay
 oc apply -k overlays/${INSTALLER_KUSTOMIZE_OVERLAY}
 
+# Clean up legacy shared ca-bundle Bundle if a per-overlay one now exists
+if oc get bundle "ca-bundle-${INSTALLER_NAMESPACE}" &>/dev/null && \
+   oc get bundle ca-bundle &>/dev/null; then
+    echo "Deleting legacy shared ca-bundle Bundle (replaced by ca-bundle-${INSTALLER_NAMESPACE})..."
+    oc delete bundle ca-bundle
+fi
+
 # Create controller OAuth credentials from the Keycloak realm config
 FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
 [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }

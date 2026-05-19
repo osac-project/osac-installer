@@ -37,7 +37,7 @@ spec:
           secretName: keycloak-tls-cert
       initContainers:
       - name: wait-for-database
-        image: postgres
+        image: quay.io/sclorg/postgresql-15-c9s:latest
         imagePullPolicy: IfNotPresent
         command:
         - /bin/bash

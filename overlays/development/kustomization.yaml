@@ -185,11 +185,47 @@ patches:
           items:
           - name: ca-bundle
             configMaps:
-            - ca-bundle
+            - ca-bundle-osac-devel
             items:
             - key: bundle.pem
               path: ca-bundle.crt
             mountPath: /etc/pki/tls/certs
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fulfillment-controller
+      spec:
+        template:
+          spec:
+            volumes:
+            - name: cas
+              configMap:
+                name: ca-bundle-osac-devel
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fulfillment-grpc-server
+      spec:
+        template:
+          spec:
+            volumes:
+            - name: cas
+              configMap:
+                name: ca-bundle-osac-devel
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: fulfillment-rest-gateway
+      spec:
+        template:
+          spec:
+            volumes:
+            - name: cas
+              configMap:
+                name: ca-bundle-osac-devel
   # Override issuerUrl (base has :8001, we use port 443 via service mapping)
   # and admin_subjects for osac-devel namespace
   - patch: |

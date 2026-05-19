@@ -21,7 +21,7 @@
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
-  name: ca-bundle-osac-e2e-ci
+  name: ca-bundle
 spec:
   sources:
   # Source the CA certificate from cert-manager namespace where ClusterIssuer stores it

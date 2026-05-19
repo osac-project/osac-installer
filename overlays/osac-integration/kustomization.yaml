@@ -465,7 +465,7 @@ patches:
                 # Note: Tenant admins can manage users. IdP managers cannot (they only manage IdP config).
                 # OPA performs method-level authorization (can this user call this method?).
                 # The application layer enforces resource-level authorization via the generic server's
-                # determineAssignedTenants validation, which ensures users can only assign tenants they have visibility to.
+                # determineAssignedTenant validation, which ensures users can only assign a tenant they have visibility to.
                 allow if {
                   is_tenant_admin
                   grpc_method in {
@@ -486,7 +486,6 @@ patches:
                 allow if {
                   is_admin
                 }
-
             priority: 0
         hosts:
         - '*'

@@ -129,11 +129,35 @@ oc create secret generic fulfillment-controller-credentials \
     -n "${INSTALLER_NAMESPACE}"
 echo "  Credentials created for client: ${FC_CLIENT_ID}"
 
-echo "[3/8] Applying kustomize overlay..."
+echo "[3/9] Applying kustomize overlay..."
 oc delete job -n "${INSTALLER_NAMESPACE}" --all --ignore-not-found
 oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}"
 
-echo "[4/8] Waiting for fulfillment rollouts..."
+echo "[4/9] Reconfiguring MetalLB for current subnet..."
+if oc get crd ipaddresspools.metallb.io &>/dev/null; then
+    retry_until 120 5 '[[ "$(oc get deploy metallb-operator-controller-manager -n metallb-system -o jsonpath='"'"'{.status.availableReplicas}'"'"' 2>/dev/null)" == "1" ]]' || {
+        echo "Timed out waiting for MetalLB operator"
+        exit 1
+    }
+    NODE_IP=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+    SUBNET_PREFIX=$(echo "${NODE_IP}" | cut -d. -f1-3)
+    echo "  Node IP: ${NODE_IP}, configuring pool: ${SUBNET_PREFIX}.240-${SUBNET_PREFIX}.250"
+    retry_command 60 5 oc apply -f - <<METALLBEOF
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: caas-address-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - ${SUBNET_PREFIX}.240-${SUBNET_PREFIX}.250
+  autoAssign: false
+METALLBEOF
+else
+    echo "  MetalLB not installed, skipping"
+fi
+
+echo "[5/9] Waiting for fulfillment rollouts..."
 pids=()
 for deploy in fulfillment-controller fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
     oc rollout status "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}" --timeout=300s &
@@ -143,14 +167,14 @@ failed=0
 for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
 if (( failed )); then echo "ERROR: Fulfillment rollout failed"; exit 1; fi
 
-echo "[5/8] Applying AAP configuration..."
+echo "[6/9] Applying AAP configuration..."
 INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
 INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \
     ./scripts/aap-configuration.sh
 
 oc config set-context --current --namespace="${INSTALLER_NAMESPACE}"
 
-echo "[6/8] Waiting for AAP controller..."
+echo "[7/9] Waiting for AAP controller..."
 retry_until 300 10 '[[ "$(oc get automationcontroller osac-aap-controller -n '"${INSTALLER_NAMESPACE}"' -o jsonpath='"'"'{.status.conditions[?(@.type=="Running")].status}'"'"' 2>/dev/null)" == "True" ]]' || {
     echo "Timed out waiting for AAP controller to be Running"
     exit 1
@@ -161,11 +185,11 @@ retry_until 120 5 '[[ "$(curl -sk -o /dev/null -w %{http_code} https://'"${AAP_R
     exit 1
 }
 
-echo "[7/8] Configuring AAP access and fulfillment service..."
+echo "[8/9] Configuring AAP access and fulfillment service..."
 ./scripts/prepare-aap.sh
 ./scripts/prepare-fulfillment-service.sh
 
-echo "[8/8] Restarting fulfillment pods and configuring tenant..."
+echo "[9/9] Restarting fulfillment pods and configuring tenant..."
 for deploy in fulfillment-controller fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
     oc rollout restart "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}"
 done

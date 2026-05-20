@@ -55,7 +55,7 @@ if [[ -n "${INSTALLER_VM_TEMPLATE}" || -n "${INSTALLER_CLUSTER_TEMPLATE}" ]]; th
 
     if [[ -n "${INSTALLER_VM_TEMPLATE}" ]]; then
         echo "Waiting for computeinstancetemplate ${INSTALLER_VM_TEMPLATE} to be published..."
-        retry_until 300 5 '[[ -n "$(osac get computeinstancetemplate -o json | jq -r --arg tpl "$INSTALLER_VM_TEMPLATE" '"'"'select(.id == $tpl)'"'"' 2> /dev/null)" ]]' || {
+        retry_until 300 5 '[[ -n "$(osac get computeinstancetemplate -o json | jq -r --arg tpl "$INSTALLER_VM_TEMPLATE" '"'"'.[] | select(.id == $tpl)'"'"' 2> /dev/null)" ]]' || {
             echo "Timed out waiting for computeinstancetemplate to exist"
             exit 1
         }
@@ -63,7 +63,7 @@ if [[ -n "${INSTALLER_VM_TEMPLATE}" || -n "${INSTALLER_CLUSTER_TEMPLATE}" ]]; th
 
     if [[ -n "${INSTALLER_CLUSTER_TEMPLATE}" ]]; then
         echo "Waiting for clustertemplate ${INSTALLER_CLUSTER_TEMPLATE} to be published..."
-        retry_until 300 5 '[[ -n "$(osac get clustertemplate -o json | jq -r --arg tpl "$INSTALLER_CLUSTER_TEMPLATE" '"'"'select(.id == $tpl)'"'"' 2> /dev/null)" ]]' || {
+        retry_until 300 5 '[[ -n "$(osac get clustertemplate -o json | jq -r --arg tpl "$INSTALLER_CLUSTER_TEMPLATE" '"'"'.[] | select(.id == $tpl)'"'"' 2> /dev/null)" ]]' || {
             echo "Timed out waiting for clustertemplate to exist"
             exit 1
         }

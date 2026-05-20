@@ -43,7 +43,6 @@ echo ""
 if [[ "${STORAGE_SERVICE}" == "true" ]]; then
     wait_for_namespace_cleanup openshift-storage
     echo "Installing LVMS storage service..."
-    oc apply -f prerequisites/lvms/lvms-operator.yaml
     retry_until 300 3 '[[ -n "$(oc get csv --no-headers -n openshift-storage | grep lvms)" ]]' 'oc apply -f prerequisites/lvms/lvms-operator.yaml || true' || {
         echo "Timed out waiting for LVMS CSV to exist"
         exit 1
@@ -67,7 +66,6 @@ fi
 if [[ "${INGRESS_SERVICE}" == "true" ]]; then
     wait_for_namespace_cleanup metallb-system
     echo "Installing MetalLB ingress service..."
-    oc apply -f prerequisites/metallb/metallb-operator.yaml
     retry_until 300 3 '[[ -n "$(oc get csv --no-headers -n metallb-system | grep metallb)" ]]' 'oc apply -f prerequisites/metallb/metallb-operator.yaml || true' || {
         echo "Timed out waiting for MetalLB CSV to exist"
         exit 1
@@ -85,7 +83,6 @@ fi
 if [[ "${MCE_SERVICE}" == "true" ]]; then
     wait_for_namespace_cleanup multicluster-engine
     echo "Installing Multicluster Engine..."
-    oc apply -f prerequisites/mce/mce-operator.yaml
     retry_until 300 3 '[[ -n "$(oc get csv --no-headers -n multicluster-engine | grep multicluster-engine)" ]]' 'oc apply -f prerequisites/mce/mce-operator.yaml || true' || {
         echo "Timed out waiting for MCE CSV to exist"
         exit 1
@@ -126,7 +123,6 @@ fi
 if [[ "${VIRT_SERVICE}" == "true" ]]; then
     wait_for_namespace_cleanup openshift-cnv
     echo "Installing OpenShift Virtualization..."
-    oc apply -f prerequisites/cnv/cnv-operator.yaml
     retry_until 300 3 '[[ -n "$(oc get csv --no-headers -n openshift-cnv | grep kubevirt-hyperconverged-operator)" ]]' 'oc apply -f prerequisites/cnv/cnv-operator.yaml || true' || {
         echo "Timed out waiting for OpenShift Virtualization CSV to exist"
         exit 1

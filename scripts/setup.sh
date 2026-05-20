@@ -251,6 +251,11 @@ oc apply -k overlays/${INSTALLER_KUSTOMIZE_OVERLAY}
 # Ensure the shared ca-bundle Bundle exists and includes our namespace
 "${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
 
+retry_until 120 5 'oc get configmap ca-bundle -n '"${INSTALLER_NAMESPACE}"' &>/dev/null' || {
+    echo "Timed out waiting for ca-bundle ConfigMap to be created by trust-manager"
+    exit 1
+}
+
 # Create controller OAuth credentials from the Keycloak realm config
 FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
 [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }

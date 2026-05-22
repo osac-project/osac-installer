@@ -132,7 +132,10 @@ echo "  Credentials created for client: ${FC_CLIENT_ID}"
 echo "[3/8] Applying kustomize overlay..."
 oc delete job -n "${INSTALLER_NAMESPACE}" --all --ignore-not-found
 oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}"
+echo "  Deleting aap-bootstrap job (AAP config survives from snapshot, bootstrap not needed)"
 oc delete job aap-bootstrap -n "${INSTALLER_NAMESPACE}" --ignore-not-found
+echo "  AAP jobs in namespace:"
+oc get jobs -n "${INSTALLER_NAMESPACE}" --no-headers 2>/dev/null || echo "  (none)"
 
 echo "[4/8] Waiting for fulfillment rollouts..."
 pids=()
@@ -161,6 +164,12 @@ retry_until 120 5 '[[ "$(curl -sk -o /dev/null -w %{http_code} https://'"${AAP_R
     echo "Timed out waiting for AAP gateway API to respond"
     exit 1
 }
+
+echo "  AAP snapshot state diagnostics:"
+echo "  - AutomationController status: $(oc get automationcontroller osac-aap-controller -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.status.conditions[?(@.type=="Running")].status}' 2>/dev/null || echo 'NOT FOUND')"
+echo "  - AAP project revisions: $(curl -sk "https://${AAP_ROUTE_HOST}/api/controller/v2/projects/" -H "Authorization: Bearer $(oc create token -n "${INSTALLER_NAMESPACE}" admin 2>/dev/null)" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'{d.get(\"count\",0)} projects, current_job statuses: {[p.get(\"status\",\"?\") for p in d.get(\"results\",[])]}' )" 2>/dev/null || echo 'could not query')"
+echo "  - Job templates: $(curl -sk "https://${AAP_ROUTE_HOST}/api/controller/v2/job_templates/" -H "Authorization: Bearer $(oc create token -n "${INSTALLER_NAMESPACE}" admin 2>/dev/null)" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'{d.get(\"count\",0)} templates: {[t[\"name\"] for t in d.get(\"results\",[])]}' )" 2>/dev/null || echo 'could not query')"
+echo "  - Existing computeinstancetemplates: $(oc get computeinstancetemplate -n "${INSTALLER_NAMESPACE}" --no-headers 2>/dev/null | wc -l || echo 0)"
 
 echo "[7/8] Configuring AAP access and fulfillment service..."
 ./scripts/prepare-aap.sh

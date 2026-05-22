@@ -132,6 +132,7 @@ echo "  Credentials created for client: ${FC_CLIENT_ID}"
 echo "[3/8] Applying kustomize overlay..."
 oc delete job -n "${INSTALLER_NAMESPACE}" --all --ignore-not-found
 oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}"
+oc delete job aap-bootstrap -n "${INSTALLER_NAMESPACE}" --ignore-not-found
 
 echo "[4/8] Waiting for fulfillment rollouts..."
 pids=()

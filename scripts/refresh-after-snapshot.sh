@@ -203,10 +203,17 @@ for cert in authorino fulfillment-controller fulfillment-grpc-server fulfillment
     oc wait --for=condition=Ready "certificate.cert-manager.io/${cert}" -n "${INSTALLER_NAMESPACE}" --timeout=300s &
     pids+=($!)
 done
+# Kustomize apply may have changed deployment images, triggering new rollouts
+# that run DB migrations. Wait for those to finish before restarting pods —
+# otherwise the restart kills pods mid-migration and leaves the DB dirty.
+for deploy in fulfillment-controller fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
+    oc rollout status "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}" --timeout=300s &
+    pids+=($!)
+done
 failed=0
 for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
 wait ${pid_cdi} || failed=1
-if (( failed )); then echo "ERROR: TLS certificates not ready"; exit 1; fi
+if (( failed )); then echo "ERROR: TLS certificates or fulfillment rollouts not ready"; exit 1; fi
 echo "[4/8] TLS certificates ready, restarting fulfillment pods..."
 for deploy in fulfillment-controller fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
     oc rollout restart "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}"

@@ -508,7 +508,7 @@ for full examples.
 # ConfigMap with non-sensitive settings
 oc create configmap cluster-fulfillment-ig \
   --from-literal=NETWORK_CLASS=esi \
-  --from-literal=NETWORK_STEPS_COLLECTION=massopencloud.steps \
+  --from-literal=NETWORK_STEPS_COLLECTION=osac.steps \
   --from-literal=EXTERNAL_ACCESS_BASE_DOMAIN=box.massopen.cloud \
   --from-literal=EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS=box.massopen.cloud \
   --from-literal=EXTERNAL_ACCESS_API_INTERNAL_NETWORK=hypershift \
@@ -564,7 +564,7 @@ fulfillment endpoint to register templates with.
 
 ```bash
 oc create configmap publish-templates-ig \
-  --from-literal=OSAC_TEMPLATE_COLLECTIONS=osac.templates,osac.massopencloud \
+  --from-literal=OSAC_TEMPLATE_COLLECTIONS=osac.templates \
   --from-literal=OSAC_FULFILLMENT_SERVICE_URI=https://fulfillment-internal-api:8001 \
   -n ${NAMESPACE}
 ```

@@ -11,7 +11,7 @@ see [AAP Configuration](aap-configuration.md).
 
 | `NETWORK_CLASS` | `NETWORK_STEPS_COLLECTION` | Description |
 |-----------------|---------------------------|-------------|
-| `esi` (default) | `massopencloud.steps` | ESI (Elastic System Infrastructure) |
+| `esi` (default) | `osac.steps` | ESI (Elastic System Infrastructure) |
 | `netris` | `netris.steps` | Netris controller API |
 
 ## Netris Configuration

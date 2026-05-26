@@ -65,7 +65,7 @@ secretGenerator:
 configMapGenerator:
 - name: publish-templates-ig
   literals:
-    - OSAC_TEMPLATE_COLLECTIONS=osac.templates,osac.massopencloud
+    - OSAC_TEMPLATE_COLLECTIONS=osac.templates
     - OSAC_FULFILLMENT_SERVICE_URI=https://fulfillment-internal-api:8001
 - name: cluster-fulfillment-ig
   options:
@@ -73,7 +73,7 @@ configMapGenerator:
       osac.openshift.io/project: osac-aap
   literals:
     - NETWORK_CLASS=esi
-    - NETWORK_STEPS_COLLECTION=massopencloud.steps
+    - NETWORK_STEPS_COLLECTION=osac.steps
     - EXTERNAL_ACCESS_BASE_DOMAIN=box.massopen.cloud
     - EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS=box.massopen.cloud
     - EXTERNAL_ACCESS_API_INTERNAL_NETWORK=hypershift

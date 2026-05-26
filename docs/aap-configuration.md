@@ -38,7 +38,7 @@ for CI pipelines.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NETWORK_CLASS` | `esi` | Network backend (`netris` or `esi`) |
-| `NETWORK_STEPS_COLLECTION` | `massopencloud.steps` | Ansible collection for network steps |
+| `NETWORK_STEPS_COLLECTION` | `osac.steps` | Ansible collection for network steps |
 | `EXTERNAL_ACCESS_BASE_DOMAIN` | `box.massopen.cloud` | Base domain for cluster DNS records |
 | `EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS` | `box.massopen.cloud` | Comma-separated list of allowed domains |
 | `EXTERNAL_ACCESS_API_INTERNAL_NETWORK` | `hypershift` | Internal network for API access |

@@ -30,7 +30,7 @@ images:
   newTag: sha-2cec20c
 - name: osac-aap
   newName: ghcr.io/osac-project/osac-aap
-  newTag: sha-0255559
+  newTag: sha-c049d44
 - name: ghcr.io/osac-project/osac-operator
   newTag: sha-72aa363
 - name: envoy

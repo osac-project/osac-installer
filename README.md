@@ -47,6 +47,15 @@ The OSAC platform relies on four core components to deliver governed self-servic
    Leverages the **Red Hat Ansible Automation Platform** to store and execute the custom
    template logic required for provisioning.
 
+5. **Bare Metal Fulfillment Operator:**
+   Kubernetes operator for managing bare-metal host pools. It watches **BareMetalPool**
+   custom resources and reconciles them to their desired state by provisioning pools of
+   bare-metal hosts organized by host type (e.g., GPU nodes, worker nodes). Uses profile
+   templates to configure workflows and apply configuration parameters to selected hosts.
+   It also contains a Kubernetes controller that manages bare-metal hosts via OpenStack
+   Ironic. It watches **HostLease** CRs (defined by the Bare Metal Fulfillment Operator)
+   and reconciles power state with Ironic.
+
 ### Prerequisites & Setup
 
 > **System Requirements** This solution requires the following platforms to be installed
@@ -130,7 +139,8 @@ Use Kustomize to manage your environment-specific configurations.
 4. **Update Critical Configuration:**
    You **must** update these configuration values to match your environment:
 
-   - In `kustomization.yaml`: Update the `namespace` field to `<project-name>`
+   - In `kustomization.yaml`: Update the `namespace` field and other instances
+     of the default namespace throughout the overlay to `<project-name>`.
    - In `prefixTransformer.yaml`: Update the `prefix` field to `<project-name>-`
    - The `ca-bundle` Bundle is cluster-scoped and shared across overlays.
      **If using `setup.sh`**, it handles the Bundle automatically (creates it on
@@ -173,6 +183,67 @@ Use Kustomize to manage your environment-specific configurations.
      `oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'`.
      **If using `setup.sh`**, these values are discovered from the cluster
      and patched automatically.
+   - In `kustomization.yaml`: For bare metal fulfillment, copy each `.example` file in
+     `files/` to its real name, fill in the required values, and update the
+     corresponding `secretGenerator` entry to reference the real file.
+
+     **`files/clouds.yaml`** — OpenStack credentials for the bare metal provider:
+     ```yaml
+     clouds:
+       my-cloud:                        # cloud name — used as OS_CLOUD value below
+         auth:
+           auth_url: https://keystone.example.com:35357/
+           project_name: myproject
+           username: myuser
+           password: mypassword
+         region_name: RegionOne
+     ```
+
+     **`files/inventory.yaml`** — inventory source configuration:
+     ```yaml
+     name: my-inventory
+     type: openstack
+     options:
+       openstack:
+         cloud: my-cloud                # must match the cloud name in clouds.yaml
+     hostClass: openstack
+     networkClass: openstack
+     ```
+
+     **`files/management.yaml`** — management cloud configuration:
+     ```yaml
+     name: my-management
+     type: openstack
+     options:
+       openstack:
+         cloud: my-cloud                # must match the cloud name in clouds.yaml
+     ```
+
+     **`files/profile.yaml`** — one entry per bare metal host provisioning profile:
+     ```yaml
+     - name: agentProvisioning
+       hostSelector:
+         managedBy: baremetal
+         provisionState: available
+       labels:
+         profileName: agentProvisioning
+       persistentLabels:
+         managedBy: agent
+       hostTemplate: bm_host_agent_provisioning
+       expectedTemplateParameters:
+         - imageURL
+       optionalTemplateParameters:
+         - agentPrivateNetwork
+     ```
+
+     The cloud name key in `clouds.yaml` must also be set in the
+     `bare-metal-fulfillment-ig` secretGenerator literal so that the BMF operator and
+     the Ironic controller use the same OpenStack cloud:
+     ```yaml
+     - name: bare-metal-fulfillment-ig
+       literals:
+         - OS_CLOUD=my-cloud            # must match the cloud name in clouds.yaml
+     ```
 
    These changes ensure your installation uses a unique namespace and prevents resource
    name conflicts with other OSAC installations.
@@ -222,6 +293,7 @@ To test a specific revision of a component, you need to:
    | Fulfillment Service | `fulfillment-service` |
    | OSAC Operator | `osac-operator` |
    | OSAC AAP | `osac-aap` |
+   | Bare Metal Fulfillment Operator | `bare-metal-fulfillment-operator` |
 
 #### OSAC AAP Customization
 

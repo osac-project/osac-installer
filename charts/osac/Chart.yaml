@@ -21,3 +21,11 @@ dependencies:
     version: ">=0.0.0"
     repository: "file://../../base/osac-aap/charts/aap"
     alias: aap
+  - name: bare-metal-fulfillment-operator-crds
+    version: "0.0.0"
+    repository: "file://../../base/bare-metal-fulfillment-operator/charts/operator-crds"
+    alias: bmfCrds
+  - name: bare-metal-fulfillment-operator
+    version: "0.0.0"
+    repository: "file://../../base/bare-metal-fulfillment-operator/charts/operator"
+    alias: bmf

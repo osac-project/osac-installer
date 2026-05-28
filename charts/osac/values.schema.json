@@ -232,6 +232,109 @@
           "properties": {
             "name": { "type": "string", "default": "service" },
             "user": { "type": "string", "default": "service" }
+	  }
+	}
+      }
+    },
+    "bmfCrds": {
+      "type": "object",
+      "description": "Bare Metal Fulfillment Operator CRDs configuration"
+    },
+    "bmf": {
+      "type": "object",
+      "description": "Bare Metal Fulfillment Operator configuration",
+      "properties": {
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "Operator container image repository",
+              "default": "ghcr.io/osac-project/bare-metal-fulfillment-operator"
+            },
+            "tag": {
+              "type": "string",
+              "description": "Operator container image tag",
+              "default": "latest"
+            },
+            "pullPolicy": {
+              "type": "string",
+              "description": "Image pull policy",
+              "enum": ["Always", "IfNotPresent", "Never"],
+              "default": "Always"
+            }
+          }
+        },
+        "replicaCount": {
+          "type": "integer",
+          "description": "Number of operator replicas",
+          "minimum": 1,
+          "default": 1
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resource requests and limits",
+          "properties": {
+            "limits": {
+              "type": "object",
+              "properties": {
+                "cpu": { "type": "string" },
+                "memory": { "type": "string" }
+              }
+            },
+            "requests": {
+              "type": "object",
+              "properties": {
+                "cpu": { "type": "string" },
+                "memory": { "type": "string" }
+              }
+            }
+          }
+        },
+        "serviceAccount": {
+          "type": "object",
+          "properties": {
+            "create": {
+              "type": "boolean",
+              "description": "Create a ServiceAccount for the operator",
+              "default": true
+            },
+            "name": {
+              "type": "string",
+              "description": "Override the ServiceAccount name (uses fullname if empty)"
+            }
+          }
+        },
+        "secrets": {
+          "type": "object",
+          "description": "Names of Secrets mounted into the operator pod",
+          "properties": {
+            "inventoryConfig": {
+              "type": "string",
+              "description": "Secret name for OSAC inventory configuration",
+              "default": "osac-inventory-config"
+            },
+            "managementConfig": {
+              "type": "string",
+              "description": "Secret name for OSAC management configuration",
+              "default": "osac-management-config"
+            },
+            "osClouds": {
+              "type": "string",
+              "description": "Secret name for OpenStack clouds.yaml",
+              "default": "osac-os-clouds"
+            }
+          }
+        },
+        "configMaps": {
+          "type": "object",
+          "description": "Names of ConfigMaps mounted into the operator pod",
+          "properties": {
+            "profiles": {
+              "type": "string",
+              "description": "ConfigMap name for OSAC profiles",
+              "default": "osac-profiles"
+            }
           }
         }
       }

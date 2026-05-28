@@ -33,12 +33,17 @@ fi
 # Store the token in a Kubernetes secret
 oc create secret generic osac-aap-api-token \
     --from-literal=token="${AAP_TOKEN}" \
-    -n ${INSTALLER_NAMESPACE} \
+    -n "${INSTALLER_NAMESPACE}" \
     --dry-run=client -o yaml | oc apply -f -
 
 # Set the correct AAP URL on the operator deployment (triggers rollout)
 oc set env deployment/osac-operator-controller-manager \
-    -n ${INSTALLER_NAMESPACE} \
+    -n "${INSTALLER_NAMESPACE}" \
+    OSAC_AAP_URL="${AAP_URL}/api/controller"
+
+# Set the correct AAP URL on the bare metal fulfillment operator deployment (triggers rollout)
+oc set env deployment/bmf-operator-controller-manager \
+    -n "${INSTALLER_NAMESPACE}" \
     OSAC_AAP_URL="${AAP_URL}/api/controller"
 
 echo "AAP API token created and stored in secret osac-aap-api-token"

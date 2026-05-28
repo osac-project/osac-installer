@@ -13,11 +13,12 @@ declare -A IMAGE_NAME=(
   [osac-operator]="ghcr.io/osac-project/osac-operator"
   [osac-fulfillment-service]="ghcr.io/osac-project/fulfillment-service"
   [osac-aap]="osac-aap"
+  [bare-metal-fulfillment-operator]="ghcr.io/osac-project/bare-metal-fulfillment-operator"
 )
 
 errors=0
 
-for submodule in osac-operator osac-fulfillment-service osac-aap; do
+for submodule in osac-operator osac-fulfillment-service osac-aap bare-metal-fulfillment-operator; do
   commit=$(git -C "${REPO_ROOT}" submodule status "base/${submodule}" | awk '{print $1}' | tr -d ' +-')
   short="${commit:0:7}"
   tag="sha-${short}"
@@ -74,6 +75,7 @@ done
 operator_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-operator | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 fulfillment_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-fulfillment-service | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 aap_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-aap | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
+bmf_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/bare-metal-fulfillment-operator | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 
 for values_file in "${REPO_ROOT}"/values/*.yaml; do
   [[ ! -f "${values_file}" ]] && continue
@@ -83,7 +85,8 @@ for values_file in "${REPO_ROOT}"/values/*.yaml; do
   for pair in \
     "osac-operator:tag ${operator_tag}" \
     "fulfillment-service:inline ${fulfillment_tag}" \
-    "osac-aap:inline ${aap_tag}"; do
+    "osac-aap:inline ${aap_tag}" \
+    "bare-metal-fulfillment-operator:tag ${bmf_tag}"; do
     component="${pair%%:*}"
     rest="${pair#*:}"
     mode="${rest%% *}"

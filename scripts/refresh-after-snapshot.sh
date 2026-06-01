@@ -24,6 +24,24 @@ echo ""
 
 echo "Waiting for cluster services to stabilize..."
 
+fix_ovn_masquerade_subnet() {
+    # Snapshot flavors carry the pre-4.17 OVN-K masquerade subnet default
+    # (169.254.169.0/29, 8 IPs). This is too small for CUDNs — OVN-K cannot
+    # allocate masquerade IPs for the gateway router and pods in CUDN
+    # namespaces get no external connectivity (DNS, registry pulls all fail).
+    local current
+    current=$(oc get nodes -o jsonpath='{.items[0].metadata.annotations.k8s\.ovn\.org/node-masquerade-subnet}' 2>/dev/null)
+    if echo "${current}" | grep -q "169.254.0.0/17"; then
+        echo "  OVN masquerade subnet already 169.254.0.0/17"
+        return 0
+    fi
+    echo "  Expanding OVN masquerade subnet to 169.254.0.0/17..."
+    oc patch networks.operator.openshift.io cluster --type=merge \
+        -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"ipv4":{"internalMasqueradeSubnet":"169.254.0.0/17"}}}}}}'
+    oc rollout status daemonset/ovnkube-node -n openshift-ovn-kubernetes --timeout=300s
+    echo "  OVN masquerade subnet configured"
+}
+
 patch_stale_routes() {
     echo "  Patching stale routes with new domain..."
     for ns in "${INSTALLER_NAMESPACE}" "${KEYCLOAK_NS}" "multicluster-engine"; do
@@ -46,6 +64,8 @@ oc wait --for=condition=Ready certificate/keycloak-tls -n "${KEYCLOAK_NS}" --tim
 pid_kc=$!
 patch_stale_routes &
 pid_rt=$!
+fix_ovn_masquerade_subnet &
+pid_masq=$!
 # Recert triggers an AAP controller rollout on boot. Wait for it to finish
 # before mutating any resources, otherwise the operator cascade causes
 # multiple waves of rollouts that kill in-flight AAP jobs.
@@ -58,6 +78,7 @@ failed=0
 wait ${pid_tm} || failed=1
 wait ${pid_kc} || failed=1
 wait ${pid_rt} || failed=1
+wait ${pid_masq} || failed=1
 wait ${pid_aap1} || true
 wait ${pid_aap2} || true
 if (( failed )); then

@@ -32,7 +32,7 @@ images:
   newName: ghcr.io/osac-project/osac-aap
   newTag: sha-e2fd241
 - name: ghcr.io/osac-project/osac-operator
-  newTag: sha-b613d8d
+  newTag: sha-50d1f27
 - name: envoy
   newName: docker.io/envoyproxy/envoy
   newTag: v1.33.0

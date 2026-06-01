@@ -175,7 +175,9 @@ oc delete job -n "${INSTALLER_NAMESPACE}" --all --ignore-not-found
 sed -i '/aap\.yaml/d; /job\.yaml/d' base/osac-aap/config/base/kustomization.yaml
 oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}"
 
-PULL_SECRET="/installer/overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/files/quay-pull-secret.json"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
+PULL_SECRET="${REPO_ROOT}/overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/files/quay-pull-secret.json"
+[[ -f "${PULL_SECRET}" ]] || { echo "ERROR: Pull secret not found: ${PULL_SECRET}" >&2; exit 1; }
 img_check_pids=()
 img_check_imgs=()
 img_check_logs=()

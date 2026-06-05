@@ -67,6 +67,55 @@ for overlay in "${CI_OVERLAYS[@]}"; do
   done
 done
 
+# --- Helm values files ---
+# Sync image tags in values/*.yaml with submodule commits.
+# Skips files that use :latest (e.g. development.yaml).
+
+operator_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-operator | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
+fulfillment_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-fulfillment-service | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
+
+for values_file in "${REPO_ROOT}"/values/*.yaml; do
+  [[ ! -f "${values_file}" ]] && continue
+  name=$(basename "${values_file}")
+  grep -q "sha-" "${values_file}" || continue
+
+  for pair in \
+    "osac-operator:tag ${operator_tag}" \
+    "fulfillment-service:inline ${fulfillment_tag}" \
+    "osac-aap:inline ${aap_tag}"; do
+    component="${pair%%:*}"
+    rest="${pair#*:}"
+    mode="${rest%% *}"
+    expected="${rest#* }"
+
+    if [[ "${mode}" == "tag" ]]; then
+      current=$(grep -A1 "repository: ghcr.io/osac-project/${component}$" "${values_file}" | grep "tag:" | awk '{print $2}')
+      [[ -z "${current}" ]] && continue
+      if [[ "${current}" == "${expected}" ]]; then
+        echo "${name} ${component}: OK (${expected})"
+      elif [[ "${1:-}" == "--fix" ]]; then
+        sed -i "/repository: ghcr.io\/osac-project\/${component}$/{n;s|tag: .*|tag: ${expected}|}" "${values_file}"
+        echo "${name} ${component}: FIXED ${current} -> ${expected}"
+      else
+        echo "${name} ${component}: MISMATCH current=${current} expected=${expected}"
+        errors=$((errors + 1))
+      fi
+    else
+      current=$(grep -o "${component}:sha-[a-f0-9]\{7\}" "${values_file}" | head -1 | sed "s/${component}://")
+      [[ -z "${current}" ]] && continue
+      if [[ "${current}" == "${expected}" ]]; then
+        echo "${name} ${component}: OK (${expected})"
+      elif [[ "${1:-}" == "--fix" ]]; then
+        sed -i "s|${component}:sha-[a-f0-9]\{7\}|${component}:${expected}|g" "${values_file}"
+        echo "${name} ${component}: FIXED ${current} -> ${expected}"
+      else
+        echo "${name} ${component}: MISMATCH current=${current} expected=${expected}"
+        errors=$((errors + 1))
+      fi
+    fi
+  done
+done
+
 if [[ ${errors} -gt 0 ]]; then
   echo ""
   echo "Run '$0 --fix' to update the tags automatically."

@@ -33,6 +33,7 @@ jobs:
             local code
             code=$(curl -s -o /dev/null -w "%{http_code}" \
               -H "Authorization: Bearer ${token}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
               "https://ghcr.io/v2/osac-project/${image}/manifests/${tag}")
             if [[ "${code}" != "200" ]]; then
               echo "ERROR: ${repo} latest main commit ${sha:0:7} has no published image (tag ${tag})" >&2

@@ -284,5 +284,31 @@ check_postgres_prerequisites() {
     echo "PostgreSQL prerequisites satisfied."
 }
 
+# Overlays using console-proxy-shared-dev deploy console-proxy to the fixed
+# "osac" namespace while the rest of the stack lives in the overlay namespace
+# (e.g. osac-devel). Ensure that namespace exists before applying manifests.
+ensure_console_proxy_namespace() {
+    local overlay="${1:-development}"
+    if [[ "${overlay}" == *..* || "${overlay}" == */* ]] || \
+       [[ ! "${overlay}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+        echo "ERROR: invalid overlay name: ${overlay}"
+        exit 1
+    fi
+    if ! grep -q 'console-proxy-shared-dev' "overlays/${overlay}/kustomization.yaml" 2>/dev/null; then
+        return
+    fi
+    wait_for_namespace_cleanup osac
+    if oc get namespace osac &>/dev/null; then
+        return
+    fi
+    echo "Creating shared console-proxy namespace osac..."
+    if ! oc create namespace osac; then
+        oc get namespace osac &>/dev/null || {
+            echo "ERROR: failed to create namespace osac"
+            exit 1
+        }
+    fi
+}
+
 _LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_LIB_DIR}/oc.sh"

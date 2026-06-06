@@ -267,6 +267,7 @@ if [[ "${DEPLOY_MODE}" == "helm" ]]; then
         --wait
 else
     # --- Kustomize deployment mode (legacy) ---
+    ensure_console_proxy_namespace "${INSTALLER_KUSTOMIZE_OVERLAY}"
     echo "Deploying OSAC using Kustomize..."
     oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}" --server-side --force-conflicts
 fi

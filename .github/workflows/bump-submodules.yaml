@@ -99,14 +99,20 @@ jobs:
           git config user.name "osac-dev-bot"
           git config user.email "osac-dev-bot@users.noreply.github.com"
           git add -A
+
+          # Skip if bump branch already has identical content
+          git fetch origin "${BRANCH}" || true
+          EXISTING_TREE=$(git rev-parse "refs/remotes/origin/${BRANCH}^{tree}" || echo "")
+          NEW_TREE=$(git write-tree)
+          if [[ -n "${EXISTING_TREE}" && "${NEW_TREE}" == "${EXISTING_TREE}" ]]; then
+            echo "Bump branch already up to date, skipping"
+            exit 0
+          fi
+
           git commit -m "bump submodules to latest with published images"
           git push origin "HEAD:${BRANCH}" --force
 
-          EXISTING=$(gh pr list --head "${BRANCH}" --json number --jq '.[0].number // empty')
-          if [[ -n "${EXISTING}" ]]; then
-            echo "Updated existing PR #${EXISTING}"
-          else
-            BODY=$(cat <<BODY_EOF
+          BODY=$(cat <<BODY_EOF
           ## Automated submodule bump
 
           $(cat /tmp/bump-summary.txt)
@@ -115,6 +121,12 @@ jobs:
           Runs every 3 hours via [bump-submodules workflow](../actions/workflows/bump-submodules.yaml).
           BODY_EOF
           )
+
+          EXISTING=$(gh pr list --head "${BRANCH}" --json number --jq '.[0].number // empty')
+          if [[ -n "${EXISTING}" ]]; then
+            gh pr edit "${EXISTING}" --body "${BODY}"
+            echo "Updated existing PR #${EXISTING}"
+          else
             gh pr create \
               --title "bump submodules" \
               --body "${BODY}" \

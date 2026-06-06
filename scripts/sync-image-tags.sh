@@ -73,6 +73,7 @@ done
 
 operator_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-operator | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 fulfillment_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-fulfillment-service | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
+aap_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-aap | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 
 for values_file in "${REPO_ROOT}"/values/*.yaml; do
   [[ ! -f "${values_file}" ]] && continue

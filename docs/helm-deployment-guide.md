@@ -6,6 +6,7 @@ using the Helm umbrella chart. Covers VMaaS and CaaS profiles.
 ## Table of Contents
 
 - [Before You Begin](#before-you-begin)
+- [Install CLI tools](#install-cli-tools)
 - [Phase 1: Cluster Prerequisites](#phase-1-cluster-prerequisites)
   - [1.1 Storage (LVMS)](#11-storage-lvms)
   - [1.2 Ingress (MetalLB)](#12-ingress-metallb)
@@ -52,6 +53,27 @@ using the Helm umbrella chart. Covers VMaaS and CaaS profiles.
 | Network | Outbound access to github.com, ghcr.io, quay.io, registry.redhat.io |
 | Storage | A default StorageClass (or install LVMS below) |
 | AAP license | Subscription manifest (`license.zip`) from [Red Hat Customer Portal](https://access.redhat.com/) |
+
+### Install CLI tools
+
+Helm 3 is required on the machine running `setup.sh` or `make helm-*` targets
+(it is not installed onto the cluster). Install the CLI tools listed above if
+they are not already in your `PATH`:
+
+```bash
+# RHEL / Fedora
+sudo dnf install helm jq
+
+# Or install Helm directly: https://helm.sh/docs/intro/install/
+```
+
+Verify:
+
+```bash
+helm version --short
+oc whoami
+jq --version
+```
 
 ### Clone and Verify
 

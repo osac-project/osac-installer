@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+# Require a command to be available in PATH.
+# Usage: require_command <command> [install_hint]
+require_command() {
+    local cmd="$1"
+    local hint="${2:-}"
+    if ! command -v "${cmd}" >/dev/null 2>&1; then
+        echo "ERROR: '${cmd}' not found in PATH."
+        [[ -n "${hint}" ]] && echo "${hint}"
+        exit 1
+    fi
+}
+
 # Retry a condition until it succeeds or times out, optionally running a command each iteration
 # Usage: retry_until <timeout_seconds> <interval_seconds> <condition_command> [loop_command]
 # Returns: 0 on success, 1 on timeout

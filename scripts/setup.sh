@@ -28,6 +28,14 @@ STORAGE_SERVICE=${STORAGE_SERVICE:-${EXTRA_SERVICES}}
 VIRT_SERVICE=${VIRT_SERVICE:-${EXTRA_SERVICES}}
 MCE_SERVICE=${MCE_SERVICE:-${EXTRA_SERVICES}}
 
+require_command oc "Install the OpenShift CLI: https://docs.openshift.com/container-platform/latest/cli_reference/openshift_cli/getting-started-cli.html"
+require_command jq "Install jq: https://jqlang.org/download/"
+if [[ "${DEPLOY_MODE}" == "helm" ]]; then
+    require_command helm "Install Helm 3: https://helm.sh/docs/intro/install/"
+elif [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
+    require_command kustomize "Install kustomize: https://kubectl.docs.kubernetes.io/installation/kustomize/"
+fi
+
 echo "=== Setting up OSAC deployment ==="
 echo "Deploy mode: ${DEPLOY_MODE}"
 if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then

@@ -277,22 +277,39 @@ for i in "${!img_check_pids[@]}"; do
     fi
 done
 
+# Discover fulfillment deployments by label instead of maintaining a hardcoded
+# list. The app=fulfillment-service label is set by kustomize on all
+# fulfillment-service resources, so new deployments are picked up automatically.
+read -ra FULFILLMENT_DEPLOYS <<< \
+    "$(oc get deploy -n "${INSTALLER_NAMESPACE}" -l app=fulfillment-service \
+       -o jsonpath='{.items[*].metadata.name}')"
+if [[ ${#FULFILLMENT_DEPLOYS[@]} -eq 0 || -z "${FULFILLMENT_DEPLOYS[0]}" ]]; then
+    echo "ERROR: No deployments found with label app=fulfillment-service in namespace ${INSTALLER_NAMESPACE}"
+    exit 1
+fi
+echo "  Fulfillment deployments: ${FULFILLMENT_DEPLOYS[*]}"
+
 echo "[5/9] Waiting for TLS certificates and restarting pods..."
 refresh_cdi_certificates &
 pid_cdi=$!
 pids=()
-for cert in authorino fulfillment-controller fulfillment-grpc-server fulfillment-api \
-            fulfillment-rest-gateway fulfillment-database-client fulfillment-database-server \
-            osac-console-proxy; do
-    oc wait --for=condition=Ready "certificate.cert-manager.io/${cert}" -n "${INSTALLER_NAMESPACE}" --timeout=300s &
+read -ra fs_certs <<< \
+    "$(oc get certificates.cert-manager.io -n "${INSTALLER_NAMESPACE}" \
+       -l app=fulfillment-service -o jsonpath='{.items[*].metadata.name}')"
+if [[ ${#fs_certs[@]} -eq 0 || -z "${fs_certs[0]}" ]]; then
+    echo "ERROR: No certificates found with label app=fulfillment-service in namespace ${INSTALLER_NAMESPACE}"
+    exit 1
+fi
+echo "  Certificates to wait for: ${fs_certs[*]}"
+for cert in "${fs_certs[@]}"; do
+    oc wait --for=condition=Ready "certificate.cert-manager.io/${cert}" \
+        -n "${INSTALLER_NAMESPACE}" --timeout=300s &
     pids+=($!)
 done
 # Kustomize apply may have changed deployment images, triggering new rollouts
 # that run DB migrations. Wait for those to finish before restarting pods —
 # otherwise the restart kills pods mid-migration and leaves the DB dirty.
-# fulfillment-controller is excluded — it was scaled down to prevent
-# crash-loops while Keycloak/certs stabilize; it starts after certs are ready.
-for deploy in fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
+for deploy in "${FULFILLMENT_DEPLOYS[@]}"; do
     oc rollout status "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}" --timeout=300s &
     pids+=($!)
 done
@@ -302,7 +319,7 @@ wait ${pid_cdi} || failed=1
 if (( failed )); then echo "ERROR: TLS certificates or fulfillment rollouts not ready"; exit 1; fi
 echo "[5/9] TLS certificates ready, restarting pods..."
 oc scale deploy/fulfillment-controller -n "${INSTALLER_NAMESPACE}" --replicas=1
-for deploy in fulfillment-controller fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
+for deploy in "${FULFILLMENT_DEPLOYS[@]}"; do
     oc rollout restart "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}"
 done
 if oc get deploy assisted-service -n multicluster-engine &>/dev/null; then
@@ -315,7 +332,7 @@ fi
 
 wait_fulfillment_rollouts() {
     pids=()
-    for deploy in fulfillment-controller fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
+    for deploy in "${FULFILLMENT_DEPLOYS[@]}"; do
         oc rollout status "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}" --timeout=300s &
         pids+=($!)
     done
@@ -373,11 +390,11 @@ echo "[8/9] Configuring AAP access and fulfillment service..."
 ./scripts/prepare-fulfillment-service.sh
 
 echo "[9/9] Restarting fulfillment pods and configuring tenant..."
-for deploy in fulfillment-controller fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
+for deploy in "${FULFILLMENT_DEPLOYS[@]}"; do
     oc rollout restart "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}"
 done
 pids=()
-for deploy in fulfillment-controller fulfillment-grpc-server fulfillment-rest-gateway fulfillment-ingress-proxy; do
+for deploy in "${FULFILLMENT_DEPLOYS[@]}"; do
     oc rollout status "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}" --timeout=300s &
     pids+=($!)
 done

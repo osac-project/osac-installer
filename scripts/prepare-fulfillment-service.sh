@@ -59,7 +59,7 @@ if [[ -n "${INSTALLER_VM_TEMPLATE}" || -n "${INSTALLER_CLUSTER_TEMPLATE}" ]]; th
     JOB_ID=""
     for attempt in $(seq 1 10); do
         LAUNCH_ERR=$(mktemp)
-        JOB_RESPONSE=$(curl -ksS -X POST -H "Authorization: Bearer ${AAP_TOKEN}" -H "Content-Type: application/json" \
+        JOB_RESPONSE=$(curl -kfsS -X POST -H "Authorization: Bearer ${AAP_TOKEN}" -H "Content-Type: application/json" \
             "${AAP_URL}/api/controller/v2/job_templates/${JT_ID}/launch/" 2>"${LAUNCH_ERR}") && {
             JOB_ID=$(echo "${JOB_RESPONSE}" | jq -r '.id // empty')
             [[ -n "${JOB_ID}" && "${JOB_ID}" != "null" ]] && break

@@ -15,11 +15,24 @@ fi
 INSTALLER_VM_TEMPLATE=${INSTALLER_VM_TEMPLATE:-}
 INSTALLER_CLUSTER_TEMPLATE=${INSTALLER_CLUSTER_TEMPLATE:-}
 
+command -v osac &>/dev/null || {
+    echo "ERROR: 'osac' CLI not found on PATH." >&2
+    echo "Install from: https://github.com/osac-project/fulfillment-service/releases/latest/download/osac_Linux_x86_64" >&2
+    exit 1
+}
+
+echo "Registering hub with fulfillment service (namespace: ${INSTALLER_NAMESPACE})..."
+
 create_hub() {
     ./scripts/create-hub-access-kubeconfig.sh
 
-    local fulfillment_url
-    fulfillment_url=https://$(oc get route -n "${INSTALLER_NAMESPACE}" fulfillment-internal-api -o jsonpath='{.status.ingress[0].host}')
+    # The private API (osac.private.v1.*) is only available via the internal listener
+    # (fulfillment-internal-api route, port 8001). The external listener
+    # (fulfillment-api route, port 8000) only routes public API methods.
+    local fulfillment_host fulfillment_url
+    fulfillment_host=$(get_route_host "${INSTALLER_NAMESPACE}" fulfillment-internal-api)
+    require_host_resolvable "${fulfillment_host}"
+    fulfillment_url="https://${fulfillment_host}"
     echo "Fulfillment internal API URL: ${fulfillment_url}"
 
     echo "Logging into fulfillment internal API..."
@@ -39,7 +52,8 @@ sync_aap_project() {
     local AAP_ROUTE_HOST AAP_URL AAP_TOKEN JT_ID PROJECT_ID
     local EXPECTED_BRANCH EXPECTED_URI
 
-    AAP_ROUTE_HOST=$(oc get routes -n "${INSTALLER_NAMESPACE}" --no-headers osac-aap -o jsonpath='{.spec.host}')
+    AAP_ROUTE_HOST=$(get_route_host "${INSTALLER_NAMESPACE}" osac-aap)
+    require_host_resolvable "${AAP_ROUTE_HOST}"
     AAP_URL="https://${AAP_ROUTE_HOST}"
     AAP_TOKEN=$(oc get secret osac-aap-api-token -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.data.token}' | base64 -d)
 
@@ -117,7 +131,8 @@ sync_aap_project() {
 publish_templates() {
     local AAP_ROUTE_HOST AAP_URL AAP_TOKEN JT_ID PROJECT_ID
 
-    AAP_ROUTE_HOST=$(oc get routes -n "${INSTALLER_NAMESPACE}" --no-headers osac-aap -o jsonpath='{.spec.host}')
+    AAP_ROUTE_HOST=$(get_route_host "${INSTALLER_NAMESPACE}" osac-aap)
+    require_host_resolvable "${AAP_ROUTE_HOST}"
     AAP_URL="https://${AAP_ROUTE_HOST}"
     AAP_TOKEN=$(oc get secret osac-aap-api-token -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.data.token}' | base64 -d)
 

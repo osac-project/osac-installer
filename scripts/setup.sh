@@ -328,13 +328,13 @@ wait_for_resource deployment/fulfillment-ingress-proxy condition=Available 300 $
 # Update project context
 oc project ${INSTALLER_NAMESPACE}
 
-# Create AAP API token for the OSAC operator
+echo "Creating AAP API token for the OSAC operator..."
 ./scripts/prepare-aap.sh
 
-# Setup OSAC CLI, register hub
+echo "Setting up OSAC CLI and registering hub..."
 ./scripts/prepare-fulfillment-service.sh
 
-# Prepare tenant
+echo "Preparing tenant..."
 ./scripts/prepare-tenant.sh
 
 echo ""

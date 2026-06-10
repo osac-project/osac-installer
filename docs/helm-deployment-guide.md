@@ -271,7 +271,9 @@ oc wait deployment/authorino-operator -n openshift-operators \
 ### 1.8 Keycloak
 
 Keycloak provides identity management (OAuth/OIDC) for OSAC. It includes its
-own PostgreSQL database.
+own PostgreSQL database. The in-cluster Service and Route are named
+`osac-keycloak` (see [keycloak-service-rename.md](keycloak-service-rename.md)
+for upgrading environments that still have the old `keycloak` Service/Route).
 
 ```bash
 oc apply -k prerequisites/keycloak/

@@ -18,6 +18,6 @@ dependencies:
     repository: "file://../../base/osac-fulfillment-service/charts/service"
     alias: service
   - name: osac-aap
-    version: "0.0.0"
+    version: "0.1.0"
     repository: "file://../../base/osac-aap/charts/aap"
     alias: aap

@@ -374,18 +374,28 @@ $ sudo mv osac /usr/local/bin/
 
 ### 2. Log in to the Service
 
-Authenticate with the fulfillment API. You will need the route address and a valid
+Authenticate with the internal fulfillment API. You will need the route address and a valid
 token generation script.
 
 ```bash
 $ osac login \
-    --address <your-fulfillment-route-url> \
+    --address <your-fulfillment-internal-api-route-url> \
     --token-script "oc create token fulfillment-controller -n <project-name> \
     --duration 1h --as system:admin" \
     --insecure
 ```
 
 > **Tip:** Retrieve your route URL using: `oc get routes -n <project-name>`
+
+```bash
+$ oc get routes -n <project-name>
+NAME                       HOST/PORT                                                                           PATH   SERVICES                      PORT           TERMINATION     WILDCARD
+fulfillment-api            fulfillment-api-osac.apps.<domain>                   fulfillment-api               external-api   passthrough     None
+fulfillment-internal-api   fulfillment-internal-api-osac.apps.<domain>          fulfillment-internal-api      internal-api   passthrough     None
+osac-aap                   osac-aap-osac.apps.<domain>                          osac-aap                      http           edge/Redirect   None
+osac-aap-controller        osac-aap-controller-osac.apps.<domain>               osac-aap-controller-service   http           edge/Redirect   None
+osac-aap-eda               osac-aap-eda-osac.apps.<domain>                      osac-aap-eda-api              8000           edge/Redirect   None
+```
 
 ### 3. Register the Hub
 
@@ -404,6 +414,8 @@ $ osac create hub \
     --id <hub-name> \
     --namespace <project-name>
 ```
+
+> **Note:** Refer to `base/hub-access/README.md` for more information
 
 ### 4. Use the CLI
 

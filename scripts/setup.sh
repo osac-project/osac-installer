@@ -288,8 +288,8 @@ INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
 INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \
     ./scripts/aap-configuration.sh
 
-# Detect console-proxy namespace (shared-dev pins it to "osac")
-if grep -q 'console-proxy-shared-dev' \
+# Detect console-proxy namespace (shared-dev component pins it to "osac")
+if grep -Eq '^[[:space:]]*- \.\./_shared/console-proxy-shared-dev[[:space:]]*$' \
     "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" 2>/dev/null; then
   CONSOLE_PROXY_NS="osac"
 else

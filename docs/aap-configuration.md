@@ -33,6 +33,32 @@ INSTALLER_NAMESPACE=<project-name> ./scripts/aap-configuration.sh
 Shell environment variables override values from the env files, which is useful
 for CI pipelines.
 
+## Bootstrap job image vs `AAP_EE_IMAGE`
+
+The `aap-bootstrap` Job uses two independent mechanisms to reference the OSAC
+execution environment (EE) image. Overlays must keep both aligned when pinning a
+custom registry or tag.
+
+| Mechanism | Where to set | What it controls |
+|-----------|--------------|------------------|
+| Kustomize `images:` | Overlay `kustomization.yaml` — transform placeholder `osac-aap` | Container image for the `aap-bootstrap` pod (runs `ansible-playbook`) |
+| `AAP_EE_IMAGE` | `config-as-code-ig` secret literal (or Helm equivalent) | EE image registered **inside AAP** by `osac.config_as_code.configure` |
+
+Base `kustomization.yaml` maps placeholder `osac-aap` to `ghcr.io/osac-project/osac-aap:<tag>`.
+Overlays that only set `AAP_EE_IMAGE` in `config-as-code-ig` do not change the bootstrap
+pod image — the Job will still pull from `ghcr.io` unless the overlay also adds an
+`images:` entry. Match the **resolved** image name from base (not the placeholder):
+
+```yaml
+images:
+  - name: ghcr.io/osac-project/osac-aap
+    newName: quay.io/<your-registry>/osac-aap
+    newTag: sha-<commit>
+```
+
+Use the same registry and tag for `AAP_EE_IMAGE` so bootstrap, AAP EE registration, and
+subsequent job pods stay consistent.
+
 ## ConfigMap Variables (`osac-aap-configuration.env`)
 
 | Variable | Default | Description |

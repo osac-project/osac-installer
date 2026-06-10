@@ -431,8 +431,7 @@ INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \
 if [[ "${DEPLOY_MODE}" == "helm" ]]; then
   CONSOLE_PROXY_NS="${INSTALLER_NAMESPACE}"
   CONSOLE_PROXY_DEPLOY="fulfillment-console-proxy"
-elif grep -Eq '^[[:space:]]*- \.\./_shared/console-proxy-shared-dev[[:space:]]*$' \
-    "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" 2>/dev/null; then
+elif overlay_uses_shared_console_proxy "${INSTALLER_KUSTOMIZE_OVERLAY}"; then
   CONSOLE_PROXY_NS="osac"
   CONSOLE_PROXY_DEPLOY="osac-console-proxy"
 else

@@ -1,0 +1,87 @@
+name: Publish Helm Charts
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: publish-charts-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  CHARTS_REPO: ${{ github.repository_owner }}/charts
+
+jobs:
+  publish-osac-chart:
+    name: Publish osac umbrella chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Set up Helm
+      uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2  # v5.0.0
+      with:
+        version: v3.17.0
+
+    - name: Log in to GHCR
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+    - name: Extract and validate version from tag
+      id: version
+      run: |
+        version="${GITHUB_REF_NAME#v}"
+        if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$ ]]; then
+          echo "::error::Invalid semver: ${version}"
+          exit 1
+        fi
+        echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+    - name: Rewrite dependencies to OCI references
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        cd charts/osac
+
+        # Replace file:// references with OCI registry references and pin versions
+        sed -i \
+          -e 's|repository: "file://../../base/osac-operator/charts/operator-crds"|repository: "oci://'"${{ env.REGISTRY }}"'/'"${{ env.CHARTS_REPO }}"'"|' \
+          -e 's|repository: "file://../../base/osac-operator/charts/operator"|repository: "oci://'"${{ env.REGISTRY }}"'/'"${{ env.CHARTS_REPO }}"'"|' \
+          -e 's|repository: "file://../../base/osac-fulfillment-service/charts/service"|repository: "oci://'"${{ env.REGISTRY }}"'/'"${{ env.CHARTS_REPO }}"'"|' \
+          -e 's|repository: "file://../../base/osac-aap/charts/aap"|repository: "oci://'"${{ env.REGISTRY }}"'/'"${{ env.CHARTS_REPO }}"'"|' \
+          -e 's|version: "0.0.0"|version: "'"${VERSION}"'"|' \
+          Chart.yaml
+
+        # Remove stale Chart.lock so helm pulls fresh from OCI
+        rm -f Chart.lock
+
+        echo "--- Updated Chart.yaml ---"
+        cat Chart.yaml
+
+    - name: Build dependencies from OCI
+      run: helm dependency build charts/osac/
+
+    - name: Update image tags in values.yaml
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        sed -i \
+          -e "s|tag: latest|tag: v${VERSION}|g" \
+          charts/osac/values.yaml
+
+    - name: Package chart
+      run: |
+        helm package charts/osac/ \
+          --version "${{ steps.version.outputs.version }}" \
+          --app-version "${{ steps.version.outputs.version }}"
+
+    - name: Push chart to GHCR
+      run: |
+        helm push osac-${{ steps.version.outputs.version }}.tgz \
+          oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}

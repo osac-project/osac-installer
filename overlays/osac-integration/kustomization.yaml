@@ -98,11 +98,11 @@ patches:
                 - --log-headers=false
                 - --log-bodies=true
                 - --ca-file=/etc/fulfillment-controller/tls/cas
-                - --auth-issuer-url=https://keycloak-keycloak.apps.osac-integration.svc.massopen.cloud/realms/osac
+                - --auth-issuer-url=https://osac-keycloak-keycloak.apps.osac-integration.svc.massopen.cloud/realms/osac
                 - --auth-client-id-file=/etc/fulfillment-controller/credentials/client-id
                 - --auth-client-secret-file=/etc/fulfillment-controller/credentials/client-secret
                 - --idp-provider=keycloak
-                - --idp-url=https://keycloak-keycloak.apps.osac-integration.svc.massopen.cloud
+                - --idp-url=https://osac-keycloak-keycloak.apps.osac-integration.svc.massopen.cloud
                 - --idp-client-id-file=/etc/fulfillment-controller/idp/client-id
                 - --idp-client-secret-file=/etc/fulfillment-controller/idp/client-secret
                 - --grpc-server-address=fulfillment-internal-api:8001
@@ -134,7 +134,7 @@ patches:
                 - --grpc-listener-address=0.0.0.0:8000
                 - --grpc-listener-tls-crt=/etc/fulfillment-grpc-server/tls/tls.crt
                 - --grpc-listener-tls-key=/etc/fulfillment-grpc-server/tls/tls.key
-                - --grpc-authn-trusted-token-issuers=https://keycloak-keycloak.apps.osac-integration.svc.massopen.cloud/realms/osac
+                - --grpc-authn-trusted-token-issuers=https://osac-keycloak-keycloak.apps.osac-integration.svc.massopen.cloud/realms/osac
                 - --grpc-authn-type=external
                 - --grpc-authn-external-address=authorino-authorino-authorization:50051
                 - --tenancy-logic=default
@@ -237,7 +237,7 @@ patches:
             priority: 0
           keycloak-jwt:
             jwt:
-              issuerUrl: https://keycloak-keycloak.apps.osac-integration.svc.massopen.cloud/realms/osac
+              issuerUrl: https://osac-keycloak-keycloak.apps.osac-integration.svc.massopen.cloud/realms/osac
             metrics: false
             overrides:
               authnMethod:

@@ -94,7 +94,7 @@ keycloak_sync() {
         echo "  ConfigMap unchanged, skipping Keycloak restart"
     fi
 
-    KC_URL="https://$(oc get route keycloak -n "${KEYCLOAK_NS}" -o jsonpath='{.spec.host}')"
+    KC_URL="https://$(oc get route osac-keycloak -n "${KEYCLOAK_NS}" -o jsonpath='{.spec.host}')"
     retry_until 300 5 '[[ "$(curl -sk -o /dev/null -w %{http_code} '"${KC_URL}"'/realms/osac)" == "200" ]]' || {
         echo "Timed out waiting for Keycloak"
         exit 1

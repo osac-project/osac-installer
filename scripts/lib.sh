@@ -127,5 +127,15 @@ http_json() {
     return 1
 }
 
+# Shared dev clusters use overlays/_shared/console-proxy-shared-dev so console-proxy
+# runs in the fixed "osac" namespace (cluster-scoped APIService). Dedicated overlays
+# deploy console-proxy in INSTALLER_NAMESPACE and may mention the shared component
+# only in comments — match the components list entry, not arbitrary text.
+overlay_uses_shared_console_proxy() {
+    local overlay="${1:?overlay name required}"
+    grep -Eq '^[[:space:]]*- \.\./_shared/console-proxy-shared-dev[[:space:]]*$' \
+        "overlays/${overlay}/kustomization.yaml" 2>/dev/null
+}
+
 _LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_LIB_DIR}/oc.sh"

@@ -20,8 +20,8 @@ spec:
     kind: ClusterIssuer
     name: default-ca
   dnsNames:
-  - keycloak
-  - keycloak.keycloak.svc.cluster.local
+  - osac-keycloak
+  - osac-keycloak.keycloak.svc.cluster.local
   secretName: keycloak-tls-cert
   privateKey:
     rotationPolicy: Always

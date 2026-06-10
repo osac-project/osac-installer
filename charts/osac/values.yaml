@@ -103,6 +103,16 @@ aap:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
 
+# --- Hub Access ---
+hubAccess:
+  enabled: true
+
+# --- Publish Templates ---
+publishTemplates:
+  enabled: true
+  templateCollections: "osac.templates"
+  fulfillmentServiceUri: "https://fulfillment-internal-api:8001"
+
 # --- Validation hooks ---
 validation:
   enabled: true

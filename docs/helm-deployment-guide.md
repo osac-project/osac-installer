@@ -559,6 +559,10 @@ oc create secret generic network-fulfillment-ig \
 <details>
 <summary><strong>publish-templates-ig</strong> — Template publishing config (click to expand)</summary>
 
+> **Note:** The Helm chart creates this ConfigMap automatically with sensible
+> defaults (`publishTemplates.enabled: true`). You only need to create it
+> manually if you disabled it in values or need to override the defaults.
+
 Tells the template publishing job which collections to scan and which
 fulfillment endpoint to register templates with.
 
@@ -624,6 +628,8 @@ Key settings to review in your values file:
 | `service.database.connection` | PostgreSQL connection | Referenced from `fulfillment-db` secret |
 | `aap.aap.instance.enabled` | Create AAP instance CR | `true` (chart manages AAP instance) |
 | `aap.bootstrap.enabled` | Run bootstrap job | `true` (configures AAP with job templates) |
+| `hubAccess.enabled` | Create hub-access SA and RBAC | `true` (required for hub registration) |
+| `publishTemplates.enabled` | Create publish-templates-ig ConfigMap | `true` (template publishing config) |
 
 ### 3.3 Validate
 
@@ -743,6 +749,7 @@ INSTALLER_NAMESPACE=${NAMESPACE} ./scripts/prepare-fulfillment-service.sh
 
 What this does:
 1. Creates a hub-access kubeconfig using the `hub-access` ServiceAccount
+   (created by the Helm chart when `hubAccess.enabled: true`, the default)
 2. Logs into the fulfillment internal API
 3. Registers the cluster as hub "hub" in the fulfillment service
 
@@ -993,9 +1000,18 @@ oc logs -f job/osac-aap-bootstrap -n ${NAMESPACE}
 # Uninstall OSAC
 helm uninstall osac -n ${NAMESPACE}
 
-# Delete the namespace (waits for all resources to terminate)
+# Uninstall the fulfillment-db postgres (separate Helm release)
+helm uninstall fulfillment-db -n ${NAMESPACE} 2>/dev/null || true
+
+# Delete the namespace (waits for all resources to terminate).
+# This also removes AAP operator-managed resources (postgres StatefulSet,
+# PVCs) that are not part of any Helm release.
 oc delete namespace ${NAMESPACE} --wait
 
 # CRDs are preserved. To remove them:
 oc delete crd -l app.kubernetes.io/part-of=osac
+
+# Cluster-scoped RBAC resources are removed by helm uninstall, but if
+# they persist (e.g., after a failed install):
+oc delete clusterrole,clusterrolebinding -l app.kubernetes.io/part-of=osac
 ```

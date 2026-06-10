@@ -161,6 +161,38 @@
         }
       }
     },
+    "hubAccess": {
+      "type": "object",
+      "description": "Hub access ServiceAccount and RBAC for remote cluster management",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create hub-access ServiceAccount, Secret, Role, RoleBinding, ClusterRole, and ClusterRoleBinding",
+          "default": true
+        }
+      }
+    },
+    "publishTemplates": {
+      "type": "object",
+      "description": "Configuration for AAP template publishing",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create publish-templates-ig ConfigMap",
+          "default": true
+        },
+        "templateCollections": {
+          "type": "string",
+          "description": "Comma-separated list of Ansible collections containing OSAC templates",
+          "default": "osac.templates"
+        },
+        "fulfillmentServiceUri": {
+          "type": "string",
+          "description": "Internal URI of the fulfillment service API for template registration",
+          "default": "https://fulfillment-internal-api:8001"
+        }
+      }
+    },
     "validation": {
       "type": "object",
       "description": "Pre-install validation hook",

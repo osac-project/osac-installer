@@ -61,6 +61,35 @@ wait_for_resource() {
     oc wait --for="${condition}" "${resource}" ${ns_args[@]+"${ns_args[@]}"} --timeout="${timeout}s"
 }
 
+# Fail with a clear message if a hostname does not resolve.
+# Usage: require_host_resolvable <hostname>
+require_host_resolvable() {
+    local host="$1"
+    if ! getent ahosts "${host}" &>/dev/null; then
+        echo "ERROR: Cannot resolve hostname '${host}'." >&2
+        echo "Add it to /etc/hosts pointing at your cluster ingress IP." >&2
+        echo "  oc get routes -n <namespace> -o jsonpath='{range .items[*]}{.spec.host}{\"\\n\"}{end}'" >&2
+        exit 1
+    fi
+}
+
+# Require an OpenShift Route to exist and return its host.
+# Usage: get_route_host <namespace> <route-name>
+get_route_host() {
+    local namespace="$1" route_name="$2" host="" rc=0
+    host=$(oc get route "${route_name}" -n "${namespace}" -o jsonpath='{.spec.host}' 2>&1) || rc=$?
+    if (( rc != 0 )); then
+        echo "ERROR: failed to get route '${route_name}' in namespace '${namespace}':" >&2
+        echo "${host}" >&2
+        exit 1
+    fi
+    if [[ -z "${host}" ]]; then
+        echo "ERROR: Route '${route_name}' not found in namespace '${namespace}'." >&2
+        exit 1
+    fi
+    echo "${host}"
+}
+
 # Retry a command until it succeeds or times out.
 # All output (stdout/stderr) is preserved on every attempt.
 # Usage: retry_command <timeout_seconds> <interval_seconds> <command> [args...]
@@ -78,6 +107,10 @@ retry_command() {
         if (( rc == 0 )); then
             echo "  retry_command: succeeded on attempt ${attempt} after $(( SECONDS - start ))s"
             return 0
+        fi
+        if (( rc == 127 )); then
+            echo "  retry_command: command not found — install it and ensure it is on PATH" >&2
+            return 127
         fi
         if (( SECONDS - start >= timeout )); then
             echo "  retry_command: FAILED after ${attempt} attempts, $(( SECONDS - start ))s elapsed (exit code ${rc})"

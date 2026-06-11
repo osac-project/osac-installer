@@ -161,6 +161,20 @@
         }
       }
     },
+    "bundledPostgres": {
+      "type": "object",
+      "description": "Auto-generate secrets for bundled PostgreSQL (dev/test only)",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "database": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "default": "service" },
+            "user": { "type": "string", "default": "service" }
+          }
+        }
+      }
+    },
     "hubAccess": {
       "type": "object",
       "description": "Hub access ServiceAccount and RBAC for remote cluster management",

@@ -1,0 +1,40 @@
+# Bundled-postgres scenario: validates auto-generated secrets render correctly.
+bundledPostgres:
+  enabled: true
+  database:
+    name: service
+    user: service
+
+service:
+  auth:
+    issuerUrl: https://keycloak.example.com/realms/osac
+    controllerCredentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-id
+          param: client-id
+  idp:
+    url: https://keycloak.example.com
+    credentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-id
+          param: client-id
+  database:
+    connection:
+    - secret:
+        name: fulfillment-db
+        items:
+        - key: url
+          param: url
+    - secret:
+        name: postgres-client-cert-service
+        items:
+        - key: tls.crt
+          param: sslcert
+        - key: tls.key
+          param: sslkey
+        - key: ca.crt
+          param: sslrootcert

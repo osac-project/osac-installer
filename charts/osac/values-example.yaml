@@ -248,6 +248,21 @@ aap:
     secret: "config-as-code-ig"
 
 # ---------------------
+# Bundled PostgreSQL (dev/test)
+# ---------------------
+bundledPostgres:
+  # When true, auto-creates fulfillment-db secret and postgres-client-cert-service
+  # Certificate. Requires the bundled postgres chart to be deployed separately:
+  #   helm install fulfillment-db base/osac-fulfillment-service/it/charts/postgres/ \
+  #     -n ${NAMESPACE} --set certs.issuerRef.name=default-ca \
+  #     --set certs.caBundle.configMap=ca-bundle \
+  #     --set 'databases[0].name=service' --set 'databases[0].user=service'
+  enabled: false
+  database:
+    name: service
+    user: service
+
+# ---------------------
 # Hub Access
 # ---------------------
 hubAccess:

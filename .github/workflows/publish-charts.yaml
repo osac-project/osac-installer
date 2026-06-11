@@ -10,26 +10,26 @@ on:
         description: 'Chart version (without v prefix, e.g. 0.0.1). Defaults to git tag.'
         required: false
       operator_crds_version:
-        description: 'osac-operator-crds chart version (e.g. 0.0.1)'
-        required: true
+        description: 'osac-operator-crds chart version (e.g. 0.0.1). Defaults to Chart.yaml.'
+        required: false
       operator_version:
-        description: 'osac-operator chart version (e.g. 0.0.1)'
-        required: true
+        description: 'osac-operator chart version (e.g. 0.0.1). Defaults to Chart.yaml.'
+        required: false
       service_version:
-        description: 'fulfillment-service chart version (e.g. 0.0.64)'
-        required: true
+        description: 'fulfillment-service chart version (e.g. 0.0.64). Defaults to Chart.yaml.'
+        required: false
       aap_version:
-        description: 'osac-aap chart version (e.g. 0.0.3)'
-        required: true
+        description: 'osac-aap chart version (e.g. 0.0.3). Defaults to Chart.yaml.'
+        required: false
       bmf_crds_version:
-        description: 'bare-metal-fulfillment-operator-crds chart version (e.g. 0.0.1)'
-        required: true
+        description: 'bare-metal-fulfillment-operator-crds chart version (e.g. 0.0.1). Defaults to Chart.yaml.'
+        required: false
       bmf_version:
-        description: 'bare-metal-fulfillment-operator chart version (e.g. 0.0.1)'
-        required: true
+        description: 'bare-metal-fulfillment-operator chart version (e.g. 0.0.1). Defaults to Chart.yaml.'
+        required: false
       ui_version:
-        description: 'osac-ui chart version (e.g. 0.0.1)'
-        required: true
+        description: 'osac-ui chart version (e.g. 0.0.1). Defaults to Chart.yaml.'
+        required: false
 
 concurrency:
   group: publish-charts-${{ github.ref }}
@@ -86,7 +86,7 @@ jobs:
           exit 1
         fi
 
-        # Component versions: from inputs (workflow_dispatch) or default to umbrella version
+        # Component versions: from inputs, or read from Chart.yaml
         crds_ver="${INPUT_CRDS_VERSION}"
         operator_ver="${INPUT_OPERATOR_VERSION}"
         service_ver="${INPUT_SERVICE_VERSION}"
@@ -95,14 +95,28 @@ jobs:
         bmf_ver="${INPUT_BMF_VERSION}"
         ui_ver="${INPUT_UI_VERSION}"
 
-        # When triggered by tag push (no inputs), use the umbrella version for all components
-        : "${crds_ver:=${version}}"
-        : "${operator_ver:=${version}}"
-        : "${service_ver:=${version}}"
-        : "${aap_ver:=${version}}"
-        : "${bmf_crds_ver:=${version}}"
-        : "${bmf_ver:=${version}}"
-        : "${ui_ver:=${version}}"
+        # When no inputs provided (tag push), read versions from Chart.yaml
+        if [ -z "${crds_ver}" ]; then
+          crds_ver="$(yq '.dependencies[] | select(.name == "osac-operator-crds") | .version' charts/osac/Chart.yaml)"
+        fi
+        if [ -z "${operator_ver}" ]; then
+          operator_ver="$(yq '.dependencies[] | select(.name == "osac-operator") | .version' charts/osac/Chart.yaml)"
+        fi
+        if [ -z "${service_ver}" ]; then
+          service_ver="$(yq '.dependencies[] | select(.name == "fulfillment-service") | .version' charts/osac/Chart.yaml)"
+        fi
+        if [ -z "${aap_ver}" ]; then
+          aap_ver="$(yq '.dependencies[] | select(.name == "osac-aap") | .version' charts/osac/Chart.yaml)"
+        fi
+        if [ -z "${bmf_crds_ver}" ]; then
+          bmf_crds_ver="$(yq '.dependencies[] | select(.name == "bare-metal-fulfillment-operator-crds") | .version' charts/osac/Chart.yaml)"
+        fi
+        if [ -z "${bmf_ver}" ]; then
+          bmf_ver="$(yq '.dependencies[] | select(.name == "bare-metal-fulfillment-operator") | .version' charts/osac/Chart.yaml)"
+        fi
+        if [ -z "${ui_ver}" ]; then
+          ui_ver="$(yq '.dependencies[] | select(.name == "osac-ui") | .version' charts/osac/Chart.yaml)"
+        fi
 
         # Validate all component versions
         for pair in "osac-operator-crds:${crds_ver}" "osac-operator:${operator_ver}" "fulfillment-service:${service_ver}" "osac-aap:${aap_ver}" "bare-metal-fulfillment-operator-crds:${bmf_crds_ver}" "bare-metal-fulfillment-operator:${bmf_ver}" "osac-ui:${ui_ver}"; do

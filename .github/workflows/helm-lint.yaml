@@ -27,7 +27,11 @@ jobs:
       uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f  # v2.8.0
 
     - name: Build chart dependencies
-      run: helm dependency build charts/osac/
+      run: |
+        # Chart.yaml has real published versions for the release workflow, but
+        # file:// deps require versions to match the submodule Chart.yaml (0.0.0).
+        yq -i '(.dependencies[].version) = "0.0.0"' charts/osac/Chart.yaml
+        helm dependency build charts/osac/
 
     - name: Run chart-testing lint
       run: ct lint --all --config ct.yaml

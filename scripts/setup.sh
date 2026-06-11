@@ -46,6 +46,13 @@ echo "Namespace: ${INSTALLER_NAMESPACE}"
 echo "Setup phase: ${SETUP_PHASE}"
 echo ""
 
+# Helm mode requires yq to patch Chart.yaml dependency versions
+if [[ "${DEPLOY_MODE}" == "helm" ]] && ! command -v yq &>/dev/null; then
+    echo "ERROR: yq is required for Helm deploy mode but was not found in PATH." >&2
+    echo "  Install it from https://github.com/mikefarah/yq" >&2
+    exit 1
+fi
+
 if [[ "${SETUP_PHASE}" == "all" || "${SETUP_PHASE}" == "prerequisites" ]]; then
 
 # Optionally install LVMS as storage service (must be before keycloak which needs a default storage class)
@@ -356,6 +363,9 @@ if [[ "${DEPLOY_MODE}" == "helm" ]]; then
     CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
     EXTERNAL_HOSTNAME="fulfillment-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
     INTERNAL_HOSTNAME="fulfillment-internal-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
+    # Chart.yaml has real published versions for the release workflow, but
+    # file:// deps require versions to match the submodule Chart.yaml (0.0.0).
+    yq -i '(.dependencies[].version) = "0.0.0"' charts/osac/Chart.yaml
     helm dependency update charts/osac/
     helm upgrade --install osac charts/osac/ \
         --namespace "${INSTALLER_NAMESPACE}" \

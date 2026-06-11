@@ -38,7 +38,11 @@ jobs:
         kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=120s
 
     - name: Build chart dependencies
-      run: helm dependency build charts/osac/
+      run: |
+        # Chart.yaml has real published versions for the release workflow, but
+        # file:// deps require versions to match the submodule Chart.yaml (0.0.0).
+        yq -i '(.dependencies[].version) = "0.0.0"' charts/osac/Chart.yaml
+        helm dependency build charts/osac/
 
     - name: Lint chart
       run: helm lint charts/osac/

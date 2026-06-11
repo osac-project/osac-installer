@@ -324,6 +324,9 @@ EOF
         --dry-run=client -o yaml | oc apply -f -
 
     echo "Deploying OSAC using Helm..."
+    # Chart.yaml has real published versions for the release workflow, but
+    # file:// deps require versions to match the submodule Chart.yaml (0.0.0).
+    yq -i '(.dependencies[].version) = "0.0.0"' charts/osac/Chart.yaml
     helm dependency build charts/osac/
     helm upgrade --install osac charts/osac/ \
         --namespace "${INSTALLER_NAMESPACE}" \

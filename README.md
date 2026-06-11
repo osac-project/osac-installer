@@ -102,6 +102,10 @@ Although the development overlay will work out of the box, we recommend customiz
 overlay by creating a new project-specific configuration. This is especially important
 when deploying on shared clusters to avoid resource name collisions.
 
+Personal overlays under `overlays/<project-name>` are gitignored by default and will
+not appear in `git status`. Only shared overlay directories listed in
+`overlays/.gitignore` are tracked.
+
 Use Kustomize to manage your environment-specific configurations.
 
 1. **Choose a Project Name:**

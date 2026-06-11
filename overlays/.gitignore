@@ -1,0 +1,25 @@
+# Whitelist: only the directories below are tracked in git.
+# Personal overlays use any other name under overlays/ (ignored by default).
+# To add a new shared overlay, add !<name>/ and !<name>/** below.
+
+*
+
+!.gitignore
+
+!_shared/
+!_shared/**
+
+!caas-ci/
+!caas-ci/**
+
+!development/
+!development/**
+
+!hypershift2/
+!hypershift2/**
+
+!osac-integration/
+!osac-integration/**
+
+!vmaas-ci/
+!vmaas-ci/**

@@ -5,9 +5,12 @@ Kubernetes ConfigMaps and Secrets that are mounted into AAP instance group
 execution pods via `envFrom`. This makes every key available as an environment
 variable during playbook execution.
 
-Currently only the **cluster-fulfillment-ig** instance group mounts these
-variables, as it is the only instance group that consumes them (for cluster provisioning workflows).
-This will be expanded to additional instance groups in the future as more automation workflows are added.
+Each instance group mounts its own ConfigMap/Secret pair where needed. See
+`base/osac-aap/collections/ansible_collections/osac/config_as_code/README.md`
+for the full multi-IG model. Compute instance jobs optionally mount
+`compute-instance-operations-ig` (`optional: true`); default KubeVirt VMaaS does
+not require creating that secret — see
+`base/osac-aap/config/base/secret-compute-instance-operations-ig-example.yaml`.
 
 ## Configuration Files
 
@@ -21,8 +24,9 @@ secrets file only when credential overrides are needed:
 
 The `scripts/aap-configuration.sh` script reads `osac-aap-configuration.env`
 and, when present, `osac-aap-secrets.env`, then patches the
-`cluster-fulfillment-ig` ConfigMap and Secret on the cluster. The setup script
-(`setup.sh`) calls this automatically after applying the Kustomize overlay.
+`cluster-fulfillment-ig` and `network-fulfillment-ig` ConfigMaps and Secrets
+on the cluster. The setup script (`setup.sh`) calls this automatically after
+applying the Kustomize overlay.
 
 For manual deployments, run the script standalone after `oc apply -k`:
 
@@ -68,6 +72,7 @@ Additional variables are added by specific network backends — see
 
 ## Reference
 
-See `base/osac-aap/config/base/configmap-cluster-fulfillment-ig-example.yaml` and
-`base/osac-aap/config/base/secret-cluster-fulfillment-ig-example.yaml` for full
+See `base/osac-aap/config/base/configmap-cluster-fulfillment-ig-example.yaml`,
+`base/osac-aap/config/base/secret-cluster-fulfillment-ig-example.yaml`, and
+`base/osac-aap/config/base/secret-compute-instance-operations-ig-example.yaml` for full
 examples.

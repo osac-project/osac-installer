@@ -306,7 +306,7 @@ patches:
                   role in tenant_idp_manager_roles
                 }
 
-                # Check if an account is a regular client (no admin or tenant management roles):
+                # Check if an account is a regular client (no admin, tenant management roles):
                 default is_client = false
                 is_client if {
                   not is_admin
@@ -361,8 +361,7 @@ patches:
                     "/osac.public.v1.ComputeInstances/Get",
                     "/osac.public.v1.ComputeInstances/List",
                     "/osac.public.v1.ComputeInstances/Update",
-                    "/osac.public.v1.Console/Connect",
-                    "/osac.public.v1.Console/GetAccess",
+                    "/osac.public.v1.ConsoleSessions/Create",
                     "/osac.public.v1.Events/Watch",
                     "/osac.public.v1.HostTypes/Get",
                     "/osac.public.v1.HostTypes/List",

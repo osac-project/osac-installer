@@ -94,3 +94,13 @@ validation:
 dbMigrate:
   enabled: false
   image: ghcr.io/osac-project/fulfillment-service:sha-6252427
+
+clusterFulfillment:
+  enabled: true
+  config:
+    NETWORK_STEPS_COLLECTION: "ci.steps"
+    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "SingleReplica"
+    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "SingleReplica"
+
+networkFulfillment:
+  enabled: true

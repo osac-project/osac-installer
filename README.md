@@ -73,7 +73,7 @@ target Hub cluster.
 |---------------|-----------------|----------------------|
 | **Platform** | Red Hat OpenShift Container Platform (OCP) 4.17 or later | Must have cluster admin access to the hub cluster. |
 | **Operators** | Red Hat Advanced Cluster Management (RHACM) 2.18+<br>Red Hat OpenShift Virtualization (OCP-Virt) 4.17+<br>Red Hat Ansible Automation Platform (AAP) 2.5+ | These must be installed and running prior to OSAC installation. |
-| **CLI Tools** | `oc` (OpenShift CLI) v4.17+<br>`kubectl` (optional)<br>`kustomize` v5.x<br>`git` | Ensure all CLIs are available in your `PATH`. |
+| **CLI Tools** | `oc` (OpenShift CLI) v4.17+<br>`helm` v3.x (helm mode, default)<br>`kustomize` v5.x (kustomize mode)<br>`jq`<br>`git` | Ensure all CLIs are available in your `PATH`. See [Helm deployment guide](docs/helm-deployment-guide.md#install-cli-tools) for install instructions. |
 | **Container Registry Access** | `registry.redhat.io` and `quay.io` | Verify credentials and pull secrets are valid in the target cluster namespace. |
 | **Network / DNS** | Ingress route configured for OSAC services | Required for external access to fulfillment API and AAP UI. |
 | **Authentication / IDM** | Organization Identity Provider (e.g., Keycloak, LDAP, RH-SSO) | Used for tenant and user identity mapping. |

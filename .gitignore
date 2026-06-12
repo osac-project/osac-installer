@@ -39,3 +39,24 @@ CLAUDE.md
 
 # kubeconfig files
 kubeconfig.hub-access
+
+# Overlays: whitelist committed directories; personal overlays/<project-name> are ignored.
+# To add a new committed overlay, add !overlays/<name>/ and !overlays/<name>/** below.
+overlays/*
+!overlays/_shared/
+!overlays/_shared/**
+
+!overlays/caas-ci/
+!overlays/caas-ci/**
+
+!overlays/development/
+!overlays/development/**
+
+!overlays/hypershift2/
+!overlays/hypershift2/**
+
+!overlays/osac-integration/
+!overlays/osac-integration/**
+
+!overlays/vmaas-ci/
+!overlays/vmaas-ci/**

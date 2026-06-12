@@ -21,6 +21,15 @@ generatorOptions:
   disableNameSuffixHash: true
 
 secretGenerator:
+- name: osac-inventory-config
+  literals:
+  - placeholder=ci-stub
+- name: osac-management-config
+  literals:
+  - placeholder=ci-stub
+- name: osac-os-clouds
+  literals:
+  - clouds.yaml={}
 # This expects to find quay credentials in
 # files/quay-pull-secret.json.
 - name: quay-pull-secret

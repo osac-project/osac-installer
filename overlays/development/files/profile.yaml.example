@@ -1,0 +1,34 @@
+- name: agentProvisioning
+  hostSelector:
+    managedBy: baremetal
+    provisionState: available
+  labels:
+    profileName: agentProvisioning
+  persistentLabels:
+    managedBy: agent
+  hostTemplate: bm_host_agent_provisioning
+  expectedTemplateParameters:
+    - agentPrivateNetwork
+    - imageURL
+
+- name: agentDeprovisioning
+  hostSelector:
+    managedBy: agent
+    provisionState: active
+  labels:
+    profileName: agentDeprovisioning
+  persistentLabels:
+    managedBy: baremetal
+  hostTemplate: bm_host_agent_deprovisioning
+
+- name: agentCaaS
+  hostSelector:
+    managedBy: agent
+    provisionState: active
+  labels:
+    profileName: agentCaaS
+  bareMetalPoolTemplate: bm_private_network
+  hostTemplate: bm_host_private_network
+  expectedTemplateParameters:
+    - privateNetwork
+    - networkAfterDelete

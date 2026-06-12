@@ -7,3 +7,6 @@
 [submodule "base/osac-aap"]
 	path = base/osac-aap
 	url = https://github.com/osac-project/osac-aap.git
+[submodule "base/bare-metal-fulfillment-operator"]
+	path = base/bare-metal-fulfillment-operator
+	url = https://github.com/osac-project/bare-metal-fulfillment-operator.git

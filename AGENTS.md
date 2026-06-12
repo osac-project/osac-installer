@@ -2,7 +2,7 @@
 
 ## Overview
 
-Kustomize-based deployment system that assembles fulfillment-service, osac-operator, and osac-aap (Git submodules under `base/`) into OpenShift overlays.
+Kustomize-based deployment system that assembles fulfillment-service, osac-operator, osac-aap, and bare-metal-fulfillment-operator (Git submodules under `base/`) into OpenShift overlays.
 
 ## Common Commands
 
@@ -34,11 +34,12 @@ yamllint --strict .
 ### Kustomize Composition
 
 ```
-base/kustomization.yaml          # Composes all submodule components + hub-access
-  base/osac-fulfillment-service/   # Git submodule -> fulfillment-service repo
-  base/osac-operator/              # Git submodule -> osac-operator repo
-  base/osac-aap/                   # Git submodule -> osac-aap repo
-  base/hub-access/                 # Local: ServiceAccount + RBAC for hub cluster access
+base/kustomization.yaml                        # Composes all submodule components + hub-access
+  base/osac-fulfillment-service/                 # Git submodule -> fulfillment-service repo
+  base/osac-operator/                            # Git submodule -> osac-operator repo
+  base/osac-aap/                                 # Git submodule -> osac-aap repo
+  base/bare-metal-fulfillment-operator/          # Git submodule -> bare-metal-fulfillment-operator repo
+  base/hub-access/                               # Local: ServiceAccount + RBAC for hub cluster access
 
 overlays/<name>/kustomization.yaml  # Extends base with env-specific config
   - namespace, image pins, patches, secretGenerator
@@ -78,7 +79,7 @@ An overlay's `files/` directory must contain `quay-pull-secret.json` and `licens
 
 ## Submodules and Local Development
 
-Submodules under `base/` (osac-operator, osac-fulfillment-service, osac-aap) are pinned snapshots of the real working repos. They do not auto-sync -- to test local changes, synchronize modified files from the working repo into the submodule directory, without committing. During active development the submodule pointers are often dirty; this is expected.
+Submodules under `base/` (osac-operator, osac-fulfillment-service, osac-aap, bare-metal-fulfillment-operator) are pinned snapshots of the real working repos. They do not auto-sync -- to test local changes, synchronize modified files from the working repo into the submodule directory, without committing. During active development the submodule pointers are often dirty; this is expected.
 
 Do not `cd` into submodule directories and run git commands there -- you will operate on the submodule repo, not the installer. Always run git commands from the installer root.
 

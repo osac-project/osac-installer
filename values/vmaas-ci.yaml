@@ -94,3 +94,10 @@ validation:
 dbMigrate:
   enabled: false
   image: ghcr.io/osac-project/fulfillment-service:sha-6252427
+
+# --- Bare Metal Fulfillment Operator ---
+bmf:
+  image:
+    repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
+    tag: sha-6abb149
+    pullPolicy: Always

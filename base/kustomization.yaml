@@ -12,6 +12,7 @@ resources:
   - osac-operator/config/console-proxy-kube-system
   - osac-fulfillment-service/manifests/overlays/openshift
   - hub-access
+  - bare-metal-fulfillment-operator/config/default
 
 # Common labels for all OSAC components
 labels:
@@ -33,6 +34,8 @@ images:
   newTag: sha-3453b54
 - name: ghcr.io/osac-project/osac-operator
   newTag: sha-0c69537
+- name: ghcr.io/osac-project/bare-metal-fulfillment-operator
+  newTag: sha-6abb149
 - name: envoy
   newName: docker.io/envoyproxy/envoy
   newTag: v1.33.0

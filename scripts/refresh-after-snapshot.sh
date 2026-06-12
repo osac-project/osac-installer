@@ -164,7 +164,6 @@ failed=0
 wait ${pid_creds} || failed=1
 if (( failed )); then echo "ERROR: Failed to create fulfillment credentials"; exit 1; fi
 
-oc scale deploy/fulfillment-controller -n "${INSTALLER_NAMESPACE}" --replicas=0 2>/dev/null || true
 echo "[3/9] Applying kustomize overlay..."
 oc delete job -n "${INSTALLER_NAMESPACE}" --all --ignore-not-found
 # Exclude only the bootstrap job — it's redundant on snapshot boot and races
@@ -173,8 +172,14 @@ oc delete job -n "${INSTALLER_NAMESPACE}" --all --ignore-not-found
 # operator triggers into one reconciliation instead of a separate oc patch.
 sed '/job\.yaml/d' base/osac-aap/config/base/kustomization.yaml > base/osac-aap/config/base/kustomization.yaml.tmp \
     && mv base/osac-aap/config/base/kustomization.yaml.tmp base/osac-aap/config/base/kustomization.yaml
+# Deploy with fulfillment pods scaled to zero. The apply changes the database
+# StatefulSet image ref (tag → digest), triggering a pod recreation. If the
+# grpc-server were running, it could be mid-migration when the database is
+# killed, leaving golang-migrate's schema dirty. Deploying at zero replicas
+# eliminates the race entirely — pods are brought back at step [5/9] after
+# the database rollout completes.
+( cd "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}" && kustomize edit set replicas fulfillment-controller=0 fulfillment-grpc-server=0 )
 oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}"
-oc scale deploy/fulfillment-controller -n "${INSTALLER_NAMESPACE}" --replicas=0 2>/dev/null || true
 
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
 PULL_SECRET="${REPO_ROOT}/overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/files/quay-pull-secret.json"
@@ -306,12 +311,20 @@ for cert in "${fs_certs[@]}"; do
         -n "${INSTALLER_NAMESPACE}" --timeout=300s &
     pids+=($!)
 done
+failed=0
+for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
+if (( failed )); then echo "ERROR: TLS certificates not ready"; exit 1; fi
+# Wait for the database StatefulSet rollout before scaling up pods that run
+# migrations. The kustomize apply changed the image ref, triggering a
+# recreation — the database must be accepting connections before grpc-server
+# starts.
+oc rollout status statefulset/fulfillment-database -n "${INSTALLER_NAMESPACE}" --timeout=300s
+oc scale deploy/fulfillment-controller -n "${INSTALLER_NAMESPACE}" --replicas=1
+oc scale deploy/fulfillment-grpc-server -n "${INSTALLER_NAMESPACE}" --replicas=1
 # Envoy never re-reads its config after startup. Restart ingress-proxy before
 # the rollout wait so that pods depending on new routes (e.g. JWKS) can start.
 oc rollout restart deploy/fulfillment-ingress-proxy -n "${INSTALLER_NAMESPACE}"
-# Kustomize apply may have changed deployment images, triggering new rollouts
-# that run DB migrations. Wait for those to finish before restarting pods —
-# otherwise the restart kills pods mid-migration and leaves the DB dirty.
+pids=()
 for deploy in "${FULFILLMENT_DEPLOYS[@]}"; do
     oc rollout status "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}" --timeout=300s &
     pids+=($!)
@@ -319,9 +332,8 @@ done
 failed=0
 for pid in "${pids[@]}"; do wait "${pid}" || failed=1; done
 wait ${pid_cdi} || failed=1
-if (( failed )); then echo "ERROR: TLS certificates or fulfillment rollouts not ready"; exit 1; fi
+if (( failed )); then echo "ERROR: Fulfillment rollouts not ready"; exit 1; fi
 echo "[5/9] TLS certificates ready, restarting pods..."
-oc scale deploy/fulfillment-controller -n "${INSTALLER_NAMESPACE}" --replicas=1
 for deploy in "${FULFILLMENT_DEPLOYS[@]}"; do
     oc rollout restart "deploy/${deploy}" -n "${INSTALLER_NAMESPACE}"
 done

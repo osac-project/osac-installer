@@ -53,6 +53,8 @@ for overlay in "${CI_OVERLAYS[@]}"; do
   current_branch=$(grep "AAP_PROJECT_GIT_BRANCH=" "${overlay_file}" | sed 's/.*AAP_PROJECT_GIT_BRANCH=//' | tr -d ' ')
   expected_branch="${aap_commit}"
 
+  current_image_tag=$(grep -A2 "name: osac-aap$" "${overlay_file}" | grep "newTag:" | awk '{print $2}')
+
   for pair in "AAP_EE_IMAGE ${current_ee} ${expected_ee}" "AAP_PROJECT_GIT_BRANCH ${current_branch} ${expected_branch}"; do
     read -r key current expected <<< "${pair}"
     if [[ "${current}" == "${expected}" ]]; then
@@ -65,6 +67,16 @@ for overlay in "${CI_OVERLAYS[@]}"; do
       errors=$((errors + 1))
     fi
   done
+
+  if [[ "${current_image_tag}" == "${aap_tag}" ]]; then
+    echo "${overlay} osac-aap image: OK"
+  elif [[ "${1:-}" == "--fix" ]]; then
+    sed -i "/name: osac-aap$/,/newTag:/{s|newTag:.*|newTag: ${aap_tag}|}" "${overlay_file}"
+    echo "${overlay} osac-aap image: FIXED ${current_image_tag} -> ${aap_tag}"
+  else
+    echo "${overlay} osac-aap image: MISMATCH current=${current_image_tag} expected=${aap_tag}"
+    errors=$((errors + 1))
+  fi
 done
 
 # --- Helm values files ---

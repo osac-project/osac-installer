@@ -390,6 +390,8 @@ patches:
                     "/osac.public.v1.PublicIPAttachments/Get",
                     "/osac.public.v1.PublicIPAttachments/List",
                     "/osac.public.v1.PublicIPAttachments/Update",
+                    "/osac.public.v1.PublicIPPools/Get",
+                    "/osac.public.v1.PublicIPPools/List",
                     "/osac.public.v1.PublicIPs/Create",
                     "/osac.public.v1.PublicIPs/Delete",
                     "/osac.public.v1.PublicIPs/Get",

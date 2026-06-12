@@ -103,7 +103,7 @@ overlay by creating a new project-specific configuration. This is especially imp
 when deploying on shared clusters to avoid resource name collisions.
 
 Personal overlays under `overlays/<project-name>` are gitignored by default and will
-not appear in `git status`. Only shared overlay directories whitelisted in the root
+not appear in `git status`. Only committed overlay directories whitelisted in the root
 `.gitignore` are tracked.
 
 Use Kustomize to manage your environment-specific configurations.

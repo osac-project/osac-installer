@@ -40,8 +40,8 @@ CLAUDE.md
 # kubeconfig files
 kubeconfig.hub-access
 
-# Overlays: whitelist shared directories; personal overlays/<project-name> are ignored.
-# To add a new shared overlay, add !overlays/<name>/ and !overlays/<name>/** below.
+# Overlays: whitelist committed directories; personal overlays/<project-name> are ignored.
+# To add a new committed overlay, add !overlays/<name>/ and !overlays/<name>/** below.
 overlays/*
 !overlays/_shared/
 !overlays/_shared/**

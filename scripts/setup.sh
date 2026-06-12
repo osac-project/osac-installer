@@ -257,11 +257,76 @@ wait_for_namespace_cleanup "${INSTALLER_NAMESPACE}"
 
 if [[ "${DEPLOY_MODE}" == "helm" ]]; then
     # --- Helm deployment mode ---
+    #
+    # helm --wait blocks until all pods are Ready. Several resources that pods
+    # mount as required volumes must exist before the install starts.
+
+    # Create the namespace early so pre-deploy resources can target it.
+    oc create namespace "${INSTALLER_NAMESPACE}" --dry-run=client -o yaml | oc apply -f -
+
+    # Ensure the shared ca-bundle Bundle exists and the ConfigMap is populated.
+    "${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
+    echo "Waiting for ca-bundle ConfigMap..."
+    retry_until 120 3 'oc get configmap ca-bundle -n '"${INSTALLER_NAMESPACE}"' -o jsonpath='"'"'{.data.bundle\.pem}'"'"' 2>/dev/null | grep -q "BEGIN CERTIFICATE"'
+
+    # Create controller OAuth credentials from the Keycloak realm config.
+    FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
+    [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
+    oc create secret generic fulfillment-controller-credentials \
+        --from-literal=client-id=osac-controller \
+        --from-literal=client-secret="${FC_CLIENT_SECRET}" \
+        -n "${INSTALLER_NAMESPACE}" \
+        --dry-run=client -o yaml | oc apply -f -
+
+    # Deploy the fulfillment database. The fulfillment-service chart expects an
+    # external PostgreSQL with connection details in 'fulfillment-db' and client
+    # TLS in 'postgres-client-cert-service'.
+    echo "Deploying fulfillment database..."
+    helm upgrade --install fulfillment-db \
+        base/osac-fulfillment-service/it/charts/postgres/ \
+        --namespace "${INSTALLER_NAMESPACE}" \
+        --set certs.issuerRef.name=default-ca \
+        --set certs.caBundle.configMap=ca-bundle \
+        --set 'databases[0].name=service' \
+        --set 'databases[0].user=service' \
+        --timeout 5m \
+        --wait
+
+    # Create client certificate for the 'service' database user.
+    # The postgres chart does not generate per-user client certs yet.
+    oc apply -f - <<EOF
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  namespace: ${INSTALLER_NAMESPACE}
+  name: postgres-client-cert-service
+spec:
+  issuerRef:
+    kind: ClusterIssuer
+    name: default-ca
+  commonName: service
+  usages:
+  - client auth
+  secretName: postgres-client-cert-service
+  privateKey:
+    rotationPolicy: Always
+EOF
+    oc wait certificate/postgres-client-cert-service -n "${INSTALLER_NAMESPACE}" --for=condition=Ready --timeout=60s
+
+    # Create the connection secret for the fulfillment gRPC server.
+    DB_URL="postgres://service@postgres:5432/service?sslmode=verify-full"
+    DB_URL+="&sslcert=/etc/fulfillment-grpc-server/db/sslcert"
+    DB_URL+="&sslkey=/etc/fulfillment-grpc-server/db/sslkey"
+    DB_URL+="&sslrootcert=/etc/fulfillment-grpc-server/db/sslrootcert"
+    oc create secret generic fulfillment-db \
+        --from-literal=url="${DB_URL}" \
+        -n "${INSTALLER_NAMESPACE}" \
+        --dry-run=client -o yaml | oc apply -f -
+
     echo "Deploying OSAC using Helm..."
     helm dependency build charts/osac/
     helm upgrade --install osac charts/osac/ \
         --namespace "${INSTALLER_NAMESPACE}" \
-        --create-namespace \
         --values "${VALUES_FILE}" \
         --timeout 40m \
         --wait
@@ -269,19 +334,19 @@ else
     # --- Kustomize deployment mode (legacy) ---
     echo "Deploying OSAC using Kustomize..."
     oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}" --server-side --force-conflicts
+
+    # Ensure the shared ca-bundle Bundle exists and includes our namespace
+    "${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
+
+    # Create controller OAuth credentials from the Keycloak realm config
+    FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
+    [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
+    oc create secret generic fulfillment-controller-credentials \
+        --from-literal=client-id=osac-controller \
+        --from-literal=client-secret="${FC_CLIENT_SECRET}" \
+        -n "${INSTALLER_NAMESPACE}" \
+        --dry-run=client -o yaml | oc apply -f -
 fi
-
-# Ensure the shared ca-bundle Bundle exists and includes our namespace
-"${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
-
-# Create controller OAuth credentials from the Keycloak realm config
-FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
-[[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
-oc create secret generic fulfillment-controller-credentials \
-    --from-literal=client-id=osac-controller \
-    --from-literal=client-secret="${FC_CLIENT_SECRET}" \
-    -n ${INSTALLER_NAMESPACE} \
-    --dry-run=client -o yaml | oc apply -f -
 
 # Apply cluster-fulfillment-ig configmap/secret overrides from environment variables
 INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
@@ -329,13 +394,13 @@ wait_for_resource deployment/fulfillment-ingress-proxy condition=Available 300 $
 oc project ${INSTALLER_NAMESPACE}
 
 # Create AAP API token for the OSAC operator
-./scripts/prepare-aap.sh
+INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" ./scripts/prepare-aap.sh
 
 # Setup OSAC CLI, register hub
-./scripts/prepare-fulfillment-service.sh
+INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" ./scripts/prepare-fulfillment-service.sh
 
 # Prepare tenant
-./scripts/prepare-tenant.sh
+INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" ./scripts/prepare-tenant.sh
 
 echo ""
 echo "=== Setup complete ==="

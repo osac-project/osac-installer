@@ -43,3 +43,22 @@
       name: osac-console-proxy-auth-reader
     fieldPaths:
     - metadata.namespace
+# Propagates the fulfillment-api namespace into the ingress-proxy certificate
+# dnsNames so the cert covers the namespace-qualified FQDNs used by the
+# console-proxy JWKS fetch and by in-cluster clients.
+- source:
+    kind: Service
+    name: fulfillment-api
+    fieldPath: metadata.namespace
+  targets:
+  - select:
+      kind: Certificate
+      name: fulfillment-api
+    fieldPaths:
+    - spec.dnsNames.2
+    - spec.dnsNames.3
+    - spec.dnsNames.5
+    - spec.dnsNames.6
+    options:
+      delimiter: '.'
+      index: 1

@@ -170,9 +170,13 @@ Use Kustomize to manage your environment-specific configurations.
      ]'
      ```
      If this is not configured, all gRPC calls will fail with `Unauthenticated` errors.
-   - In `kustomization.yaml`: Replace `<cluster-name>.<base-domain>` in the `OSAC_AAP_URL`
-     value with your cluster's actual domain (e.g., `mgmt.example.devcluster.openshift.com`).
-     You can find it by running: `oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'`
+   - In `kustomization.yaml`: Replace `osac-devel` with your project name and
+     `<cluster-name>.<base-domain>` with your cluster's actual domain in the
+     `OSAC_AAP_URL`, token-issuer, CORS, and certificate patches.
+     You can find your cluster domain by running:
+     `oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'`.
+     **If using `setup.sh`**, these values are discovered from the cluster
+     and patched automatically.
 
    These changes ensure your installation uses a unique namespace and prevents resource
    name conflicts with other OSAC installations.

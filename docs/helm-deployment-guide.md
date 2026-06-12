@@ -370,6 +370,12 @@ oc get configmap ca-bundle -n ${NAMESPACE}
 The fulfillment-service requires a PostgreSQL database. The connection details
 are provided via a `fulfillment-db` secret.
 
+> **Shortcut:** If `bundledPostgres.enabled: true` is set in your values file,
+> the chart auto-creates the `fulfillment-db` secret and
+> `postgres-client-cert-service` Certificate. You only need to deploy the
+> postgres chart itself — skip the manual `oc create secret` and
+> `oc apply -f Certificate` steps below.
+
 **Option A: Deploy the bundled dev postgres chart** (single-replica, non-HA,
 suitable for dev/test):
 

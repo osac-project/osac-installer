@@ -1,0 +1,30 @@
+{{- if .Values.bundledPostgres.enabled }}
+# Auto-generated secrets for bundled PostgreSQL (dev/test).
+# See docs/helm-deployment-guide.md section 2.2 for manual alternative.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fulfillment-db
+  labels:
+    {{- include "osac.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  url: "postgres://{{ .Values.bundledPostgres.database.user }}@postgres:5432/{{ .Values.bundledPostgres.database.name }}?sslmode=verify-full&sslrootcert=/etc/fulfillment-grpc-server/db/sslrootcert&sslcert=/etc/fulfillment-grpc-server/db/sslcert&sslkey=/etc/fulfillment-grpc-server/db/sslkey"
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: postgres-client-service
+  labels:
+    {{- include "osac.labels" . | nindent 4 }}
+spec:
+  issuerRef:
+    kind: {{ .Values.service.certs.issuerRef.kind }}
+    name: {{ .Values.service.certs.issuerRef.name }}
+  commonName: {{ .Values.bundledPostgres.database.user }}
+  usages:
+  - client auth
+  secretName: postgres-client-cert-service
+  privateKey:
+    rotationPolicy: Always
+{{- end }}

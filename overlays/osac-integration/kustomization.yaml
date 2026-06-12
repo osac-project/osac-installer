@@ -139,6 +139,40 @@ patches:
                 - --grpc-authn-external-address=authorino-authorino-authorization:50051
                 - --tenancy-logic=default
                 - --metrics-listener-address=0.0.0.0:8002
+                - --token-signer-crt=/etc/fulfillment-token-signer/tls.crt
+                - --token-signer-key=/etc/fulfillment-token-signer/tls.key
+                - --token-encryption-crt=/etc/fulfillment-token-encryption/tls.crt
+                - --token-issuer=https://fulfillment-api-osac-integration.apps.osac-integration.svc.massopen.cloud
+
+  # Override the console-proxy --token-issuer to use the external FQDN so it
+  # matches the iss claim stamped by the grpc-server.
+  - target:
+      kind: Deployment
+      name: fulfillment-console-proxy
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/command/5
+        value: --token-issuer=https://fulfillment-api-osac-integration.apps.osac-integration.svc.massopen.cloud
+
+  # Override the console-proxy --console-cors-allowed-origins to use the
+  # external FQDN so browser WebSocket Origin headers are accepted.
+  - target:
+      kind: Deployment
+      name: fulfillment-console-proxy
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/command/13
+        value: --console-cors-allowed-origins=https://fulfillment-api-osac-integration.apps.osac-integration.svc.massopen.cloud
+
+  # Add the external FQDN to the ingress-proxy certificate so TLS validation
+  # succeeds when the console-proxy fetches JWKS via the external hostname.
+  - target:
+      kind: Certificate
+      name: fulfillment-api
+    patch: |-
+      - op: add
+        path: /spec/dnsNames/-
+        value: fulfillment-api-osac-integration.apps.osac-integration.svc.massopen.cloud
 
   - target:
       kind: Deployment

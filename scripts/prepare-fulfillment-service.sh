@@ -182,6 +182,36 @@ publish_templates() {
     fi
 }
 
+patch_token_config() {
+    local api_route_host issuer_url
+    # The route ingress host may take a moment to populate after apply.
+    retry_until 60 5 \
+        '[[ -n "$(oc get route -n "${INSTALLER_NAMESPACE}" fulfillment-api -o jsonpath="{.status.ingress[0].host}" 2>/dev/null)" ]]' || {
+        echo "ERROR: fulfillment-api route has no ingress host after 60s"
+        exit 1
+    }
+    api_route_host=$(oc get route -n "${INSTALLER_NAMESPACE}" fulfillment-api -o jsonpath='{.status.ingress[0].host}')
+    issuer_url="https://${api_route_host}"
+
+    echo "Patching token-issuer and CORS to ${issuer_url}..."
+
+    # Patch grpc-server --token-issuer (command[19])
+    oc patch deployment/fulfillment-grpc-server -n "${INSTALLER_NAMESPACE}" --type=json \
+        -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/19\",\"value\":\"--token-issuer=${issuer_url}\"}]"
+
+    # Patch console-proxy --token-issuer (command[5]) and CORS (command[13])
+    oc patch deployment/fulfillment-console-proxy -n "${INSTALLER_NAMESPACE}" --type=json \
+        -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/5\",\"value\":\"--token-issuer=${issuer_url}\"},{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/13\",\"value\":\"--console-cors-allowed-origins=${issuer_url}\"}]"
+
+    # Add external FQDN to fulfillment-api certificate SANs (idempotent)
+    if ! oc get certificate/fulfillment-api -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.spec.dnsNames}' | grep -qF "${api_route_host}"; then
+        oc patch certificate/fulfillment-api -n "${INSTALLER_NAMESPACE}" --type=json \
+            -p "[{\"op\":\"add\",\"path\":\"/spec/dnsNames/-\",\"value\":\"${api_route_host}\"}]"
+    fi
+}
+
+patch_token_config
+
 create_hub &
 pid_hub=$!
 sync_aap_project &

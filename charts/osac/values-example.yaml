@@ -1,0 +1,307 @@
+# =============================================================================
+# OSAC (Open Sovereign AI Cloud) - Example Values
+# =============================================================================
+#
+# Copy this file and customize it for your environment:
+#   cp values-example.yaml my-values.yaml
+#   # Edit my-values.yaml with your settings
+#   helm install osac charts/osac/ -f my-values.yaml -n <namespace>
+#
+# Required fields are marked with [REQUIRED]. All other fields have sensible
+# defaults and can be omitted.
+#
+# Two deployment scenarios are documented:
+#   1. Production: external Postgres, external Keycloak, pinned image tags
+#   2. Development: bundled dependencies, latest images
+#
+# =============================================================================
+
+# ---------------------
+# Operator CRDs
+# ---------------------
+operatorCrds:
+  # Install OSAC CRDs (ClusterOrder, ComputeInstance, Tenant, etc.).
+  # Set to false if CRDs are managed separately (e.g., by a cluster admin).
+  install: true
+
+# ---------------------
+# OSAC Operator
+# ---------------------
+operator:
+  image:
+    repository: ghcr.io/osac-project/osac-operator
+    # Production: pin to a specific SHA or release tag.
+    # Development: use "latest".
+    tag: latest
+    # "Always" recommended for development; "IfNotPresent" for production.
+    pullPolicy: Always
+
+  replicaCount: 1
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+  # AAP connection settings. The operator uses AAP to provision infrastructure
+  # resources (clusters, VMs, networks) via job templates.
+  aap:
+    # [REQUIRED for provisioning] Full URL to the AAP controller API.
+    # Typically set post-install by scripts/prepare-aap.sh after the AAP
+    # instance is ready and its route is available.
+    # Example: https://osac-aap.osac.apps.mycluster.example.com/api/controller
+    url: ""
+
+    # [REQUIRED for provisioning] AAP API token for authentication.
+    # Created by scripts/prepare-aap.sh from the AAP admin credentials.
+    token: ""
+
+    # Skip TLS verification for AAP connection. Set to "false" in production
+    # if using trusted certificates.
+    insecureSkipVerify: "true"
+
+    # How often the operator polls AAP for job status updates.
+    statusPollInterval: "30s"
+
+    # Prefix for AAP job template names. The operator looks for templates
+    # named "<prefix>-<action>-<resource>" (e.g., "osac-create-subnet").
+    templatePrefix: "osac"
+
+  # Fulfillment service gRPC connection. The operator reports resource state
+  # back to the fulfillment service for multi-cluster coordination.
+  fulfillment:
+    # In-cluster gRPC address. Change only if the service name differs.
+    serverAddress: "fulfillment-api:8000"
+    # Path to the ServiceAccount token file used for authentication.
+    tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+  # Enable/disable individual controllers. When all are true (default),
+  # the operator manages all resource types. Set to false to disable
+  # specific controllers in split-responsibility deployments.
+  controllers:
+    clusterOrder: true
+    computeInstance: true
+    tenant: true
+    networking: true
+
+  # Secret containing operator configuration overrides. Mounted as
+  # environment variables. Created by scripts/prepare-aap.sh.
+  configSecret:
+    name: "osac-config"
+    # When true, the operator starts even if the secret doesn't exist yet.
+    optional: true
+
+# ---------------------
+# Fulfillment Service
+# ---------------------
+service:
+  # Deployment variant: "openshift" for OCP clusters, "kind" for local dev.
+  variant: openshift
+
+  images:
+    # Production: pin to a specific SHA tag.
+    # Development: use "latest".
+    service: ghcr.io/osac-project/fulfillment-service:latest
+    envoy: docker.io/envoyproxy/envoy:v1.33.0
+
+  # TLS certificate configuration. All service components use cert-manager
+  # to generate certificates signed by this issuer.
+  certs:
+    issuerRef:
+      # "ClusterIssuer" for cluster-wide issuers, "Issuer" for namespaced.
+      kind: ClusterIssuer
+      # [REQUIRED] Name of the cert-manager issuer. Must exist in the cluster
+      # before deploying OSAC. See prerequisites in the deployment guide.
+      name: default-ca
+    caBundle:
+      # ConfigMap containing the CA bundle. Created by trust-manager's
+      # ca-bundle Bundle resource. Pods mount this to trust internal certs.
+      configMap: ca-bundle
+
+  # Authentication configuration for the fulfillment service API.
+  auth:
+    # [REQUIRED] OIDC issuer URL. Must be the Keycloak realm URL that issues
+    # tokens for OSAC API authentication.
+    # Example: https://keycloak.keycloak.svc.cluster.local/realms/osac
+    issuerUrl: https://keycloak.keycloak.svc.cluster.local/realms/osac
+
+    # Credentials for the fulfillment controller to authenticate with
+    # the OIDC provider. Mounted as projected volumes.
+    controllerCredentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-id
+          param: client-id
+        - key: client-secret
+          param: client-secret
+
+  # Identity provider configuration for user management.
+  idp:
+    # Currently only "keycloak" is supported.
+    provider: keycloak
+    # [REQUIRED] Keycloak base URL (without /realms/...).
+    # Example: https://keycloak.keycloak.svc.cluster.local
+    url: https://keycloak.keycloak.svc.cluster.local
+    # Credentials for the fulfillment service to manage Keycloak users/roles.
+    credentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-id
+          param: client-id
+        - key: client-secret
+          param: client-secret
+
+  # Database connection configuration for the fulfillment service.
+  # Uses projected volumes to mount connection parameters from secrets.
+  database:
+    connection:
+    # Production: external Postgres with mTLS.
+    # Provide a secret with the connection URL and client certificates.
+    - secret:
+        name: fulfillment-db
+        items:
+        - key: url
+          # Format: postgresql://user:pass@host:5432/dbname?sslmode=verify-full
+          param: url
+    - secret:
+        name: postgres-client-cert-service
+        items:
+        - key: tls.crt
+          param: sslcert
+        - key: tls.key
+          param: sslkey
+        - key: ca.crt
+          param: sslrootcert
+  # Development: for non-TLS Postgres, replace the connection block above with:
+  #   connection:
+  #   - secret:
+  #       name: fulfillment-db
+  #       items:
+  #       - key: url
+  #         param: url
+
+  # Logging configuration.
+  log:
+    # Log level: debug, info, warn, error
+    level: info
+    # Log HTTP headers (useful for debugging, disable in production).
+    headers: false
+    # Log HTTP bodies (useful for debugging, disable in production).
+    bodies: false
+
+# ---------------------
+# AAP (Ansible Automation Platform)
+# ---------------------
+aap:
+  aap:
+    instance:
+      # Set to false if using an externally managed AAP instance.
+      enabled: true
+      # Name of the AAP instance CR. Used to derive route/service names.
+      name: "osac-aap"
+      # AAP components to enable. Only controller and EDA are needed for OSAC.
+      controller:
+        disabled: false
+      eda:
+        disabled: false
+      hub:
+        disabled: true
+      lightspeed:
+        disabled: true
+      # Suppress sensitive data in AAP logs.
+      noLog: true
+      # Redis mode: "standalone" for single-node, "cluster" for HA.
+      redisMode: standalone
+      # TLS termination for AAP routes: "Edge" or "Passthrough".
+      routeTlsTerminationMechanism: Edge
+      imagePullPolicy: IfNotPresent
+
+  bootstrap:
+    # Run the AAP bootstrap job after install. The job creates OSAC-specific
+    # job templates, credentials, and inventories in AAP.
+    enabled: true
+    # Bootstrap job container image.
+    image: ghcr.io/osac-project/osac-aap:latest
+    # CLI image for oc/kubectl commands during bootstrap.
+    cliImage: quay.io/openshift/origin-cli:4.20.0
+    # Number of retries for the bootstrap job. AAP takes time to start,
+    # so a high backoff limit is normal.
+    backoffLimit: 15
+    # Hostnames for AAP component routes. Leave empty to auto-detect
+    # from the AAP instance CR status.
+    gateway:
+      hostname: ""
+    eda:
+      hostname: ""
+    controller:
+      hostname: ""
+
+  configAsCode:
+    # Secret names for AAP config-as-code. These are created by
+    # scripts/aap-configuration.sh during post-install setup.
+    manifestSecret: "config-as-code-manifest-ig"
+    secret: "config-as-code-ig"
+
+# ---------------------
+# Bundled PostgreSQL (dev/test)
+# ---------------------
+bundledPostgres:
+  # When true, auto-creates fulfillment-db secret and postgres-client-cert-service
+  # Certificate. Requires the bundled postgres chart to be deployed separately:
+  #   helm install fulfillment-db base/osac-fulfillment-service/it/charts/postgres/ \
+  #     -n ${NAMESPACE} --set certs.issuerRef.name=default-ca \
+  #     --set certs.caBundle.configMap=ca-bundle \
+  #     --set 'databases[0].name=service' --set 'databases[0].user=service'
+  enabled: false
+  database:
+    name: service
+    user: service
+
+# ---------------------
+# Hub Access
+# ---------------------
+hubAccess:
+  # Create hub-access ServiceAccount, Secret, Role, RoleBinding, ClusterRole,
+  # and ClusterRoleBinding. Required by prepare-fulfillment-service.sh to
+  # generate a kubeconfig for remote cluster management.
+  enabled: true
+
+# ---------------------
+# Publish Templates
+# ---------------------
+publishTemplates:
+  # Create the publish-templates-ig ConfigMap consumed by the AAP template
+  # publishing instance group. Controls which Ansible collections are scanned
+  # and where templates are registered.
+  enabled: true
+  # Comma-separated list of Ansible collections containing OSAC templates.
+  templateCollections: "osac.templates"
+  # Internal URI of the fulfillment service API for template registration.
+  fulfillmentServiceUri: "https://fulfillment-internal-api:8001"
+
+# ---------------------
+# Pre-install Validation
+# ---------------------
+validation:
+  # Run pre-install checks (cert-manager CRDs, default StorageClass).
+  # Catches missing prerequisites before deployment starts.
+  enabled: true
+  image: bitnami/kubectl:latest
+
+# ---------------------
+# Database Migration
+# ---------------------
+# Runs schema migrations on helm upgrade. Currently disabled until the
+# 'migrate' subcommand is released in the fulfillment-service image.
+dbMigrate:
+  enabled: false
+  image: ghcr.io/osac-project/fulfillment-service:latest
+  # Provide either dbUrl (inline) or dbUrlFile (path to mounted file).
+  # dbUrl takes precedence if both are set.
+  dbUrl: ""
+  dbUrlFile: "/etc/fulfillment-service/db/url"

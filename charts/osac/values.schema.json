@@ -94,6 +94,7 @@
     "service": {
       "type": "object",
       "description": "Fulfillment Service configuration",
+      "required": ["auth", "certs"],
       "properties": {
         "variant": {
           "type": "string",
@@ -111,6 +112,66 @@
             "envoy": {
               "type": "string",
               "description": "Envoy proxy container image"
+            }
+          }
+        },
+        "certs": {
+          "type": "object",
+          "description": "TLS certificate configuration",
+          "required": ["issuerRef"],
+          "properties": {
+            "issuerRef": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "description": "Issuer kind (ClusterIssuer or Issuer)",
+                  "enum": ["ClusterIssuer", "Issuer"],
+                  "default": "ClusterIssuer"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Name of the cert-manager ClusterIssuer or Issuer",
+                  "minLength": 1
+                }
+              }
+            },
+            "caBundle": {
+              "type": "object",
+              "properties": {
+                "configMap": {
+                  "type": "string",
+                  "description": "ConfigMap name containing the CA bundle"
+                }
+              }
+            }
+          }
+        },
+        "auth": {
+          "type": "object",
+          "description": "Authentication configuration",
+          "required": ["issuerUrl"],
+          "properties": {
+            "issuerUrl": {
+              "type": "string",
+              "description": "OIDC issuer URL (e.g. Keycloak realm URL)",
+              "minLength": 1,
+              "pattern": "^https?://"
+            },
+            "controllerCredentials": {
+              "type": "array",
+              "description": "Controller credential volume sources"
+            }
+          }
+        },
+        "database": {
+          "type": "object",
+          "description": "Database configuration",
+          "properties": {
+            "connection": {
+              "type": "array",
+              "description": "Database connection volume sources (secret or configMap references)"
             }
           }
         }
@@ -157,6 +218,20 @@
               "description": "Number of retries for bootstrap job",
               "default": 15
             }
+          }
+        }
+      }
+    },
+    "bundledPostgres": {
+      "type": "object",
+      "description": "Auto-generate secrets for bundled PostgreSQL (dev/test only)",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "database": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "default": "service" },
+            "user": { "type": "string", "default": "service" }
           }
         }
       }

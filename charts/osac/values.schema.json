@@ -213,6 +213,11 @@
               "type": "string",
               "description": "Bootstrap job container image"
             },
+            "eeImage": {
+              "type": "string",
+              "description": "Execution Environment image registered in AAP for automation jobs. Defaults to bootstrap.image when empty.",
+              "default": ""
+            },
             "backoffLimit": {
               "type": "integer",
               "description": "Number of retries for bootstrap job",

@@ -486,7 +486,10 @@ oc create secret generic config-as-code-ig \
 
 > **Tip:** If using a custom osac-aap image or branch, update these values
 > accordingly. The `AAP_EE_IMAGE` is the Execution Environment image that AAP
-> uses to run automation jobs.
+> uses to run automation jobs. You can also set the EE image via Helm values
+> (`aap.bootstrap.eeImage`) — the bootstrap job will use the Helm value
+> directly, so this secret is only needed for the scheduled config-as-code
+> workflow that runs later through AAP.
 
 ### 2.6 Instance Group Configuration (Optional)
 

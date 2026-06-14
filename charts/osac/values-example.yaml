@@ -227,6 +227,9 @@ aap:
     enabled: true
     # Bootstrap job container image.
     image: ghcr.io/osac-project/osac-aap:latest
+    # Execution Environment image registered in AAP for automation jobs.
+    # When empty (default), falls back to bootstrap.image so both stay in sync.
+    eeImage: ""
     # CLI image for oc/kubectl commands during bootstrap.
     cliImage: quay.io/openshift/origin-cli:4.20.0
     # Number of retries for the bootstrap job. AAP takes time to start,

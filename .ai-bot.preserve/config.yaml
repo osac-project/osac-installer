@@ -1,0 +1,23 @@
+# .ai-bot/config.yaml for osac-installer
+#
+# Infrastructure/deployment repo -- Kustomize overlays, shell scripts,
+# YAML manifests. No Go code, no container builds, no unit tests.
+
+imports:
+  - repo: https://github.com/flightctl/ai-workflows
+    path: .ai-workflows
+    ref: main
+    install: .ai-workflows/install.sh
+
+validation_commands:
+  - yamllint --strict .
+  - pre-commit run --all-files
+  - bash scripts/kustomize-build-all.sh
+  - bash scripts/sync-image-tags.sh
+  - python3 scripts/sync-authconfig-rego.py
+
+pr:
+  draft: true
+  title_prefix: "[AI]"
+  labels:
+    - ai-pr

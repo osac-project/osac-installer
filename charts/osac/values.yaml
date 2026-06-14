@@ -91,6 +91,7 @@ aap:
   bootstrap:
     enabled: true
     image: ghcr.io/osac-project/osac-aap:latest
+    eeImage: ""
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
     gateway:

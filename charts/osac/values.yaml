@@ -137,3 +137,52 @@ dbMigrate:
   image: ghcr.io/osac-project/fulfillment-service:latest
   dbUrl: ""
   dbUrlFile: ""
+
+# --- Cluster Fulfillment Instance Group ---
+# ConfigMap and Secret for the AAP cluster-fulfillment instance group.
+# Carries network backend selection, Netris credentials, SSH config,
+# external-access domains, and hosted-cluster defaults.
+clusterFulfillment:
+  enabled: false
+  config:
+    NETWORK_CLASS: ""
+    NETWORK_STEPS_COLLECTION: ""
+    NETRIS_CONTROLLER_URL: ""
+    NETRIS_USERNAME: ""
+    NETRIS_SITE_ID: ""
+    NETRIS_TENANT_ID: ""
+    NETRIS_TENANT_NAME: ""
+    NETRIS_MGMT_VPC_ID: ""
+    NETRIS_MGMT_VPC_NAME: ""
+    NETRIS_RESOURCE_CLASS_MAP: ""
+    SERVER_SSH_BASTION_HOST: ""
+    SERVER_SSH_BASTION_USER: ""
+    SERVER_SSH_USER: ""
+    SERVER_MGMT_ROUTE_DESTINATION: ""
+    SERVER_MGMT_ROUTE_GATEWAY: ""
+    EXTERNAL_ACCESS_BASE_DOMAIN: ""
+    EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: ""
+    EXTERNAL_ACCESS_API_INTERNAL_NETWORK: ""
+    HOSTED_CLUSTER_BASE_DOMAIN: ""
+    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: ""
+    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: ""
+  secret:
+    NETRIS_PASSWORD: ""
+    AWS_ACCESS_KEY_ID: ""
+    AWS_SECRET_ACCESS_KEY: ""
+    SERVER_SSH_KEY: ""
+    SERVER_SSH_BASTION_KEY: ""
+
+# --- Network Fulfillment Instance Group ---
+# ConfigMap and Secret for the AAP networking-operations instance group.
+# Carries Netris controller credentials for network resource lifecycle.
+networkFulfillment:
+  enabled: false
+  config:
+    NETRIS_CONTROLLER_URL: ""
+    NETRIS_USERNAME: ""
+    NETRIS_SITE_ID: ""
+    NETRIS_TENANT_ID: ""
+    NETRIS_TENANT_NAME: ""
+  secret:
+    NETRIS_PASSWORD: ""

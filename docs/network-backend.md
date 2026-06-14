@@ -66,3 +66,88 @@ Values must be plaintext — the script base64-encodes them automatically.
 Each key is a resource class name. `server_cluster_template_id` is the Netris server
 cluster template ID, `mgmt_interface` is the management NIC name, and `vpc_interfaces`
 lists the data-plane NIC names.
+
+## Helm Chart Configuration
+
+When deploying with Helm, Netris configuration is provided via values instead of
+env files. Two values sections control the fulfillment instance groups:
+
+### Enabling the Instance Groups
+
+In your environment values file (e.g., `values/development.yaml`):
+
+```yaml
+clusterFulfillment:
+  enabled: true
+  config:
+    NETWORK_CLASS: "netris"
+    NETWORK_STEPS_COLLECTION: "netris.steps"
+    NETRIS_CONTROLLER_URL: "https://redhat-ctl.netris.io"
+    NETRIS_USERNAME: "netris"
+    NETRIS_SITE_ID: "5"
+    NETRIS_TENANT_ID: "1"
+    NETRIS_TENANT_NAME: "Admin"
+    NETRIS_MGMT_VPC_ID: "4"
+    NETRIS_MGMT_VPC_NAME: "RH-Infra"
+    NETRIS_RESOURCE_CLASS_MAP: '{"fc430": {"server_cluster_template_id": 89, "mgmt_interface": "ens4", "vpc_interfaces": ["ens13"]}}'
+    SERVER_SSH_BASTION_HOST: "redhat-ctl.netris.io"
+    SERVER_SSH_BASTION_USER: "ubuntu"
+    SERVER_SSH_USER: "core"
+    SERVER_MGMT_ROUTE_DESTINATION: "10.8.0.0/30"
+    SERVER_MGMT_ROUTE_GATEWAY: "192.168.16.1"
+    EXTERNAL_ACCESS_BASE_DOMAIN: "box.massopen.cloud"
+    EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: "box.massopen.cloud"
+    EXTERNAL_ACCESS_API_INTERNAL_NETWORK: "hypershift"
+    HOSTED_CLUSTER_BASE_DOMAIN: "box.massopen.cloud"
+    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "HighlyAvailable"
+    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "HighlyAvailable"
+
+networkFulfillment:
+  enabled: true
+  config:
+    NETRIS_CONTROLLER_URL: "https://redhat-ctl.netris.io"
+    NETRIS_USERNAME: "netris"
+    NETRIS_SITE_ID: "5"
+    NETRIS_TENANT_ID: "1"
+    NETRIS_TENANT_NAME: "Admin"
+```
+
+Only non-empty values are rendered into the ConfigMap. Keys left as `""` are
+omitted, so you only need to set the variables relevant to your network backend.
+
+### Setting Secret Values
+
+Create a separate secrets values file that is **not committed to git**
+(`.local.yaml` files are already gitignored):
+
+```yaml
+# values/development-secrets.local.yaml
+clusterFulfillment:
+  secret:
+    NETRIS_PASSWORD: "my-netris-password"
+    AWS_ACCESS_KEY_ID: "AKIA..."
+    AWS_SECRET_ACCESS_KEY: "..."
+    SERVER_SSH_KEY: "<contents of ~/.ssh/id_rsa>"
+    SERVER_SSH_BASTION_KEY: "<contents of ~/.ssh/id_ed25519>"
+
+networkFulfillment:
+  secret:
+    NETRIS_PASSWORD: "my-netris-password"
+```
+
+Pass both files when deploying — Helm deep-merges them:
+
+```bash
+helm install osac charts/osac \
+  -f values/development.yaml \
+  -f values/development-secrets.local.yaml \
+  -n <namespace>
+```
+
+Alternatively, pass secrets directly on the command line:
+
+```bash
+helm install osac charts/osac -f values/development.yaml \
+  --set clusterFulfillment.secret.NETRIS_PASSWORD=mypass \
+  --set networkFulfillment.secret.NETRIS_PASSWORD=mypass
+```

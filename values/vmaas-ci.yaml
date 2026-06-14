@@ -5,7 +5,7 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-0c69537
+    tag: sha-acb50ad
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -23,7 +23,7 @@ operator:
 service:
   variant: openshift
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-6252427
+    service: ghcr.io/osac-project/fulfillment-service:sha-79daf20
     envoy: docker.io/envoyproxy/envoy:v1.33.0
   certs:
     issuerRef:
@@ -79,7 +79,7 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-3453b54
+    image: ghcr.io/osac-project/osac-aap:sha-9828dea
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
@@ -93,4 +93,4 @@ validation:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-6252427
+  image: ghcr.io/osac-project/fulfillment-service:sha-79daf20

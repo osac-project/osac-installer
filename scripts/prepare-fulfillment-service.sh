@@ -21,7 +21,11 @@ create_hub() {
     echo "Fulfillment internal API URL: ${fulfillment_url}"
 
     echo "Logging into fulfillment internal API..."
-    retry_command 300 10 osac login --insecure --private --token-script "oc create token -n ${INSTALLER_NAMESPACE} admin" --address "${fulfillment_url}"
+    # OC_IMPERSONATE wraps the oc bash function but osac spawns oc as a
+    # child process, so we pass --as directly in the token-script.
+    local _impersonate_flag=""
+    [[ -n "${OC_IMPERSONATE:-}" ]] && _impersonate_flag="--as $(printf '%q' "${OC_IMPERSONATE}")"
+    retry_command 300 10 osac login --insecure --private --token-script "oc create token -n ${INSTALLER_NAMESPACE} admin ${_impersonate_flag}" --address "${fulfillment_url}"
 
     echo "Deleting existing hub..."
     retry_command 300 10 osac delete hub hub

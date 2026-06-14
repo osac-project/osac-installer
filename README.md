@@ -173,6 +173,8 @@ Use Kustomize to manage your environment-specific configurations.
      `oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'`.
      **If using `setup.sh`**, these values are discovered from the cluster
      and patched automatically.
+     * Note: For a local dev environment, `OSAC_AAP_URL` can be set to
+     `http://osac-aap/api/controller`.
 
    These changes ensure your installation uses a unique namespace and prevents resource
    name conflicts with other OSAC installations.

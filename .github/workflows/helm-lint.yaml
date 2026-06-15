@@ -50,3 +50,13 @@ jobs:
 
     - name: Validate values schema
       run: python3 -m json.tool charts/osac/values.schema.json > /dev/null
+
+    - name: Validate images.txt
+      run: |
+        set -euo pipefail
+        bash scripts/generate-images-txt.sh /tmp/images-check.txt
+        if ! diff -u images.txt /tmp/images-check.txt; then
+          echo "::error::images.txt is out of date. Run 'bash scripts/generate-images-txt.sh' and commit the result."
+          exit 1
+        fi
+        echo "images.txt is up to date."

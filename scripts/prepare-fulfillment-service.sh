@@ -30,7 +30,7 @@ create_hub() {
     local _server_name
     _server_name=$(oc config view --minify --output jsonpath="{.clusters[*].cluster.server}")
     _server_name=${_server_name#*.}; _server_name=${_server_name%%.*}
-    retry_command 300 10 osac create hub --kubeconfig="/tmp/kubeconfig.hub-access.${_server_name}" --id hub --namespace "${INSTALLER_NAMESPACE}"
+    retry_command 300 10 osac create hub --kubeconfig="/tmp/kubeconfig.hub-access.${_server_name}" --id hub --namespace "${INSTALLER_NAMESPACE}" --tenant shared
 }
 
 sync_aap_project() {

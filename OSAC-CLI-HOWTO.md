@@ -608,6 +608,9 @@ EOF
 ```
 
 **Step 2: Register the Hub**
+
+When registering as an admin (universal tenant access), specify `--tenant shared` or rely on the CLI default (`shared`).
+
 ```bash
 # Register hub with fulfillment service
 ./osac create hub \

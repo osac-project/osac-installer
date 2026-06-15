@@ -34,7 +34,7 @@ images:
 - name: ghcr.io/osac-project/osac-operator
   newTag: sha-acb50ad
 - name: envoy
-  newName: docker.io/envoyproxy/envoy
+  newName: ghcr.io/osac-project/envoy
   newTag: v1.33.0
 - name: openshift-cli
   newName: image-registry.openshift-image-registry.svc:5000/openshift/cli

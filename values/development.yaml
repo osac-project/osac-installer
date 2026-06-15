@@ -28,7 +28,7 @@ service:
   variant: openshift
   images:
     service: ghcr.io/osac-project/fulfillment-service:latest
-    envoy: docker.io/envoyproxy/envoy:v1.33.0
+    envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
       kind: ClusterIssuer

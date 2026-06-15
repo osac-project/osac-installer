@@ -41,7 +41,7 @@ custom registry or tag.
 
 | Mechanism | Where to set | What it controls |
 |-----------|--------------|------------------|
-| Kustomize `images:` | Overlay `kustomization.yaml` — transform placeholder `osac-aap` | Container image for the `aap-bootstrap` pod (runs `ansible-playbook`) |
+| Kustomize `images:` | Overlay `kustomization.yaml` — match resolved name `ghcr.io/osac-project/osac-aap` | Container image for the `aap-bootstrap` pod (runs `ansible-playbook`) |
 | `AAP_EE_IMAGE` | `config-as-code-ig` secret literal (or Helm equivalent) | EE image registered **inside AAP** by `osac.config_as_code.configure` |
 
 Base `kustomization.yaml` maps placeholder `osac-aap` to `ghcr.io/osac-project/osac-aap:<tag>`.

@@ -133,7 +133,7 @@ http_json() {
 # only in comments — match the components list entry, not arbitrary text.
 overlay_uses_shared_console_proxy() {
     local overlay="${1:?overlay name required}"
-    grep -Eq '^[[:space:]]*- \.\./_shared/console-proxy-shared-dev[[:space:]]*$' \
+    grep -Eq '^[[:space:]]*-[[:space:]]+"?\.\./_shared/console-proxy-shared-dev"?([[:space:]]+#.*)?[[:space:]]*$' \
         "overlays/${overlay}/kustomization.yaml" 2>/dev/null
 }
 

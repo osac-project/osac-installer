@@ -291,7 +291,7 @@ validation:
   # Run pre-install checks (cert-manager CRDs, default StorageClass).
   # Catches missing prerequisites before deployment starts.
   enabled: true
-  image: bitnami/kubectl:latest
+  image: quay.io/openshift/origin-cli:4.20.0
 
 # ---------------------
 # Database Migration

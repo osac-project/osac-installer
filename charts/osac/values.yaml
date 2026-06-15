@@ -127,7 +127,7 @@ publishTemplates:
 # --- Validation hooks ---
 validation:
   enabled: true
-  image: bitnami/kubectl:latest
+  image: quay.io/openshift/origin-cli:4.20.0
 
 # --- Database migration hook ---
 # NOTE: Disabled until the 'migrate' subcommand is released in the

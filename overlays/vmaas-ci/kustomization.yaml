@@ -90,6 +90,13 @@ patches:
         value: "--idp-url=https://keycloak.keycloak.svc.cluster.local"
   - target:
       kind: Deployment
+      name: fulfillment-grpc-server
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/command/11
+        value: "--grpc-authn-trusted-token-issuers=https://keycloak.keycloak.svc.cluster.local/realms/osac"
+  - target:
+      kind: Deployment
       name: osac-operator-controller-manager
     patch: |-
       - op: add

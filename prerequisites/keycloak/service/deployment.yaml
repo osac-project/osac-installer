@@ -90,9 +90,13 @@ spec:
           value: keycloak
         - name: KC_DB_PASSWORD
           value: ""
-        args:
-        - start
-        - --import-realm
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          /opt/keycloak/bin/kc.sh import --dir /opt/keycloak/data/import --override true
+          exec /opt/keycloak/bin/kc.sh start
         ports:
         - name: https
           containerPort: 8001

@@ -225,6 +225,20 @@ else
 fi
 wait_for_resource deployment/keycloak-service condition=Available 600 ${KEYCLOAK_NS}
 
+# Configure Keycloak to use the external route hostname so clients can reach it
+echo "Configuring Keycloak hostname from route..."
+KEYCLOAK_ROUTE="$(
+  oc get route keycloak -n "${KEYCLOAK_NS}" --ignore-not-found \
+    -o jsonpath='{.spec.host}' 2>/dev/null || true
+)"
+if [[ -n "${KEYCLOAK_ROUTE}" ]]; then
+    echo "Setting KC_HOSTNAME to ${KEYCLOAK_ROUTE}"
+    oc set env deployment/keycloak-service -n "${KEYCLOAK_NS}" KC_HOSTNAME="${KEYCLOAK_ROUTE}"
+    wait_for_resource deployment/keycloak-service condition=Available 600 "${KEYCLOAK_NS}"
+else
+    echo "WARNING: Could not determine Keycloak route hostname, KC_HOSTNAME may be misconfigured"
+fi
+
 # Apply AAP prerequisites and wait for it to be ready
 AAP_NS=""
 if oc get deployment automation-controller-operator-controller-manager -n aap &>/dev/null; then

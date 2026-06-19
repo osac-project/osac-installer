@@ -93,6 +93,9 @@ for values_file in "${REPO_ROOT}"/values/*.yaml; do
     expected="${rest#* }"
 
     if [[ "${mode}" == "tag" ]]; then
+      # Skip components not configured in this values file (e.g. BMF disabled in vmaas-ci).
+      # Must check before the pipeline below — pipefail would abort on grep returning 1.
+      grep -q "repository: ghcr.io/osac-project/${component}$" "${values_file}" || continue
       current=$(grep -A1 "repository: ghcr.io/osac-project/${component}$" "${values_file}" | grep "tag:" | awk '{print $2}')
       [[ -z "${current}" ]] && continue
       if [[ "${current}" == "${expected}" ]]; then

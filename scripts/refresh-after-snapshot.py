@@ -433,7 +433,7 @@ def keycloak_sync(config: RefreshConfig) -> None:
 
 def create_secrets(config: RefreshConfig) -> None:
     print("  Creating secrets...")
-    realm = json.loads(Path(config.realm_json).read_text())
+    realm = json.loads((REPO_ROOT / config.realm_json).read_text())
 
     fc_client = next((c for c in realm["clients"] if c.get("serviceAccountsEnabled")), None)
     if not fc_client:
@@ -539,10 +539,12 @@ def adopt_resources_for_helm(config: RefreshConfig) -> None:
     resources = [r for r in result.stdout.strip().splitlines() if r]
 
     def _adopt(resource: str) -> None:
-        oc("annotate", resource, "-n", config.namespace,
-           "meta.helm.sh/release-name=osac",
-           f"meta.helm.sh/release-namespace={config.namespace}",
-           "--overwrite", check=False, capture=True)
+        r = oc("annotate", resource, "-n", config.namespace,
+               "meta.helm.sh/release-name=osac",
+               f"meta.helm.sh/release-namespace={config.namespace}",
+               "--overwrite", check=False, capture=True)
+        if r.returncode != 0:
+            print(f"  WARN: failed to adopt {resource}: {r.stderr or r.stdout}", file=sys.stderr)
 
     with ThreadPoolExecutor(max_workers=20) as pool:
         list(pool.map(_adopt, resources))

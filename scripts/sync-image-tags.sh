@@ -121,6 +121,21 @@ for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
       fi
     fi
   done
+
+  # Sync projectGitBranch (full 40-char commit) with osac-aap submodule.
+  aap_full_commit=$(git -C "${REPO_ROOT}" submodule status base/osac-aap | awk '{print $1}' | tr -d ' +-')
+  grep -q "projectGitBranch:" "${values_file}" || continue
+  current_branch=$(grep "projectGitBranch:" "${values_file}" | head -1 | sed 's/.*projectGitBranch: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/')
+  [[ -z "${current_branch}" ]] && continue
+  if [[ "${current_branch}" == "${aap_full_commit}" ]]; then
+    echo "${name} projectGitBranch: OK"
+  elif [[ "${1:-}" == "--fix" ]]; then
+    sed -i "s|projectGitBranch: .*|projectGitBranch: \"${aap_full_commit}\"|" "${values_file}"
+    echo "${name} projectGitBranch: FIXED ${current_branch} -> ${aap_full_commit}"
+  else
+    echo "${name} projectGitBranch: MISMATCH current=${current_branch} expected=${aap_full_commit}"
+    errors=$((errors + 1))
+  fi
 done
 
 if [[ ${errors} -gt 0 ]]; then

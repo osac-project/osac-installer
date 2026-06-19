@@ -90,7 +90,7 @@ aap:
     secret: "config-as-code-ig"
     eeImage: "ghcr.io/osac-project/osac-aap:sha-1ada6eb"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "d92092c6a35d7e6498896c134cdc42d14c9eed54"
+    projectGitBranch: "1ada6eb443c45d0848a91bd81a2222cd6334081f"
 
 # --- Validation ---
 validation:

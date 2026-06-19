@@ -11,7 +11,9 @@ metadata:
     osac.openshift.io/project: osac-aap
 data:
   {{- range $key, $value := .Values.instanceGroups.cluster.config }}
+  {{- if $value }}
   {{ $key }}: {{ $value | quote }}
+  {{- end }}
   {{- end }}
 ---
 apiVersion: v1
@@ -25,6 +27,7 @@ metadata:
 type: Opaque
 data: {}
 {{- end }}
+{{- if not .Values.networkFulfillment.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -36,7 +39,9 @@ metadata:
     osac.openshift.io/project: osac-aap
 data:
   {{- range $key, $value := .Values.instanceGroups.network.config }}
+  {{- if $value }}
   {{ $key }}: {{ $value | quote }}
+  {{- end }}
   {{- end }}
 ---
 apiVersion: v1
@@ -49,4 +54,5 @@ metadata:
     osac.openshift.io/project: osac-aap
 type: Opaque
 data: {}
+{{- end }}
 {{- end }}

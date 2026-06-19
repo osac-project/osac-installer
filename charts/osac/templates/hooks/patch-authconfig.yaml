@@ -20,6 +20,7 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   backoffLimit: 3
+  activeDeadlineSeconds: 600
   template:
     metadata:
       labels:
@@ -78,7 +79,7 @@ spec:
           for sa in EXTRA_SAS:
               full = f"system:serviceaccount:{NS}:{sa}"
               if full not in rego:
-                  print(f"ERROR: failed to inject {full} into rego", file=sys.stderr)
+                  print(f"ERROR: failed to inject {full} into rego. Current rego:\n{rego}", file=sys.stderr)
                   sys.exit(1)
 
           authconfig["spec"]["authorization"]["default"]["opa"]["rego"] = rego

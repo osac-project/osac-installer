@@ -21,7 +21,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -391,7 +392,7 @@ def pre_fix_cert_sans(config: RefreshConfig) -> None:
     dns_names: list[str] = cert["spec"]["dnsNames"]
 
     if config.external_host in dns_names and config.internal_host in dns_names:
-        print(f"  Cert SANs already correct")
+        print("  Cert SANs already correct")
         return
 
     new_dns_names = [n for n in dns_names if ".apps." not in n]
@@ -404,7 +405,7 @@ def pre_fix_cert_sans(config: RefreshConfig) -> None:
        ]))
     oc("wait", "--for=condition=Ready", "certificate.cert-manager.io/fulfillment-api",
        "-n", config.namespace, "--timeout=120s")
-    print(f"  Cert reissued with new SANs")
+    print("  Cert reissued with new SANs")
 
 
 # ─── Phase 2: Prepare environment ───────────────────────────────────────────
@@ -552,6 +553,8 @@ def upgrade_osac(config: RefreshConfig) -> None:
     print("  Upgrading osac chart...")
     run(["helm", "dependency", "update", "charts/osac/"])
     adopt_resources_for_helm(config)
+    # Delete stale config-as-code-ig so helm recreates it from chart values.
+    # The AAP subchart manages this secret; deleting forces a fresh render.
     oc("delete", "secret", "config-as-code-ig", "-n", config.namespace,
        "--ignore-not-found")
     base_domain = "hosted." + config.cluster_domain.removeprefix("apps.")

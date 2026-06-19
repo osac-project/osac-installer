@@ -304,6 +304,11 @@
       "type": "object",
       "description": "Bare Metal Fulfillment Operator configuration",
       "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable or disable the BMF operator subchart",
+          "default": true
+        },
         "image": {
           "type": "object",
           "properties": {

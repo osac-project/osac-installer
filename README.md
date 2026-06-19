@@ -368,11 +368,11 @@ The `scripts/setup.sh` script automates the entire installation process, includi
 To run the automated setup:
 
 ```bash
-# Helm mode (default) — uses values/development.yaml
+# Helm mode (default) — uses values/development/values.yaml
 $ ./scripts/setup.sh
 
 # Or customize the namespace and values file
-$ INSTALLER_NAMESPACE=<project-name> VALUES_FILE=values/development.yaml ./scripts/setup.sh
+$ INSTALLER_NAMESPACE=<project-name> VALUES_FILE=values/development/values.yaml ./scripts/setup.sh
 
 # Kustomize mode (legacy)
 $ DEPLOY_MODE=kustomize INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/setup.sh
@@ -386,7 +386,7 @@ $ EXTRA_SERVICES=true INSTALLER_NAMESPACE=<project-name> ./scripts/setup.sh
 | `KUBECONFIG` | `~/.kube/config` | Path to the target cluster's kubeconfig file |
 | `DEPLOY_MODE` | `helm` | Deployment method: `helm` or `kustomize` |
 | `INSTALLER_NAMESPACE` | `osac` (helm) / from overlay (kustomize) | Target namespace for the OSAC deployment |
-| `VALUES_FILE` | `values/development.yaml` | Helm values file to use (helm mode only) |
+| `VALUES_FILE` | `values/development/values.yaml` | Helm values file to use (helm mode only) |
 | `INSTALLER_KUSTOMIZE_OVERLAY` | `development` | Kustomize overlay directory (kustomize mode only) |
 | `EXTRA_SERVICES` | `false` | Enable all optional services (sets all below to `true`) |
 | `INGRESS_SERVICE` | `false` | Install MetalLB as the ingress/LoadBalancer service |
@@ -494,7 +494,7 @@ helm dependency build charts/osac/
 Copy and customize a values file for your environment:
 
 ```bash
-cp values/development.yaml values/<project-name>.yaml
+cp values/development/values.yaml values/<project-name>.yaml
 # Edit values/<project-name>.yaml to set:
 #   - operator.aap.url: your AAP controller URL
 #   - service.auth.issuerUrl: your Keycloak realm URL

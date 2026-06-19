@@ -39,3 +39,7 @@ CLAUDE.md
 
 # kubeconfig files
 kubeconfig.hub-access
+
+# Helm build artifacts
+charts/*/charts/*.tgz
+charts/*/Chart.lock

@@ -1,5 +1,5 @@
-# OSAC VMaaS (VM-as-a-Service) CI Environment Values
-# Replaces overlays/vmaas-ci/kustomization.yaml
+# OSAC CaaS (Cluster-as-a-Service) CI Environment Values
+# Replaces overlays/caas-ci/kustomization.yaml
 
 # --- Operator ---
 operator:
@@ -15,7 +15,7 @@ operator:
     serverAddress: "fulfillment-api:8000"
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
   controllers:
-    computeInstance: true
+    clusterOrder: true
     tenant: true
     networking: true
 
@@ -97,9 +97,19 @@ dbMigrate:
   enabled: false
   image: ghcr.io/osac-project/fulfillment-service:sha-a553eee
 
+clusterFulfillment:
+  enabled: true
+  config:
+    NETWORK_STEPS_COLLECTION: "ci.steps"
+    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "SingleReplica"
+    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "SingleReplica"
+
+networkFulfillment:
+  enabled: true
+
 # --- Bare Metal Fulfillment Operator ---
 bmf:
   image:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
-    tag: sha-0a06955
+    tag: sha-daf2ad0
     pullPolicy: Always

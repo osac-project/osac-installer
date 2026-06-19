@@ -1,5 +1,5 @@
-# OSAC CaaS (Cluster-as-a-Service) CI Environment Values
-# Replaces overlays/caas-ci/kustomization.yaml
+# OSAC VMaaS (VM-as-a-Service) CI Environment Values
+# Replaces overlays/vmaas-ci/kustomization.yaml
 
 # --- Operator ---
 operator:
@@ -12,18 +12,19 @@ operator:
   aap:
     insecureSkipVerify: "true"
   fulfillment:
-    serverAddress: "fulfillment-api:8000"
+    serverAddress: "fulfillment-internal-api:8001"
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
   controllers:
-    clusterOrder: true
+    clusterOrder: false
+    computeInstance: true
     tenant: true
     networking: true
 
 # --- Fulfillment Service ---
 service:
-  variant: openshift
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
+  variant: openshift
   images:
     service: ghcr.io/osac-project/fulfillment-service:sha-a553eee
     envoy: ghcr.io/osac-project/envoy:v1.33.0
@@ -87,25 +88,22 @@ aap:
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-d92092c"
+    projectGitUri: "https://github.com/osac-project/osac-aap"
+    projectGitBranch: "d92092c6a35d7e6498896c134cdc42d14c9eed54"
 
 # --- Validation ---
 validation:
   enabled: true
 
+# --- Bare Metal Fulfillment Operator ---
+bmf:
+  enabled: false
+
 # --- Database migration ---
 dbMigrate:
   enabled: false
   image: ghcr.io/osac-project/fulfillment-service:sha-a553eee
-
-clusterFulfillment:
-  enabled: true
-  config:
-    NETWORK_STEPS_COLLECTION: "ci.steps"
-    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "SingleReplica"
-    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "SingleReplica"
-
-networkFulfillment:
-  enabled: true
 
 # --- Bare Metal Fulfillment Operator ---
 bmf:

@@ -35,7 +35,11 @@
             "pullPolicy": {
               "type": "string",
               "description": "Image pull policy",
-              "enum": ["Always", "IfNotPresent", "Never"],
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ],
               "default": "Always"
             }
           }
@@ -94,7 +98,12 @@
     "service": {
       "type": "object",
       "description": "Fulfillment Service configuration",
-      "required": ["externalHostname", "internalHostname", "auth", "certs"],
+      "required": [
+        "externalHostname",
+        "internalHostname",
+        "auth",
+        "certs"
+      ],
       "properties": {
         "externalHostname": {
           "type": "string",
@@ -109,7 +118,10 @@
         "variant": {
           "type": "string",
           "description": "Deployment variant",
-          "enum": ["openshift", "kind"],
+          "enum": [
+            "openshift",
+            "kind"
+          ],
           "default": "openshift"
         },
         "images": {
@@ -128,16 +140,23 @@
         "certs": {
           "type": "object",
           "description": "TLS certificate configuration",
-          "required": ["issuerRef"],
+          "required": [
+            "issuerRef"
+          ],
           "properties": {
             "issuerRef": {
               "type": "object",
-              "required": ["name"],
+              "required": [
+                "name"
+              ],
               "properties": {
                 "kind": {
                   "type": "string",
                   "description": "Issuer kind (ClusterIssuer or Issuer)",
-                  "enum": ["ClusterIssuer", "Issuer"],
+                  "enum": [
+                    "ClusterIssuer",
+                    "Issuer"
+                  ],
                   "default": "ClusterIssuer"
                 },
                 "name": {
@@ -161,7 +180,9 @@
         "auth": {
           "type": "object",
           "description": "Authentication configuration",
-          "required": ["issuerUrl"],
+          "required": [
+            "issuerUrl"
+          ],
           "properties": {
             "issuerUrl": {
               "type": "string",
@@ -229,6 +250,26 @@
               "default": 15
             }
           }
+        },
+        "configAsCode": {
+          "type": "object",
+          "properties": {
+            "manifestSecret": {
+              "type": "string"
+            },
+            "secret": {
+              "type": "string"
+            },
+            "eeImage": {
+              "type": "string"
+            },
+            "projectGitUri": {
+              "type": "string"
+            },
+            "projectGitBranch": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -236,14 +277,23 @@
       "type": "object",
       "description": "Auto-generate secrets for bundled PostgreSQL (dev/test only)",
       "properties": {
-        "enabled": { "type": "boolean", "default": false },
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
         "database": {
           "type": "object",
           "properties": {
-            "name": { "type": "string", "default": "service" },
-            "user": { "type": "string", "default": "service" }
-	  }
-	}
+            "name": {
+              "type": "string",
+              "default": "service"
+            },
+            "user": {
+              "type": "string",
+              "default": "service"
+            }
+          }
+        }
       }
     },
     "bmfCrds": {
@@ -270,7 +320,11 @@
             "pullPolicy": {
               "type": "string",
               "description": "Image pull policy",
-              "enum": ["Always", "IfNotPresent", "Never"],
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ],
               "default": "Always"
             }
           }
@@ -288,15 +342,23 @@
             "limits": {
               "type": "object",
               "properties": {
-                "cpu": { "type": "string" },
-                "memory": { "type": "string" }
+                "cpu": {
+                  "type": "string"
+                },
+                "memory": {
+                  "type": "string"
+                }
               }
             },
             "requests": {
               "type": "object",
               "properties": {
-                "cpu": { "type": "string" },
-                "memory": { "type": "string" }
+                "cpu": {
+                  "type": "string"
+                },
+                "memory": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -412,6 +474,31 @@
         "dbUrlFile": {
           "type": "string",
           "description": "Path to file containing database connection URL (optional, alternative to dbUrl)"
+        }
+      }
+    },
+    "instanceGroups": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cluster": {
+          "type": "object"
+        },
+        "network": {
+          "type": "object"
+        }
+      }
+    },
+    "clusterFulfillment": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "config": {
+          "type": "object"
         }
       }
     }

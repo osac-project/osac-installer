@@ -106,6 +106,17 @@ aap:
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
+    eeImage: ""
+    projectGitUri: ""
+    projectGitBranch: ""
+
+# --- Instance Groups ---
+instanceGroups:
+  enabled: true
+  cluster:
+    config: {}
+  network:
+    config: {}
 
 # --- Bundled PostgreSQL ---
 # When enabled, auto-creates the fulfillment-db secret and client certificate.
@@ -123,6 +134,7 @@ bmfCrds: {}
 
 # --- Bare Metal Fulfillment Operator ---
 bmf:
+  enabled: true
   image:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
     tag: latest

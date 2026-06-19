@@ -111,5 +111,5 @@ networkFulfillment:
 bmf:
   image:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
-    tag: sha-daf2ad0
+    tag: sha-0a06955
     pullPolicy: Always

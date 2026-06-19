@@ -77,9 +77,9 @@ fulfillment_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-fulfillm
 aap_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-aap | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 bmf_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/bare-metal-fulfillment-operator | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 
-for values_file in "${REPO_ROOT}"/values/*.yaml; do
+for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
   [[ ! -f "${values_file}" ]] && continue
-  name=$(basename "${values_file}")
+  name=$(basename "$(dirname "${values_file}")")
   grep -q "sha-" "${values_file}" || continue
 
   for pair in \

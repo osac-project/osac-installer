@@ -75,6 +75,12 @@ spec:
               print("AuthConfig already has all emergency SAs")
               sys.exit(0)
 
+          for sa in EXTRA_SAS:
+              full = f"system:serviceaccount:{NS}:{sa}"
+              if full not in rego:
+                  print(f"ERROR: failed to inject {full} into rego", file=sys.stderr)
+                  sys.exit(1)
+
           authconfig["spec"]["authorization"]["default"]["opa"]["rego"] = rego
           subprocess.run(["oc", "apply", "-f", "-"],
                          input=json.dumps(authconfig), text=True, check=True)

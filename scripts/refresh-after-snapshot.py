@@ -372,7 +372,7 @@ def refresh_metallb_and_subnet() -> None:
 
 def wait_keycloak_cert(config: RefreshConfig) -> None:
     print("  Waiting for Keycloak TLS certificate...")
-    oc("wait", "--for=condition=Ready", f"certificate/keycloak-tls",
+    oc("wait", "--for=condition=Ready", "certificate/keycloak-tls",
        "-n", config.keycloak_ns, "--timeout=300s")
     print("  Keycloak TLS ready")
 
@@ -384,7 +384,7 @@ def pre_fix_cert_sans(config: RefreshConfig) -> None:
     reissues the cert with new SANs. Without this, console-proxy crashes
     on TLS verification (cert has old snapshot domain).
     """
-    if not oc_exists(f"certificate.cert-manager.io/fulfillment-api", config.namespace):
+    if not oc_exists("certificate.cert-manager.io/fulfillment-api", config.namespace):
         return
 
     cert = oc_json("get", "certificate.cert-manager.io/fulfillment-api", "-n", config.namespace)
@@ -434,7 +434,9 @@ def create_secrets(config: RefreshConfig) -> None:
     print("  Creating secrets...")
     realm = json.loads(Path(config.realm_json).read_text())
 
-    fc_client = next(c for c in realm["clients"] if c.get("serviceAccountsEnabled"))
+    fc_client = next((c for c in realm["clients"] if c.get("serviceAccountsEnabled")), None)
+    if not fc_client:
+        raise RuntimeError("No client with serviceAccountsEnabled in realm.json")
     fc_id: str = fc_client["clientId"]
     fc_secret: str = fc_client.get("secret", "")
     if not fc_secret:
@@ -548,7 +550,7 @@ def adopt_resources_for_helm(config: RefreshConfig) -> None:
 
 def upgrade_osac(config: RefreshConfig) -> None:
     print("  Upgrading osac chart...")
-    run(["helm", "dependency", "build", "charts/osac/"])
+    run(["helm", "dependency", "update", "charts/osac/"])
     adopt_resources_for_helm(config)
     oc("delete", "secret", "config-as-code-ig", "-n", config.namespace,
        "--ignore-not-found")

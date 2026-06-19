@@ -8,8 +8,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib.sh"
 
 INSTALLER_KUSTOMIZE_OVERLAY=${INSTALLER_KUSTOMIZE_OVERLAY:-"development"}
-INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')}
-[[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: Could not determine namespace from overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" && exit 1
+if [[ -z "${INSTALLER_NAMESPACE:-}" ]]; then
+    INSTALLER_NAMESPACE=$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')
+    [[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: INSTALLER_NAMESPACE not set and could not determine from overlay" && exit 1
+fi
 INSTALLER_VM_TEMPLATE=${INSTALLER_VM_TEMPLATE:-}
 INSTALLER_CLUSTER_TEMPLATE=${INSTALLER_CLUSTER_TEMPLATE:-}
 
@@ -195,22 +197,39 @@ patch_token_config() {
 
     echo "Patching token-issuer and CORS to ${issuer_url}..."
 
-    # Patch grpc-server --token-issuer (command[19])
-    oc patch deployment/fulfillment-grpc-server -n "${INSTALLER_NAMESPACE}" --type=json \
-        -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/19\",\"value\":\"--token-issuer=${issuer_url}\"}]"
+    patch_command_arg() {
+        local deploy="$1" prefix="$2" value="$3"
+        local idx
+        idx=$(oc get "deployment/${deploy}" -n "${INSTALLER_NAMESPACE}" -o json \
+            | jq --arg p "${prefix}" '[.spec.template.spec.containers[0].command | to_entries[] | select(.value | startswith($p)) | .key] | first')
+        [[ -z "${idx}" || "${idx}" == "null" ]] && { echo "ERROR: ${prefix} not found in ${deploy} command"; exit 1; }
+        oc patch "deployment/${deploy}" -n "${INSTALLER_NAMESPACE}" --type=json \
+            -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/${idx}\",\"value\":\"${value}\"}]"
+    }
 
-    # Patch console-proxy --token-issuer (command[5]) and CORS (command[13])
-    oc patch deployment/fulfillment-console-proxy -n "${INSTALLER_NAMESPACE}" --type=json \
-        -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/5\",\"value\":\"--token-issuer=${issuer_url}\"},{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/13\",\"value\":\"--console-cors-allowed-origins=${issuer_url}\"}]"
-
-    # Add external FQDN to fulfillment-api certificate SANs (idempotent)
+    # Add external FQDN to certificate SANs BEFORE patching deployments.
+    # Deployments patch triggers a rollout — the new pods fetch JWKS via the
+    # external URL and need the certificate to cover it.
     if ! oc get certificate/fulfillment-api -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.spec.dnsNames}' | grep -qF "${api_route_host}"; then
         oc patch certificate/fulfillment-api -n "${INSTALLER_NAMESPACE}" --type=json \
             -p "[{\"op\":\"add\",\"path\":\"/spec/dnsNames/-\",\"value\":\"${api_route_host}\"}]"
+        echo "Waiting for certificate reissue..."
+        oc wait certificate/fulfillment-api -n "${INSTALLER_NAMESPACE}" \
+            --for=condition=Ready --timeout=120s
+        # Envoy does not hot-reload TLS certs — restart so it serves the new cert
+        # before console-proxy tries to fetch JWKS via the external URL.
+        oc rollout restart deploy/fulfillment-ingress-proxy -n "${INSTALLER_NAMESPACE}"
+        oc rollout status deploy/fulfillment-ingress-proxy -n "${INSTALLER_NAMESPACE}" --timeout=120s
     fi
+
+    patch_command_arg fulfillment-grpc-server "--token-issuer=" "--token-issuer=${issuer_url}"
+    patch_command_arg fulfillment-console-proxy "--token-issuer=" "--token-issuer=${issuer_url}"
+    patch_command_arg fulfillment-console-proxy "--console-cors-allowed-origins=" "--console-cors-allowed-origins=${issuer_url}"
 }
 
-patch_token_config
+if [[ "${SKIP_TOKEN_CONFIG_PATCH:-}" != "1" ]]; then
+    patch_token_config
+fi
 
 create_hub &
 pid_hub=$!

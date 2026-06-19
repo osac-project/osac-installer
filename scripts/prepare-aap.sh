@@ -8,15 +8,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib.sh"
 
 INSTALLER_KUSTOMIZE_OVERLAY=${INSTALLER_KUSTOMIZE_OVERLAY:-"development"}
-INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')}
-[[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: Could not determine namespace from overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" && exit 1
+if [[ -z "${INSTALLER_NAMESPACE:-}" ]]; then
+    INSTALLER_NAMESPACE=$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')
+    [[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: INSTALLER_NAMESPACE not set and could not determine from overlay" && exit 1
+fi
 
 # Get the AAP gateway route URL
 AAP_ROUTE_HOST=$(oc get routes -n "${INSTALLER_NAMESPACE}" --no-headers osac-aap -o jsonpath='{.spec.host}')
 AAP_URL="https://${AAP_ROUTE_HOST}"
 
 # Get the AAP admin password
-AAP_ADMIN_PASSWORD=$(oc get secret osac-aap-admin-password -n ${INSTALLER_NAMESPACE} -o jsonpath='{.data.password}' | base64 -d)
+AAP_ADMIN_PASSWORD=$(oc get secret osac-aap-admin-password -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.data.password}' | base64 -d)
 
 AAP_TOKEN=$(http_json "Failed to create AAP API token (gateway may be rolling out)" 30 10 \
     '.token // empty' \
@@ -36,14 +38,14 @@ oc create secret generic osac-aap-api-token \
     -n "${INSTALLER_NAMESPACE}" \
     --dry-run=client -o yaml | oc apply -f -
 
-# Set the correct AAP URL on the operator deployment (triggers rollout)
-oc set env deployment/osac-operator-controller-manager \
-    -n "${INSTALLER_NAMESPACE}" \
-    OSAC_AAP_URL="${AAP_URL}/api/controller"
-
-# Set the correct AAP URL on the bare metal fulfillment operator deployment (triggers rollout)
-oc set env deployment/bmf-operator-controller-manager \
-    -n "${INSTALLER_NAMESPACE}" \
-    OSAC_AAP_URL="${AAP_URL}/api/controller"
+# Set the AAP URL on operator deployments (triggers rollout).
+for pattern in osac-operator bmf-operator; do
+    deploy=$(oc get deploy -n "${INSTALLER_NAMESPACE}" -o name | grep -m1 "${pattern}" || true)
+    if [[ -z "${deploy}" ]]; then
+        echo "  ${pattern}: not found, skipping"
+        continue
+    fi
+    oc set env "${deploy}" -n "${INSTALLER_NAMESPACE}" OSAC_AAP_URL="${AAP_URL}/api/controller"
+done
 
 echo "AAP API token created and stored in secret osac-aap-api-token"

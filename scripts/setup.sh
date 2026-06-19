@@ -15,7 +15,7 @@ if [[ "${DEPLOY_MODE}" == "helm" ]]; then
 fi
 
 INSTALLER_KUSTOMIZE_OVERLAY=${INSTALLER_KUSTOMIZE_OVERLAY:-"development"}
-VALUES_FILE=${VALUES_FILE:-"values/development.yaml"}
+VALUES_FILE=${VALUES_FILE:-"values/development/values.yaml"}
 
 if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
     INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')}
@@ -362,10 +362,15 @@ EOF
         --dry-run=client -o yaml | oc apply -f -
 
     echo "Deploying OSAC using Helm..."
+    CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
+    EXTERNAL_HOSTNAME="fulfillment-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
+    INTERNAL_HOSTNAME="fulfillment-internal-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
     helm dependency update charts/osac/
     helm upgrade --install osac charts/osac/ \
         --namespace "${INSTALLER_NAMESPACE}" \
         --values "${VALUES_FILE}" \
+        --set "service.externalHostname=${EXTERNAL_HOSTNAME}" \
+        --set "service.internalHostname=${INTERNAL_HOSTNAME}" \
         --timeout 40m \
         --wait
 else

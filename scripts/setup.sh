@@ -22,6 +22,10 @@ if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
     [[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: Could not determine namespace from overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" && exit 1
 else
     INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-"osac"}
+    INGRESS_FQDN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
+    [[ -z "${INGRESS_FQDN}" ]] && echo "ERROR: Could not determine the ingress FQDN" && exit 1
+    EXTERNAL_HOSTNAME=fulfillment-api-${INSTALLER_NAMESPACE}.${INGRESS_FQDN}
+    INTERNAL_HOSTNAME=fulfillment-internal-api-${INSTALLER_NAMESPACE}.${INGRESS_FQDN}
 fi
 
 INSTALLER_VM_TEMPLATE=${INSTALLER_VM_TEMPLATE:-}
@@ -366,6 +370,8 @@ EOF
     helm upgrade --install osac charts/osac/ \
         --namespace "${INSTALLER_NAMESPACE}" \
         --values "${VALUES_FILE}" \
+        --set service.externalHostname=${EXTERNAL_HOSTNAME} \
+        --set service.internalHostname=${INTERNAL_HOSTNAME} \
         --timeout 40m \
         --wait
 else

@@ -90,7 +90,7 @@ aap:
     secret: "config-as-code-ig"
     eeImage: "ghcr.io/osac-project/osac-aap:sha-1ada6eb"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "1ada6eb443c45d0848a91bd81a2222cd6334081f"
+    projectGitBranch: "75b6796848f5589d9b9ff5591937509c64c1ef45"
 
 # --- Validation ---
 validation:
@@ -104,10 +104,3 @@ bmf:
 dbMigrate:
   enabled: false
   image: ghcr.io/osac-project/fulfillment-service:sha-a553eee
-
-# --- Bare Metal Fulfillment Operator ---
-bmf:
-  image:
-    repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
-    tag: sha-0a06955
-    pullPolicy: Always

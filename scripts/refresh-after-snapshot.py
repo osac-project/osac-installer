@@ -553,7 +553,8 @@ def adopt_resources_for_helm(config: RefreshConfig) -> None:
 
 def upgrade_osac(config: RefreshConfig) -> None:
     print("  Upgrading osac chart...")
-    run(["helm", "dependency", "update", "charts/osac/"])
+    (REPO_ROOT / "charts/osac/Chart.lock").unlink(missing_ok=True)
+    run(["helm", "dependency", "build", "charts/osac/"])
     adopt_resources_for_helm(config)
     # Delete stale config-as-code-ig so helm recreates it from chart values.
     # The AAP subchart manages this secret; deleting forces a fresh render.

@@ -15,6 +15,7 @@ INSTALLER_VM_TEMPLATE=${INSTALLER_VM_TEMPLATE:-}
 CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
 KEYCLOAK_NS="keycloak"
 REALM_JSON="prerequisites/keycloak/service/files/realm.json"
+FC_CLIENT="osac-controller"
 
 echo "=== Refreshing OSAC after snapshot boot ==="
 echo "Namespace: ${INSTALLER_NAMESPACE}"
@@ -144,14 +145,15 @@ keycloak_sync() {
 
 create_fulfillment_credentials() {
     echo "[2/9] Recreating fulfillment controller credentials..."
-    FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' "${REALM_JSON}")
-    [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
+    FC_CLIENT_ID=${FC_CLIENT:-$(jq -er 'first(.clients[] | select(.serviceAccountsEnabled==true)) | .clientId' "${REALM_JSON}")}
+    FC_CLIENT_SECRET=$(jq -er ".clients[] | select(.clientId == \"${FC_CLIENT_ID}\") | .secret // empty" "${REALM_JSON}")
+    [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for ${FC_CLIENT_ID} in realm.json" >&2; exit 1; }
     oc delete secret fulfillment-controller-credentials -n "${INSTALLER_NAMESPACE}" --ignore-not-found
     oc create secret generic fulfillment-controller-credentials \
-        --from-literal=client-id=osac-controller \
+        --from-literal=client-id="${FC_CLIENT_ID}" \
         --from-literal=client-secret="${FC_CLIENT_SECRET}" \
         -n "${INSTALLER_NAMESPACE}"
-    echo "[2/9] Credentials created for client: osac-controller"
+    echo "[2/9] Credentials created for client: ${FC_CLIENT_ID}"
 }
 
 keycloak_sync &

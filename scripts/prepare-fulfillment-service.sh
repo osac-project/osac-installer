@@ -244,6 +244,13 @@ wait ${pid_sync} || sync_rc=$?
 (( hub_rc || sync_rc )) && exit 1
 
 if [[ -n "${INSTALLER_VM_TEMPLATE}" || -n "${INSTALLER_CLUSTER_TEMPLATE}" ]]; then
+    # Project sync can trigger AAP reconciliation that restarts the gateway.
+    # Wait for it to recover before launching publish-templates.
+    AAP_ROUTE_HOST=$(oc get routes -n "${INSTALLER_NAMESPACE}" --no-headers osac-aap -o jsonpath='{.spec.host}')
+    retry_until 300 10 '[[ "$(curl -sk -o /dev/null -w %{http_code} "https://'"${AAP_ROUTE_HOST}"'/api/gateway/v1/")" == "200" ]]' || {
+        echo "ERROR: AAP gateway not responding after project sync"
+        exit 1
+    }
     publish_templates
 
     if [[ -n "${INSTALLER_VM_TEMPLATE}" ]]; then

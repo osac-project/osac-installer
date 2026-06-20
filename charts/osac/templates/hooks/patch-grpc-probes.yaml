@@ -1,0 +1,53 @@
+{{/*
+TODO: Remove once the fulfillment-service subchart uses longer probe timeouts.
+The exec-based readiness probe spawns a full process; under CPU/IO pressure from
+AAP automation jobs on single-node clusters, process startup alone can exceed the
+default 1s timeout, causing the headless Service to drop the pod IP and Envoy to
+return "no healthy upstream" for ~5s.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: osac-patch-grpc-probes
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 120
+  template:
+    metadata:
+      labels:
+        {{- include "osac.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: osac-sa
+      containers:
+      - name: patch
+        image: quay.io/openshift/origin-cli:4.20.0
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        command:
+        - oc
+        - patch
+        - deploy/fulfillment-grpc-server
+        - -n
+        - {{ .Release.Namespace }}
+        - --type=strategic
+        - -p
+        - |
+          {"spec":{"template":{"spec":{"containers":[{"name":"grpc-server","livenessProbe":{"timeoutSeconds":5,"failureThreshold":5},"readinessProbe":{"timeoutSeconds":5,"failureThreshold":5}}]}}}}

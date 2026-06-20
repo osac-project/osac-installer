@@ -333,7 +333,7 @@ def refresh_metallb_and_subnet() -> None:
 
     retry_until(
         description="MetalLB webhook endpoints",
-        timeout=120, interval=5,
+        timeout=300, interval=5,
         condition=lambda: bool(
             oc("get", "endpoints", "metallb-operator-webhook-server-service",
                "-n", "metallb-system",

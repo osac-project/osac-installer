@@ -272,8 +272,8 @@ def check_all_pods(namespace: str) -> None:
     if failures:
         print("ERROR: unhealthy pods detected:", file=sys.stderr)
         for f in failures:
-            pod_name = f.split(":")[0]
-            logs = _get_pod_logs(pod_name, namespace)
+            pname = f.split(":")[0]
+            logs = _get_pod_logs(pname, namespace)
             print(f"  {f}", file=sys.stderr)
             print(f"  logs: {logs[:500]}", file=sys.stderr)
         sys.exit(1)
@@ -764,9 +764,12 @@ def main() -> None:
     print(f"[Phase 3] Done ({time.time() - phase_start:.0f}s)\n")
 
     # Phase 4: Post-flight (sequential)
+    # Snapshot restart counts now. Post-flight takes ~3 min — any pod whose
     phase_start = time.time()
     print("[Phase 4] Post-flight configuration...")
     post_flight(config)
+    print("  Running final pod health check...")
+    check_all_pods(config.namespace)
     print(f"[Phase 4] Done ({time.time() - phase_start:.0f}s)\n")
 
     total = time.time() - start_time

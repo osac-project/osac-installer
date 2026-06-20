@@ -36,6 +36,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - osac.openshift.io
+  resources:
+  - baremetalinstances
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - osac.openshift.io
+  resources:
+  - baremetalinstances/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - osac.openshift.io
+  resources:
+  - baremetalinstances/status
+  verbs:
+  - get
+  - patch
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

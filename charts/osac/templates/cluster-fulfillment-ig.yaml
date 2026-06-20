@@ -2,7 +2,10 @@
 {{- $ingress := lookup "config.openshift.io/v1" "Ingress" "" "cluster" }}
 {{- $ingressDomain := "" }}
 {{- if $ingress }}{{- $ingressDomain = $ingress.spec.domain | default "" }}{{- end }}
-{{- $baseDomain := printf "hosted.%s" ($ingressDomain | trimPrefix "apps.") }}
+{{- $baseDomain := "" }}
+{{- if $ingressDomain }}
+{{- $baseDomain = printf "hosted.%s" ($ingressDomain | trimPrefix "apps.") }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

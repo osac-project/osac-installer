@@ -453,6 +453,14 @@ def create_secrets(config: RefreshConfig) -> None:
     oc_apply_secret("config-as-code-manifest-ig", config.namespace,
                     f"--from-file=license.zip={license_path}")
 
+    pull_secret_path = Path(config.values_dir) / "pull-secret.json"
+    if pull_secret_path.exists():
+        oc_apply_secret("quay-pull-secret", config.namespace,
+                        f"--from-file=.dockerconfigjson={pull_secret_path}",
+                        "--type=kubernetes.io/dockerconfigjson")
+        oc("secrets", "link", "osac-sa", "quay-pull-secret", "--for=pull",
+           "-n", config.namespace)
+
     print("  Secrets created")
 
 

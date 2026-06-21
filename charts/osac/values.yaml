@@ -83,7 +83,7 @@ aap:
       controller:
         disabled: false
       eda:
-        disabled: false
+        disabled: true
       hub:
         disabled: true
       lightspeed:
@@ -98,8 +98,6 @@ aap:
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
     gateway:
-      hostname: ""
-    eda:
       hostname: ""
     controller:
       hostname: ""

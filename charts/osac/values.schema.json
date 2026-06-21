@@ -757,7 +757,7 @@
             "NETWORK_CLASS": {
               "type": "string",
               "description": "Network implementation class",
-              "enum": ["", "esi", "netris"]
+              "enum": ["", "esi", "netris", "nico"]
             },
             "NETWORK_STEPS_COLLECTION": {
               "type": "string",
@@ -767,7 +767,7 @@
             "DNS_CLASS": {
               "type": "string",
               "description": "Fully-qualified Ansible role name of the DNS driver",
-              "enum": ["", "dns.route53.dns", "dns.api.dns"]
+              "enum": ["", "dns.route53.dns"]
             },
             "DNS_ZONE": {
               "type": "string",

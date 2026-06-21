@@ -50,6 +50,38 @@
           "minimum": 1,
           "default": 1
         },
+        "resources": {
+          "type": "object",
+          "description": "Container resource requests and limits",
+          "properties": {
+            "limits": {
+              "type": "object",
+              "properties": {
+                "cpu": {
+                  "type": "string",
+                  "description": "CPU limit"
+                },
+                "memory": {
+                  "type": "string",
+                  "description": "Memory limit"
+                }
+              }
+            },
+            "requests": {
+              "type": "object",
+              "properties": {
+                "cpu": {
+                  "type": "string",
+                  "description": "CPU request"
+                },
+                "memory": {
+                  "type": "string",
+                  "description": "Memory request"
+                }
+              }
+            }
+          }
+        },
         "aap": {
           "type": "object",
           "description": "AAP connection settings for the operator",
@@ -90,6 +122,48 @@
             "tokenFile": {
               "type": "string",
               "description": "Path to service account token file"
+            }
+          }
+        },
+        "controllers": {
+          "type": "object",
+          "description": "Enable or disable individual operator controllers",
+          "properties": {
+            "clusterOrder": {
+              "type": "boolean",
+              "description": "Enable ClusterOrder controller",
+              "default": true
+            },
+            "computeInstance": {
+              "type": "boolean",
+              "description": "Enable ComputeInstance controller",
+              "default": true
+            },
+            "tenant": {
+              "type": "boolean",
+              "description": "Enable Tenant controller",
+              "default": true
+            },
+            "networking": {
+              "type": "boolean",
+              "description": "Enable networking controllers",
+              "default": true
+            }
+          }
+        },
+        "configSecret": {
+          "type": "object",
+          "description": "Optional Secret with additional operator configuration",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Name of the configuration Secret",
+              "default": "osac-config"
+            },
+            "optional": {
+              "type": "boolean",
+              "description": "Allow the Secret to be absent without failing the deployment",
+              "default": true
             }
           }
         }
@@ -196,6 +270,25 @@
             }
           }
         },
+        "idp": {
+          "type": "object",
+          "description": "Identity provider configuration for user management",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "description": "Identity provider type",
+              "default": "keycloak"
+            },
+            "url": {
+              "type": "string",
+              "description": "Identity provider URL"
+            },
+            "credentials": {
+              "type": "array",
+              "description": "Credential volume sources for IdP access"
+            }
+          }
+        },
         "database": {
           "type": "object",
           "description": "Database configuration",
@@ -203,6 +296,27 @@
             "connection": {
               "type": "array",
               "description": "Database connection volume sources (secret or configMap references)"
+            }
+          }
+        },
+        "log": {
+          "type": "object",
+          "description": "Logging configuration for the fulfillment service",
+          "properties": {
+            "level": {
+              "type": "string",
+              "description": "Log level",
+              "default": "info"
+            },
+            "headers": {
+              "type": "boolean",
+              "description": "Log request/response headers",
+              "default": false
+            },
+            "bodies": {
+              "type": "boolean",
+              "description": "Log request/response bodies",
+              "default": false
             }
           }
         }
@@ -227,6 +341,80 @@
                   "type": "string",
                   "description": "Name of the AAP instance",
                   "default": "osac-aap"
+                },
+                "controller": {
+                  "type": "object",
+                  "properties": {
+                    "disabled": {
+                      "type": "boolean",
+                      "description": "Disable the AAP automation controller",
+                      "default": false
+                    }
+                  }
+                },
+                "eda": {
+                  "type": "object",
+                  "properties": {
+                    "disabled": {
+                      "type": "boolean",
+                      "description": "Disable Event-Driven Ansible",
+                      "default": false
+                    }
+                  }
+                },
+                "hub": {
+                  "type": "object",
+                  "properties": {
+                    "disabled": {
+                      "type": "boolean",
+                      "description": "Disable Automation Hub",
+                      "default": true
+                    }
+                  }
+                },
+                "lightspeed": {
+                  "type": "object",
+                  "properties": {
+                    "disabled": {
+                      "type": "boolean",
+                      "description": "Disable Ansible Lightspeed",
+                      "default": true
+                    }
+                  }
+                },
+                "noLog": {
+                  "type": "boolean",
+                  "description": "Suppress sensitive data in AAP logs",
+                  "default": true
+                },
+                "redisMode": {
+                  "type": "string",
+                  "description": "Redis deployment mode",
+                  "enum": [
+                    "standalone",
+                    "cluster"
+                  ],
+                  "default": "standalone"
+                },
+                "routeTlsTerminationMechanism": {
+                  "type": "string",
+                  "description": "TLS termination mechanism for AAP routes",
+                  "enum": [
+                    "Edge",
+                    "Passthrough",
+                    "Reencrypt"
+                  ],
+                  "default": "Edge"
+                },
+                "imagePullPolicy": {
+                  "type": "string",
+                  "description": "Image pull policy for AAP pods",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ],
+                  "default": "IfNotPresent"
                 }
               }
             }
@@ -244,10 +432,41 @@
               "type": "string",
               "description": "Bootstrap job container image"
             },
+            "cliImage": {
+              "type": "string",
+              "description": "OpenShift CLI image used by bootstrap jobs"
+            },
             "backoffLimit": {
               "type": "integer",
               "description": "Number of retries for bootstrap job",
               "default": 15
+            },
+            "gateway": {
+              "type": "object",
+              "properties": {
+                "hostname": {
+                  "type": "string",
+                  "description": "AAP gateway route hostname"
+                }
+              }
+            },
+            "eda": {
+              "type": "object",
+              "properties": {
+                "hostname": {
+                  "type": "string",
+                  "description": "AAP EDA route hostname"
+                }
+              }
+            },
+            "controller": {
+              "type": "object",
+              "properties": {
+                "hostname": {
+                  "type": "string",
+                  "description": "AAP automation controller route hostname"
+                }
+              }
             }
           }
         },
@@ -255,19 +474,55 @@
           "type": "object",
           "properties": {
             "manifestSecret": {
-              "type": "string"
+              "type": "string",
+              "description": "Secret name for config-as-code manifest instance group"
             },
             "secret": {
-              "type": "string"
+              "type": "string",
+              "description": "Secret name for config-as-code instance group"
             },
             "eeImage": {
-              "type": "string"
+              "type": "string",
+              "description": "Execution environment image for config-as-code"
             },
             "projectGitUri": {
-              "type": "string"
+              "type": "string",
+              "description": "Git repository URI for config-as-code project"
             },
             "projectGitBranch": {
-              "type": "string"
+              "type": "string",
+              "description": "Git branch for config-as-code project"
+            }
+          }
+        }
+      }
+    },
+    "instanceGroups": {
+      "type": "object",
+      "description": "Generic AAP instance group configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create instance group ConfigMaps",
+          "default": true
+        },
+        "cluster": {
+          "type": "object",
+          "description": "Cluster instance group extra config",
+          "properties": {
+            "config": {
+              "type": "object",
+              "description": "Additional key-value pairs for the cluster instance group ConfigMap"
+            }
+          }
+        },
+        "network": {
+          "type": "object",
+          "description": "Network instance group extra config",
+          "properties": {
+            "config": {
+              "type": "object",
+              "description": "Additional key-value pairs for the network instance group ConfigMap"
             }
           }
         }
@@ -456,6 +711,10 @@
           "type": "boolean",
           "description": "Run pre-install validation checks",
           "default": true
+        },
+        "image": {
+          "type": "string",
+          "description": "Container image for the validation hook job"
         }
       }
     },
@@ -482,28 +741,190 @@
         }
       }
     },
-    "instanceGroups": {
+    "clusterFulfillment": {
       "type": "object",
+      "description": "ConfigMap and Secret for the AAP cluster-fulfillment instance group",
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Create cluster-fulfillment ConfigMap and Secret",
+          "default": false
         },
-        "cluster": {
-          "type": "object"
+        "config": {
+          "type": "object",
+          "description": "Environment variables for the cluster-fulfillment instance group",
+          "properties": {
+            "NETWORK_CLASS": {
+              "type": "string",
+              "description": "Network implementation class",
+              "enum": ["", "esi", "netris"]
+            },
+            "NETWORK_STEPS_COLLECTION": {
+              "type": "string",
+              "description": "Ansible collection providing network-class-specific steps",
+              "enum": ["", "osac.steps", "netris.steps", "ci.steps", "nico.steps"]
+            },
+            "DNS_CLASS": {
+              "type": "string",
+              "description": "Fully-qualified Ansible role name of the DNS driver",
+              "enum": ["", "dns.route53.dns", "dns.api.dns"]
+            },
+            "DNS_ZONE": {
+              "type": "string",
+              "description": "DNS zone to operate in (defaults to EXTERNAL_ACCESS_BASE_DOMAIN)"
+            },
+            "NETRIS_CONTROLLER_URL": {
+              "type": "string",
+              "description": "Netris controller API URL"
+            },
+            "NETRIS_USERNAME": {
+              "type": "string",
+              "description": "Netris controller username"
+            },
+            "NETRIS_SITE_ID": {
+              "type": "string",
+              "description": "Netris site ID"
+            },
+            "NETRIS_TENANT_ID": {
+              "type": "string",
+              "description": "Netris tenant ID"
+            },
+            "NETRIS_TENANT_NAME": {
+              "type": "string",
+              "description": "Netris tenant name"
+            },
+            "NETRIS_MGMT_VPC_ID": {
+              "type": "string",
+              "description": "Netris management VPC ID"
+            },
+            "NETRIS_MGMT_VPC_NAME": {
+              "type": "string",
+              "description": "Netris management VPC name"
+            },
+            "NETRIS_RESOURCE_CLASS_MAP": {
+              "type": "string",
+              "description": "JSON mapping of resource classes to Netris server labels"
+            },
+            "SERVER_SSH_BASTION_HOST": {
+              "type": "string",
+              "description": "SSH bastion host for server access"
+            },
+            "SERVER_SSH_BASTION_USER": {
+              "type": "string",
+              "description": "SSH bastion user"
+            },
+            "SERVER_SSH_USER": {
+              "type": "string",
+              "description": "SSH user for direct server access"
+            },
+            "SERVER_MGMT_ROUTE_DESTINATION": {
+              "type": "string",
+              "description": "Management network route destination CIDR"
+            },
+            "SERVER_MGMT_ROUTE_GATEWAY": {
+              "type": "string",
+              "description": "Management network route gateway"
+            },
+            "EXTERNAL_ACCESS_BASE_DOMAIN": {
+              "type": "string",
+              "description": "Base domain for external access DNS records"
+            },
+            "EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS": {
+              "type": "string",
+              "description": "Comma-separated list of supported base domains"
+            },
+            "EXTERNAL_ACCESS_API_INTERNAL_NETWORK": {
+              "type": "string",
+              "description": "Internal network CIDR for API access"
+            },
+            "HOSTED_CLUSTER_BASE_DOMAIN": {
+              "type": "string",
+              "description": "Base domain for hosted clusters"
+            },
+            "HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY": {
+              "type": "string",
+              "description": "Availability policy for hosted cluster control plane",
+              "enum": ["", "HighlyAvailable", "SingleReplica"]
+            },
+            "HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY": {
+              "type": "string",
+              "description": "Availability policy for hosted cluster infrastructure",
+              "enum": ["", "HighlyAvailable", "SingleReplica"]
+            }
+          }
         },
-        "network": {
-          "type": "object"
+        "secret": {
+          "type": "object",
+          "description": "Secret values for the cluster-fulfillment instance group",
+          "properties": {
+            "NETRIS_PASSWORD": {
+              "type": "string",
+              "description": "Netris controller password"
+            },
+            "AWS_ACCESS_KEY_ID": {
+              "type": "string",
+              "description": "AWS access key for Route 53 DNS backend"
+            },
+            "AWS_SECRET_ACCESS_KEY": {
+              "type": "string",
+              "description": "AWS secret key for Route 53 DNS backend"
+            },
+            "SERVER_SSH_KEY": {
+              "type": "string",
+              "description": "SSH private key for server access"
+            },
+            "SERVER_SSH_BASTION_KEY": {
+              "type": "string",
+              "description": "SSH private key for bastion access"
+            }
+          }
         }
       }
     },
-    "clusterFulfillment": {
+    "networkFulfillment": {
       "type": "object",
+      "description": "ConfigMap and Secret for the AAP network-fulfillment instance group",
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Create network-fulfillment ConfigMap and Secret",
+          "default": false
         },
         "config": {
-          "type": "object"
+          "type": "object",
+          "description": "Environment variables for the network-fulfillment instance group",
+          "properties": {
+            "NETRIS_CONTROLLER_URL": {
+              "type": "string",
+              "description": "Netris controller API URL"
+            },
+            "NETRIS_USERNAME": {
+              "type": "string",
+              "description": "Netris controller username"
+            },
+            "NETRIS_SITE_ID": {
+              "type": "string",
+              "description": "Netris site ID"
+            },
+            "NETRIS_TENANT_ID": {
+              "type": "string",
+              "description": "Netris tenant ID"
+            },
+            "NETRIS_TENANT_NAME": {
+              "type": "string",
+              "description": "Netris tenant name"
+            }
+          }
+        },
+        "secret": {
+          "type": "object",
+          "description": "Secret values for the network-fulfillment instance group",
+          "properties": {
+            "NETRIS_PASSWORD": {
+              "type": "string",
+              "description": "Netris controller password"
+            }
+          }
         }
       }
     }

@@ -100,6 +100,10 @@ for d in overlays/*/; do kustomize build "$d" > "/tmp/after-$(basename $d).yaml"
 ./scripts/kustomize-build-all.sh
 ```
 
+## Helm Chart Conventions
+
+- **Every new value must have a matching schema entry** -- when adding or modifying keys in `charts/osac/values.yaml`, always add the corresponding property definition to `charts/osac/values.schema.json`. Use `enum` constraints for fields with a known set of valid values (e.g., network/DNS backend classes). The schema is both validation and documentation -- incomplete schemas allow silent misconfiguration.
+
 ## Key Conventions
 
 - Overlay secrets (`files/`) are never committed. Place `.buildfiles` in an overlay to list files that CI should stub out for build validation.

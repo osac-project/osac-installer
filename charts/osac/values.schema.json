@@ -850,6 +850,22 @@
               "type": "string",
               "description": "Availability policy for hosted cluster infrastructure",
               "enum": ["", "HighlyAvailable", "SingleReplica"]
+            },
+            "IMPORT_AGENTS_NAMESPACE": {
+              "type": "string",
+              "description": "Namespace for BareMetalHost, Agent, and InfraEnv CRs (effective default: hardware-inventory)"
+            },
+            "IMPORT_AGENTS_INFRAENV_NAME": {
+              "type": "string",
+              "description": "InfraEnv CR name for agent discovery (effective default: infraenv)"
+            },
+            "IMPORT_AGENTS_PULL_SECRET_NAME": {
+              "type": "string",
+              "description": "Pull secret name for InfraEnv discovery ISO (effective default: pull-secret)"
+            },
+            "IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION": {
+              "type": "string",
+              "description": "Default BMC TLS certificate verification skip (effective default: true)"
             }
           }
         },
@@ -876,6 +892,55 @@
             "SERVER_SSH_BASTION_KEY": {
               "type": "string",
               "description": "SSH private key for bastion access"
+            }
+          }
+        }
+      }
+    },
+    "importAgents": {
+      "type": "object",
+      "description": "ConfigMap-based bare metal agent import configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable ConfigMap-based bare metal agent import (sets OSAC_IMPORT_AGENTS_ENABLED in config-as-code-ig Secret)",
+          "default": false
+        },
+        "servers": {
+          "type": "array",
+          "description": "Server inventory for bare metal agent import. Each entry provisions a BareMetalHost CR.",
+          "items": {
+            "type": "object",
+            "required": ["name", "bmc_url", "bmc_secret", "boot_mac", "netris_server_name", "resource_class"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Server hostname, used as the BareMetalHost CR name"
+              },
+              "bmc_url": {
+                "type": "string",
+                "description": "Redfish BMC address for virtual media boot"
+              },
+              "bmc_secret": {
+                "type": "string",
+                "description": "Name of the Kubernetes Secret with BMC credentials"
+              },
+              "boot_mac": {
+                "type": "string",
+                "description": "Boot NIC MAC address"
+              },
+              "netris_server_name": {
+                "type": "string",
+                "description": "Netris server name label for the Agent"
+              },
+              "resource_class": {
+                "type": "string",
+                "description": "Hardware type label for the Agent"
+              },
+              "disable_bmc_cert_verification": {
+                "type": "boolean",
+                "description": "Per-server override for BMC TLS certificate verification"
+              }
             }
           }
         }

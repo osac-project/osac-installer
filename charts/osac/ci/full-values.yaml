@@ -58,14 +58,7 @@ dbMigrate:
   dbUrlFile: "/etc/fulfillment-service/db/url"
 
 importAgents:
-  enabled: true
-  servers:
-    - name: test-server-001
-      bmc_url: "redfish-virtualmedia+https://192.168.1.21:8000/redfish/v1/Systems/test-uuid"
-      bmc_secret: "test-server-001-bmc-secret"
-      boot_mac: "AA:BB:CC:DD:EE:01"
-      netris_server_name: "server-01"
-      resource_class: "fc430"
+  enabled: false
 
 clusterFulfillment:
   enabled: true

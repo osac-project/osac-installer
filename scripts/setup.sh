@@ -348,19 +348,6 @@ EOF
         echo "Set AAP_LICENSE_FILE or place license.zip in overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/files/"
     fi
 
-    # Create AAP config-as-code secret (EE image, git URI, git branch).
-    # Values can be overridden via environment variables.
-    AAP_EE_IMAGE=${AAP_EE_IMAGE:-"ghcr.io/osac-project/osac-aap:latest"}
-    AAP_PROJECT_GIT_URI=${AAP_PROJECT_GIT_URI:-"https://github.com/osac-project/osac-aap"}
-    AAP_PROJECT_GIT_BRANCH=${AAP_PROJECT_GIT_BRANCH:-"main"}
-    echo "Creating config-as-code-ig secret..."
-    oc create secret generic config-as-code-ig \
-        --from-literal=AAP_EE_IMAGE="${AAP_EE_IMAGE}" \
-        --from-literal=AAP_PROJECT_GIT_URI="${AAP_PROJECT_GIT_URI}" \
-        --from-literal=AAP_PROJECT_GIT_BRANCH="${AAP_PROJECT_GIT_BRANCH}" \
-        -n "${INSTALLER_NAMESPACE}" \
-        --dry-run=client -o yaml | oc apply -f -
-
     echo "Deploying OSAC using Helm..."
     CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
     EXTERNAL_HOSTNAME="fulfillment-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"

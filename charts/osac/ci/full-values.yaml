@@ -57,6 +57,16 @@ dbMigrate:
   image: ghcr.io/osac-project/fulfillment-service:latest
   dbUrlFile: "/etc/fulfillment-service/db/url"
 
+importAgents:
+  enabled: true
+  servers:
+    - name: test-server-001
+      bmc_url: "redfish-virtualmedia+https://192.168.1.21:8000/redfish/v1/Systems/test-uuid"
+      bmc_secret: "test-server-001-bmc-secret"
+      boot_mac: "AA:BB:CC:DD:EE:01"
+      netris_server_name: "server-01"
+      resource_class: "fc430"
+
 clusterFulfillment:
   enabled: true
   config:
@@ -75,6 +85,10 @@ clusterFulfillment:
     HOSTED_CLUSTER_BASE_DOMAIN: "test.example.com"
     HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "SingleReplica"
     HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "SingleReplica"
+    IMPORT_AGENTS_NAMESPACE: "hardware-inventory"
+    IMPORT_AGENTS_INFRAENV_NAME: "infraenv"
+    IMPORT_AGENTS_PULL_SECRET_NAME: "pull-secret"
+    IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION: "true"
   secret:
     NETRIS_PASSWORD: "test-password"
 

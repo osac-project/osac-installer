@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.aap.configAsCode.secret }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac.labels" . | nindent 4 }}
+    osac.openshift.io/project: osac-aap
+type: Opaque
+stringData:
+  OSAC_IMPORT_AGENTS_ENABLED: {{ .Values.importAgents.enabled | toString | quote }}
+  {{- with .Values.aap.configAsCode.eeImage }}
+  AAP_EE_IMAGE: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.aap.configAsCode.projectGitUri }}
+  AAP_PROJECT_GIT_URI: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.aap.configAsCode.projectGitBranch }}
+  AAP_PROJECT_GIT_BRANCH: {{ . | quote }}
+  {{- end }}

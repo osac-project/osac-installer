@@ -222,9 +222,6 @@ clusterFulfillment:
     SERVER_SSH_KEY: ""
     SERVER_SSH_BASTION_KEY: ""
 
-# --- Network Fulfillment Instance Group ---
-# ConfigMap and Secret for the AAP networking-operations instance group.
-# Carries Netris controller credentials for network resource lifecycle.
 # --- Import Agents (ConfigMap inventory backend) ---
 # Enables the ConfigMap-based bare metal agent import feature.
 # When enabled, creates the import-agents-inventory ConfigMap and sets
@@ -233,6 +230,9 @@ importAgents:
   enabled: false
   servers: []
 
+# --- Network Fulfillment Instance Group ---
+# ConfigMap and Secret for the AAP networking-operations instance group.
+# Carries Netris controller credentials for network resource lifecycle.
 networkFulfillment:
   enabled: false
   config:

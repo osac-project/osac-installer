@@ -350,6 +350,18 @@ clusterFulfillment:
     HOSTED_CLUSTER_BASE_DOMAIN: ""
     HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: ""
     HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: ""
+
+    # --- Import Agents ---
+    # Playbook variables for ConfigMap-based agent import.
+    # These override the playbook defaults when non-empty.
+    # Effective default: "hardware-inventory"
+    IMPORT_AGENTS_NAMESPACE: ""
+    # Effective default: "infraenv"
+    IMPORT_AGENTS_INFRAENV_NAME: ""
+    # Effective default: "pull-secret"
+    IMPORT_AGENTS_PULL_SECRET_NAME: ""
+    # Effective default: "true"
+    IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION: ""
   secret:
     NETRIS_PASSWORD: ""
     # AWS credentials (used by the Route 53 DNS backend).
@@ -357,6 +369,35 @@ clusterFulfillment:
     AWS_SECRET_ACCESS_KEY: ""
     SERVER_SSH_KEY: ""
     SERVER_SSH_BASTION_KEY: ""
+
+# ---------------------
+# Import Agents (ConfigMap inventory backend)
+# ---------------------
+# Enables the ConfigMap-based bare metal agent import feature.
+# When enabled:
+#   - Sets OSAC_IMPORT_AGENTS_ENABLED=true in the config-as-code-ig Secret
+#   - Creates the import-agents-inventory ConfigMap from the servers list
+# See osac-aap/docs/import-agents.md for the server inventory format.
+importAgents:
+  enabled: false
+  # Server inventory for bare metal agent import.
+  # Each entry provisions a BareMetalHost CR via the import-agents playbook.
+  servers: []
+  # Example:
+  # servers:
+  #   - name: node001
+  #     bmc_url: "redfish-virtualmedia+https://192.168.1.21:8000/redfish/v1/Systems/<uuid>"
+  #     bmc_secret: "node001-bmc-secret"
+  #     boot_mac: "AA:BB:CC:DD:EE:01"
+  #     netris_server_name: "server-01"
+  #     resource_class: "fc430"
+  #   - name: node002
+  #     bmc_url: "redfish-virtualmedia+https://192.168.1.22:8000/redfish/v1/Systems/<uuid>"
+  #     bmc_secret: "node002-bmc-secret"
+  #     boot_mac: "AA:BB:CC:DD:EE:02"
+  #     netris_server_name: "server-02"
+  #     resource_class: "fc430"
+  #     disable_bmc_cert_verification: false
 
 # ---------------------
 # Network Fulfillment Instance Group

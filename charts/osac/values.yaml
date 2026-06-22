@@ -211,6 +211,10 @@ clusterFulfillment:
     HOSTED_CLUSTER_BASE_DOMAIN: ""
     HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: ""
     HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: ""
+    IMPORT_AGENTS_NAMESPACE: ""
+    IMPORT_AGENTS_INFRAENV_NAME: ""
+    IMPORT_AGENTS_PULL_SECRET_NAME: ""
+    IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION: ""
   secret:
     NETRIS_PASSWORD: ""
     AWS_ACCESS_KEY_ID: ""
@@ -221,6 +225,14 @@ clusterFulfillment:
 # --- Network Fulfillment Instance Group ---
 # ConfigMap and Secret for the AAP networking-operations instance group.
 # Carries Netris controller credentials for network resource lifecycle.
+# --- Import Agents (ConfigMap inventory backend) ---
+# Enables the ConfigMap-based bare metal agent import feature.
+# When enabled, creates the import-agents-inventory ConfigMap and sets
+# OSAC_IMPORT_AGENTS_ENABLED=true in the config-as-code-ig Secret.
+importAgents:
+  enabled: false
+  servers: []
+
 networkFulfillment:
   enabled: false
   config:

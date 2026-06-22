@@ -229,7 +229,7 @@ Use Kustomize to manage your environment-specific configurations.
          profileName: agentProvisioning
        persistentLabels:
          managedBy: agent
-       hostTemplate: bm_host_agent_provisioning
+       hostTemplate: osac.templates.bm_host_agent_provisioning
        expectedTemplateParameters:
          - agentPrivateNetwork
          - imageURL

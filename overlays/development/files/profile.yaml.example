@@ -6,7 +6,7 @@
     profileName: agentProvisioning
   persistentLabels:
     managedBy: agent
-  hostTemplate: bm_host_agent_provisioning
+  hostTemplate: osac.templates.bm_host_agent_provisioning
   expectedTemplateParameters:
     - agentPrivateNetwork
     - imageURL
@@ -19,7 +19,7 @@
     profileName: agentDeprovisioning
   persistentLabels:
     managedBy: baremetal
-  hostTemplate: bm_host_agent_deprovisioning
+  hostTemplate: osac.templates.bm_host_agent_deprovisioning
 
 - name: agentCaaS
   hostSelector:
@@ -27,8 +27,8 @@
     provisionState: active
   labels:
     profileName: agentCaaS
-  bareMetalPoolTemplate: bm_private_network
-  hostTemplate: bm_host_private_network
+  bareMetalPoolTemplate: osac.templates.bm_private_network
+  hostTemplate: osac.templates.bm_host_private_network
   expectedTemplateParameters:
     - privateNetwork
     - networkAfterDelete

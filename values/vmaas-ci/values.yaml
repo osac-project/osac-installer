@@ -5,7 +5,7 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-db48159
+    tag: sha-658dfc3
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -26,7 +26,7 @@ service:
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   variant: openshift
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-69efc5b
+    service: ghcr.io/osac-project/fulfillment-service:sha-aa1fde0
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -103,4 +103,4 @@ bmf:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-69efc5b
+  image: ghcr.io/osac-project/fulfillment-service:sha-aa1fde0

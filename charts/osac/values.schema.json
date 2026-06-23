@@ -718,29 +718,6 @@
         }
       }
     },
-    "dbMigrate": {
-      "type": "object",
-      "description": "Database migration hook",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Run database migrations on upgrade",
-          "default": false
-        },
-        "image": {
-          "type": "string",
-          "description": "Container image for migration job (should match fulfillment service image)"
-        },
-        "dbUrl": {
-          "type": "string",
-          "description": "Database connection URL (optional, alternative to dbUrlFile)"
-        },
-        "dbUrlFile": {
-          "type": "string",
-          "description": "Path to file containing database connection URL (optional, alternative to dbUrl)"
-        }
-      }
-    },
     "clusterFulfillment": {
       "type": "object",
       "description": "ConfigMap and Secret for the AAP cluster-fulfillment instance group",

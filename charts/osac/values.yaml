@@ -172,15 +172,6 @@ validation:
   enabled: true
   image: quay.io/openshift/origin-cli:4.20.0
 
-# --- Database migration hook ---
-# NOTE: Disabled until the 'migrate' subcommand is released in the
-# fulfillment-service image. Re-enable once available.
-dbMigrate:
-  enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:latest
-  dbUrl: ""
-  dbUrlFile: ""
-
 # --- Cluster Fulfillment Instance Group ---
 # ConfigMap and Secret for the AAP cluster-fulfillment instance group.
 # Carries network backend selection, Netris credentials, SSH config,

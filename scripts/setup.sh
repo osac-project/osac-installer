@@ -209,6 +209,10 @@ else
     }
 fi
 AUTHORINO_CSV=$(oc get csv --no-headers -n openshift-operators | awk '/authorino/ { print $1 }' | tail -1)
+if [[ -z "$AUTHORINO_CSV" ]]; then
+  echo "Unable to find authorino csv" >&2
+  exit 1
+fi
 wait_for_resource clusterserviceversion/${AUTHORINO_CSV} jsonpath='{.status.phase}'=Succeeded 300 openshift-operators
 wait_for_resource deployment/authorino-operator condition=Available 300 openshift-operators
 

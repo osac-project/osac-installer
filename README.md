@@ -111,6 +111,10 @@ Place the downloaded `license.zip` file in your values directory (e.g., `values/
 
 ### Pre-Installation Steps
 
+Personal overlays under `overlays/<project-name>` are gitignored by default and will
+not appear in `git status`. Only committed overlay directories whitelisted in the root
+`.gitignore` are tracked.
+
 #### 1. Initialize Submodules
 
 The OSAC installer uses Git submodules for version tracking:

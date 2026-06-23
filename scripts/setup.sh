@@ -361,6 +361,26 @@ EOF
         -n "${INSTALLER_NAMESPACE}" \
         --dry-run=client -o yaml | oc apply -f -
 
+    # Label pre-created resources for Helm adoption.
+    # setup.sh creates secrets/configmaps before helm install, but the chart
+    # also declares them. Without Helm ownership labels, helm install fails
+    # with "invalid ownership metadata".
+    echo "Labeling pre-created resources for Helm adoption..."
+    for resource in \
+        secret/config-as-code-ig \
+        secret/config-as-code-manifest-ig \
+        secret/fulfillment-controller-credentials \
+        secret/fulfillment-db \
+        configmap/ca-bundle; do
+      if oc get "${resource}" -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
+        oc label "${resource}" -n "${INSTALLER_NAMESPACE}" \
+            app.kubernetes.io/managed-by=Helm --overwrite
+        oc annotate "${resource}" -n "${INSTALLER_NAMESPACE}" \
+            meta.helm.sh/release-name=osac \
+            meta.helm.sh/release-namespace="${INSTALLER_NAMESPACE}" --overwrite
+      fi
+    done
+
     echo "Deploying OSAC using Helm..."
     CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
     EXTERNAL_HOSTNAME="fulfillment-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"

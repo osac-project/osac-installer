@@ -384,6 +384,37 @@ else
     echo "Deploying OSAC using Kustomize..."
     oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}" --server-side --force-conflicts
 
+    # Patch config-as-code-ig secret if any env-var overrides differ from the
+    # values deployed by the kustomize secretGenerator.
+    _current=$(oc get secret config-as-code-ig -n "${INSTALLER_NAMESPACE}" -o json 2>/dev/null) || true
+    if [[ -n "${_current}" ]]; then
+        _keys=$(echo "${_current}" | jq -r '.data // {} | keys[]')
+        _patch_needed=false
+        for _key in ${_keys}; do
+            _want="${!_key:-}"
+            [[ -z "${_want}" ]] && continue
+            _have=$(echo "${_current}" | jq -r ".data.\"${_key}\" // empty" | base64 -d 2>/dev/null) || true
+            [[ "${_want}" != "${_have}" ]] && _patch_needed=true && break
+        done
+        if [[ "${_patch_needed}" == "true" ]]; then
+            echo "Patching config-as-code-ig secret with environment overrides..."
+            _args=()
+            for _key in ${_keys}; do
+                _val="${!_key:-$(echo "${_current}" | jq -r ".data.\"${_key}\" // empty" | base64 -d)}"
+                echo "Patching $_key with value $_val"
+                _args+=(--from-literal="${_key}=${_val}")
+            done
+            oc create secret generic config-as-code-ig \
+                "${_args[@]}" \
+                -n "${INSTALLER_NAMESPACE}" \
+                --dry-run=client -o yaml | oc apply -f -
+        else
+            echo "No need to patch config-as-code-ig secret with environment overrides"
+        fi
+    else
+        echo "No data in secret config-as-code-ig"
+    fi
+
     # Ensure the shared ca-bundle Bundle exists and includes our namespace
     "${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
 

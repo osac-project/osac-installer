@@ -402,16 +402,18 @@ INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
 INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \
     ./scripts/aap-configuration.sh
 
-# Detect console-proxy namespace (shared-dev pins it to "osac")
-if grep -q 'console-proxy-shared-dev' \
+# Detect console-proxy namespace and deployment name.
+# In kustomize mode, the shared-dev overlay pins the console-proxy to "osac".
+# In helm mode, everything deploys into INSTALLER_NAMESPACE.
+if [[ "${DEPLOY_MODE}" == "helm" ]]; then
+  CONSOLE_PROXY_NS="${INSTALLER_NAMESPACE}"
+  CONSOLE_PROXY_DEPLOY="fulfillment-console-proxy"
+elif grep -q 'console-proxy-shared-dev' \
     "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" 2>/dev/null; then
   CONSOLE_PROXY_NS="osac"
+  CONSOLE_PROXY_DEPLOY="osac-console-proxy"
 else
   CONSOLE_PROXY_NS="${INSTALLER_NAMESPACE}"
-fi
-if [[ "${DEPLOY_MODE}" == "helm" ]]; then
-  CONSOLE_PROXY_DEPLOY="fulfillment-console-proxy"
-else
   CONSOLE_PROXY_DEPLOY="osac-console-proxy"
 fi
 wait_for_resource deployment/${CONSOLE_PROXY_DEPLOY} condition=Available 300 "${CONSOLE_PROXY_NS}"

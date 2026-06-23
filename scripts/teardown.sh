@@ -190,11 +190,6 @@ if [[ "${INGRESS_SERVICE}" == "true" ]]; then
     delete_manifests < prerequisites/metallb/metallb-config.yaml
 fi
 
-echo "Deleting Authorino CRs..."
-if resource_type_exists authorino; then
-    timeout 30 oc delete authorino --all -A --ignore-not-found --wait=false
-fi
-
 echo "Deleting CA issuer and trust-manager..."
 delete_manifests < prerequisites/ca-issuer.yaml
 delete_manifests < prerequisites/trust-manager.yaml
@@ -244,13 +239,6 @@ fi
 if [[ "${INGRESS_SERVICE}" == "true" ]]; then
     echo "  MetalLB operator..."
     uninstall_operator metallb-system metallb-operator
-fi
-
-echo "  Authorino operator..."
-csv=$(timeout 10 oc get csv --no-headers -n openshift-operators 2>/dev/null | awk '/authorino/ {print $1}')
-timeout 30 oc delete subscription authorino-operator -n openshift-operators --ignore-not-found
-if [[ -n "${csv}" ]]; then
-    timeout 120 oc delete csv "${csv}" -n openshift-operators --ignore-not-found
 fi
 
 echo "  cert-manager operator..."

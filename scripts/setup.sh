@@ -198,20 +198,6 @@ retry_until 60 5 'oc apply -f prerequisites/ca-issuer.yaml 2>/dev/null' || {
 }
 wait_for_resource clusterissuer/default-ca condition=Ready 300
 
-# Apply authorino prerequisites and wait for it to be ready
-if oc get deployment authorino-operator -n openshift-operators &>/dev/null; then
-    echo "Authorino operator is already installed, skipping..."
-else
-    oc apply -f prerequisites/authorino-operator.yaml
-    retry_until 300 3 '[[ -n "$(oc get csv --no-headers -n openshift-operators | grep authorino)" ]]' 'oc apply -f prerequisites/authorino-operator.yaml || true' || {
-        echo "Timed out waiting for authorino CSV to exist"
-        exit 1
-    }
-fi
-AUTHORINO_CSV=$(oc get csv --no-headers -n openshift-operators | awk '/authorino/ { print $1 }' | tail -1)
-wait_for_resource clusterserviceversion/${AUTHORINO_CSV} jsonpath='{.status.phase}'=Succeeded 300 openshift-operators
-wait_for_resource deployment/authorino-operator condition=Available 300 openshift-operators
-
 # Apply keycloak prerequisites and wait for it to be ready
 KEYCLOAK_NS=""
 if oc get deployment keycloak-service -n keycloak &>/dev/null; then
@@ -439,19 +425,6 @@ if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
     wait_for_resource job/aap-bootstrap condition=complete 2400 "${INSTALLER_NAMESPACE}"
 else
     wait_for_resource job/osac-aap-bootstrap condition=complete 2400 "${INSTALLER_NAMESPACE}"
-fi
-
-# Wait for Authorino to be ready (gRPC auth depends on it)
-wait_for_resource deployment/authorino condition=Available 300 ${INSTALLER_NAMESPACE}
-
-# Ensure Authorino can perform token reviews (required for Kubernetes SA authentication)
-if oc get clusterrolebinding authorino-tokenreview &>/dev/null; then
-    if ! oc get clusterrolebinding authorino-tokenreview -o json | \
-        jq -e '.subjects[] | select(.name=="authorino-authorino" and .namespace=="'"${INSTALLER_NAMESPACE}"'")' &>/dev/null; then
-        echo "Adding ${INSTALLER_NAMESPACE} Authorino SA to authorino-tokenreview ClusterRoleBinding..."
-        oc patch clusterrolebinding authorino-tokenreview --type=json \
-            -p '[{"op":"add","path":"/subjects/-","value":{"kind":"ServiceAccount","name":"authorino-authorino","namespace":"'"${INSTALLER_NAMESPACE}"'"}}]'
-    fi
 fi
 
 # Wait for fulfillment stack to be ready before running prepare scripts

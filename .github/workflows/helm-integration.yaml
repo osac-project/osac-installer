@@ -62,7 +62,6 @@ jobs:
           --set validation.enabled=false \
           --set aap.bootstrap.enabled=false \
           --set aap.aap.instance.enabled=false \
-          --set dbMigrate.enabled=false \
           --timeout 10m \
           --wait
 
@@ -89,6 +88,5 @@ jobs:
           --set validation.enabled=false \
           --set aap.bootstrap.enabled=false \
           --set aap.aap.instance.enabled=false \
-          --set dbMigrate.enabled=false \
           --timeout 10m \
           --wait

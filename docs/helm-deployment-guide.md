@@ -696,11 +696,6 @@ helm upgrade --install osac charts/osac/ \
   --wait
 ```
 
-> **Note:** The database migration hook (`dbMigrate.enabled`) is disabled by
-> default because the `fulfillment-service migrate` subcommand has not been
-> released yet. Once it is released in a tagged image, enable it with
-> `--set dbMigrate.enabled=true` to run migrations automatically on upgrade.
-
 The `--wait` flag blocks until all Deployments, StatefulSets, and Jobs
 (excluding Helm hooks) are ready. The AAP bootstrap job runs as a
 post-install hook and may take 10-40 minutes.
@@ -1008,25 +1003,6 @@ Common causes:
 - `OSAC_AAP_URL` not set (run `prepare-aap.sh`)
 - `osac-aap-api-token` secret missing or token expired
 - AAP controller not reachable from the operator pod
-
-### Database Migration Hook Failing
-
-The db-migrate hook is **disabled by default** (`dbMigrate.enabled: false`)
-because the `fulfillment-service migrate` subcommand has not been released
-yet. If you enable it and it fails with `BackoffLimitExceeded`:
-
-```bash
-# Check the error
-oc logs job/osac-db-migrate -n ${NAMESPACE}
-
-# Fix: delete the failed job and redeploy with the hook disabled
-oc delete job osac-db-migrate -n ${NAMESPACE}
-helm upgrade --install osac charts/osac/ \
-  --namespace ${NAMESPACE} \
-  --values values/development/values.yaml \
-  --timeout 40m \
-  --wait
-```
 
 ### Helm Install Timeout
 

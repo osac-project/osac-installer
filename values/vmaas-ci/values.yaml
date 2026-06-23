@@ -99,8 +99,3 @@ validation:
 # --- Bare Metal Fulfillment Operator ---
 bmf:
   enabled: false
-
-# --- Database migration ---
-dbMigrate:
-  enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-69efc5b

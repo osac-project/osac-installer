@@ -382,16 +382,3 @@ validation:
   # Catches missing prerequisites before deployment starts.
   enabled: true
   image: quay.io/openshift/origin-cli:4.20.0
-
-# ---------------------
-# Database Migration
-# ---------------------
-# Runs schema migrations on helm upgrade. Currently disabled until the
-# 'migrate' subcommand is released in the fulfillment-service image.
-dbMigrate:
-  enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:latest
-  # Provide either dbUrl (inline) or dbUrlFile (path to mounted file).
-  # dbUrl takes precedence if both are set.
-  dbUrl: ""
-  dbUrlFile: "/etc/fulfillment-service/db/url"

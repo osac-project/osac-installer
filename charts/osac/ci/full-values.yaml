@@ -52,11 +52,6 @@ aap:
 validation:
   enabled: true
 
-dbMigrate:
-  enabled: true
-  image: ghcr.io/osac-project/fulfillment-service:latest
-  dbUrlFile: "/etc/fulfillment-service/db/url"
-
 clusterFulfillment:
   enabled: true
   config:

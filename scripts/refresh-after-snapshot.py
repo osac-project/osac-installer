@@ -2,7 +2,7 @@
 """Refresh a Helm-deployed OSAC cluster after booting from a cold snapshot.
 
 All OSAC pods are at zero replicas. This script:
-  1. Starts slow operators (AAP, Authorino) early + fixes cluster identity
+  1. Starts slow operators (AAP) early + fixes cluster identity
   2. Prepares the environment (Keycloak, secrets, CA bundle, DB)
   3. Deploys via helm upgrade + waits with health monitoring
   4. Runs post-flight configuration (AAP token, hub, tenants)
@@ -506,28 +506,6 @@ def find_csv(*, namespace: str, deploy_name: str) -> str:
     raise RuntimeError(f"CSV not found for deployment {deploy_name} in {namespace}")
 
 
-def scale_authorino_operator() -> None:
-    print("  Scaling Authorino operator to 1...")
-    csv = find_csv(namespace="openshift-operators", deploy_name="authorino-operator")
-    scale_csv_to(csv_name=csv, namespace="openshift-operators", replicas=1)
-    print(f"  Authorino operator scaled via CSV {csv}")
-
-
-def wait_authorino(config: RefreshConfig) -> None:
-    print("  Waiting for Authorino...")
-    retry_until(
-        description="Authorino deployment replicas > 0",
-        timeout=120, interval=5,
-        condition=lambda: int(
-            oc("get", "deploy", "authorino", "-n", config.namespace,
-               "-o", "jsonpath={.spec.replicas}", capture=True, check=False
-               ).stdout.strip() or "0"
-        ) > 0,
-    )
-    wait_rollout_healthy("authorino", config.namespace, timeout=120)
-    print("  Authorino running")
-
-
 def upgrade_fulfillment_db(config: RefreshConfig) -> None:
     print("  Upgrading fulfillment-db...")
     run(["helm", "upgrade", "--install", "fulfillment-db",
@@ -728,7 +706,6 @@ def main() -> None:
     print("[Phase 1] Starting operators + fixing cluster identity...")
     run_parallel([
         ("scale AAP operator", lambda: scale_aap_operator(config)),
-        ("scale Authorino operator", scale_authorino_operator),
         ("patch routes", lambda: patch_stale_routes(config)),
         ("pre-fix cert SANs", lambda: pre_fix_cert_sans(config)),
         ("refresh CDI certs", refresh_cdi_certificates),
@@ -754,7 +731,6 @@ def main() -> None:
     print("[Phase 3] Deploying + waiting...")
     upgrade_osac(config)
     run_parallel([
-        ("wait Authorino", lambda: wait_authorino(config)),
         ("wait fulfillment", lambda: wait_fulfillment(config)),
         ("wait AAP", lambda: wait_aap_ready(config)),
     ])

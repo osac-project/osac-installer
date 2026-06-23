@@ -519,6 +519,8 @@ helm upgrade --install osac charts/osac/ \
   --namespace <project-name> \
   --create-namespace \
   --values values/<project-name>.yaml \
+  --set service.externalHostname=${EXTERNAL_HOSTNAME} \
+  --set service.internalHostname=${INTERNAL_HOSTNAME} \
   --timeout 40m \
   --wait
 ```

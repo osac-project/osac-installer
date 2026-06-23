@@ -198,20 +198,6 @@ retry_until 60 5 'oc apply -f prerequisites/ca-issuer.yaml 2>/dev/null' || {
 }
 wait_for_resource clusterissuer/default-ca condition=Ready 300
 
-# Apply authorino prerequisites and wait for it to be ready
-if oc get deployment authorino-operator -n openshift-operators &>/dev/null; then
-    echo "Authorino operator is already installed, skipping..."
-else
-    oc apply -f prerequisites/authorino-operator.yaml
-    retry_until 300 3 '[[ -n "$(oc get csv --no-headers -n openshift-operators | grep authorino)" ]]' 'oc apply -f prerequisites/authorino-operator.yaml || true' || {
-        echo "Timed out waiting for authorino CSV to exist"
-        exit 1
-    }
-fi
-AUTHORINO_CSV=$(oc get csv --no-headers -n openshift-operators | awk '/authorino/ { print $1 }' | tail -1)
-wait_for_resource clusterserviceversion/${AUTHORINO_CSV} jsonpath='{.status.phase}'=Succeeded 300 openshift-operators
-wait_for_resource deployment/authorino-operator condition=Available 300 openshift-operators
-
 # Apply keycloak prerequisites and wait for it to be ready
 KEYCLOAK_NS=""
 if oc get deployment keycloak-service -n keycloak &>/dev/null; then
@@ -348,6 +334,39 @@ EOF
         echo "Set AAP_LICENSE_FILE or place license.zip in overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/files/"
     fi
 
+    # Create AAP config-as-code secret (EE image, git URI, git branch).
+    # Values can be overridden via environment variables.
+    AAP_EE_IMAGE=${AAP_EE_IMAGE:-"ghcr.io/osac-project/osac-aap:latest"}
+    AAP_PROJECT_GIT_URI=${AAP_PROJECT_GIT_URI:-"https://github.com/osac-project/osac-aap"}
+    AAP_PROJECT_GIT_BRANCH=${AAP_PROJECT_GIT_BRANCH:-"main"}
+    echo "Creating config-as-code-ig secret..."
+    oc create secret generic config-as-code-ig \
+        --from-literal=AAP_EE_IMAGE="${AAP_EE_IMAGE}" \
+        --from-literal=AAP_PROJECT_GIT_URI="${AAP_PROJECT_GIT_URI}" \
+        --from-literal=AAP_PROJECT_GIT_BRANCH="${AAP_PROJECT_GIT_BRANCH}" \
+        -n "${INSTALLER_NAMESPACE}" \
+        --dry-run=client -o yaml | oc apply -f -
+
+    # Label pre-created resources for Helm adoption.
+    # setup.sh creates secrets/configmaps before helm install, but the chart
+    # also declares them. Without Helm ownership labels, helm install fails
+    # with "invalid ownership metadata".
+    echo "Labeling pre-created resources for Helm adoption..."
+    for resource in \
+        secret/config-as-code-ig \
+        secret/config-as-code-manifest-ig \
+        secret/fulfillment-controller-credentials \
+        secret/fulfillment-db \
+        configmap/ca-bundle; do
+      if oc get "${resource}" -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
+        oc label "${resource}" -n "${INSTALLER_NAMESPACE}" \
+            app.kubernetes.io/managed-by=Helm --overwrite
+        oc annotate "${resource}" -n "${INSTALLER_NAMESPACE}" \
+            meta.helm.sh/release-name=osac \
+            meta.helm.sh/release-namespace="${INSTALLER_NAMESPACE}" --overwrite
+      fi
+    done
+
     echo "Deploying OSAC using Helm..."
     CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
     EXTERNAL_HOSTNAME="fulfillment-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
@@ -383,16 +402,18 @@ INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
 INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \
     ./scripts/aap-configuration.sh
 
-# Detect console-proxy namespace (shared-dev pins it to "osac")
-if grep -q 'console-proxy-shared-dev' \
+# Detect console-proxy namespace and deployment name.
+# In kustomize mode, the shared-dev overlay pins the console-proxy to "osac".
+# In helm mode, everything deploys into INSTALLER_NAMESPACE.
+if [[ "${DEPLOY_MODE}" == "helm" ]]; then
+  CONSOLE_PROXY_NS="${INSTALLER_NAMESPACE}"
+  CONSOLE_PROXY_DEPLOY="fulfillment-console-proxy"
+elif grep -q 'console-proxy-shared-dev' \
     "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" 2>/dev/null; then
   CONSOLE_PROXY_NS="osac"
+  CONSOLE_PROXY_DEPLOY="osac-console-proxy"
 else
   CONSOLE_PROXY_NS="${INSTALLER_NAMESPACE}"
-fi
-if [[ "${DEPLOY_MODE}" == "helm" ]]; then
-  CONSOLE_PROXY_DEPLOY="fulfillment-console-proxy"
-else
   CONSOLE_PROXY_DEPLOY="osac-console-proxy"
 fi
 wait_for_resource deployment/${CONSOLE_PROXY_DEPLOY} condition=Available 300 "${CONSOLE_PROXY_NS}"
@@ -406,19 +427,6 @@ if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
     wait_for_resource job/aap-bootstrap condition=complete 2400 "${INSTALLER_NAMESPACE}"
 else
     wait_for_resource job/osac-aap-bootstrap condition=complete 2400 "${INSTALLER_NAMESPACE}"
-fi
-
-# Wait for Authorino to be ready (gRPC auth depends on it)
-wait_for_resource deployment/authorino condition=Available 300 ${INSTALLER_NAMESPACE}
-
-# Ensure Authorino can perform token reviews (required for Kubernetes SA authentication)
-if oc get clusterrolebinding authorino-tokenreview &>/dev/null; then
-    if ! oc get clusterrolebinding authorino-tokenreview -o json | \
-        jq -e '.subjects[] | select(.name=="authorino-authorino" and .namespace=="'"${INSTALLER_NAMESPACE}"'")' &>/dev/null; then
-        echo "Adding ${INSTALLER_NAMESPACE} Authorino SA to authorino-tokenreview ClusterRoleBinding..."
-        oc patch clusterrolebinding authorino-tokenreview --type=json \
-            -p '[{"op":"add","path":"/subjects/-","value":{"kind":"ServiceAccount","name":"authorino-authorino","namespace":"'"${INSTALLER_NAMESPACE}"'"}}]'
-    fi
 fi
 
 # Wait for fulfillment stack to be ready before running prepare scripts

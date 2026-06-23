@@ -553,6 +553,10 @@ def adopt_resources_for_helm(config: RefreshConfig) -> None:
                "--overwrite", check=False, capture=True)
         if r.returncode != 0:
             print(f"  WARN: failed to adopt {resource}: {r.stderr or r.stdout}", file=sys.stderr)
+            return
+        oc("label", resource, "-n", config.namespace,
+           "app.kubernetes.io/managed-by=Helm",
+           "--overwrite", check=False, capture=True)
 
     with ThreadPoolExecutor(max_workers=20) as pool:
         list(pool.map(_adopt, resources))

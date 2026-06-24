@@ -5,12 +5,15 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-2c65d7a
+    tag: sha-4d6918b
     pullPolicy: Always
   provisioning:
     provider: "aap"
   aap:
     insecureSkipVerify: "true"
+    tokenSecret:
+      name: osac-aap-api-token
+      key: token
   fulfillment:
     serverAddress: "fulfillment-internal-api:8001"
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
@@ -26,7 +29,7 @@ service:
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   variant: openshift
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-a0298ac
+    service: ghcr.io/osac-project/fulfillment-service:sha-ffdfd9f
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -87,15 +90,15 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-f5e6240
+    image: ghcr.io/osac-project/osac-aap:sha-1ada6eb
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-f5e6240"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-1ada6eb"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "f5e62408e0a75202c51e90c14530025c9bd27ccb"
+    projectGitBranch: "1ada6eb443c45d0848a91bd81a2222cd6334081f"
 
 # --- Validation ---
 validation:
@@ -108,4 +111,4 @@ bmf:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-a0298ac
+  image: ghcr.io/osac-project/fulfillment-service:sha-ffdfd9f

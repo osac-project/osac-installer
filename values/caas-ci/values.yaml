@@ -21,6 +21,7 @@ operator:
     clusterOrder: true
     tenant: true
     networking: true
+    storageController: true
 
 # --- Fulfillment Service ---
 service:

@@ -86,10 +86,6 @@ jobs:
         if: steps.update.outputs.changed == 'true'
         run: ./scripts/sync-image-tags.sh --fix
 
-      - name: Sync AuthConfig Rego
-        if: steps.update.outputs.changed == 'true'
-        run: pip install pyyaml && python3 scripts/sync-authconfig-rego.py --fix
-
       - name: Create or update PR
         if: steps.update.outputs.changed == 'true'
         env:

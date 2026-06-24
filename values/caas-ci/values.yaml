@@ -28,7 +28,7 @@ service:
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-ffdfd9f
+    service: ghcr.io/osac-project/fulfillment-service:sha-5f07d15
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -103,7 +103,7 @@ validation:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-ffdfd9f
+  image: ghcr.io/osac-project/fulfillment-service:sha-5f07d15
 
 clusterFulfillment:
   enabled: true

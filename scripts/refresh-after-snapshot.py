@@ -531,6 +531,10 @@ def adopt_resources_for_helm(config: RefreshConfig) -> None:
                "--overwrite", check=False, capture=True)
         if r.returncode != 0:
             print(f"  WARN: failed to adopt {resource}: {r.stderr or r.stdout}", file=sys.stderr)
+            return
+        oc("label", resource, "-n", config.namespace,
+           "app.kubernetes.io/managed-by=Helm",
+           "--overwrite", check=False, capture=True)
 
     with ThreadPoolExecutor(max_workers=20) as pool:
         list(pool.map(_adopt, resources))
@@ -542,10 +546,6 @@ def upgrade_osac(config: RefreshConfig) -> None:
     (REPO_ROOT / "charts/osac/Chart.lock").unlink(missing_ok=True)
     run(["helm", "dependency", "build", "charts/osac/"])
     adopt_resources_for_helm(config)
-    # Delete stale config-as-code-ig so helm recreates it from chart values.
-    # The AAP subchart manages this secret; deleting forces a fresh render.
-    oc("delete", "secret", "config-as-code-ig", "-n", config.namespace,
-       "--ignore-not-found")
     base_domain = "hosted." + config.cluster_domain.removeprefix("apps.")
     run(["helm", "upgrade", "osac", "charts/osac/",
          "--namespace", config.namespace,

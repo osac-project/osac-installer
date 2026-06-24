@@ -546,6 +546,18 @@ def upgrade_osac(config: RefreshConfig) -> None:
     # The AAP subchart manages this secret; deleting forces a fresh render.
     oc("delete", "secret", "config-as-code-ig", "-n", config.namespace,
        "--ignore-not-found")
+    # Remove OSAC_AAP_URL and OSAC_AAP_TOKEN env vars that prepare-aap.sh
+    # injected via "oc set env" on the snapshot.  The chart now manages
+    # OSAC_AAP_TOKEN via valueFrom/secretKeyRef; leaving the old plain
+    # "value:" field causes a strategic-merge-patch conflict during upgrade.
+    for pattern in ("osac-operator", "bmf-operator"):
+        deploys = oc("get", "deploy", "-n", config.namespace, "-o", "name",
+                     capture=True, check=False).stdout.strip().splitlines()
+        for d in deploys:
+            if pattern in d:
+                oc("set", "env", d, "-n", config.namespace,
+                   "OSAC_AAP_URL-", "OSAC_AAP_TOKEN-")
+                break
     base_domain = "hosted." + config.cluster_domain.removeprefix("apps.")
     run(["helm", "upgrade", "osac", "charts/osac/",
          "--namespace", config.namespace,

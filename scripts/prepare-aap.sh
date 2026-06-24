@@ -38,14 +38,16 @@ oc create secret generic osac-aap-api-token \
     -n "${INSTALLER_NAMESPACE}" \
     --dry-run=client -o yaml | oc apply -f -
 
-# Set the AAP URL on operator deployments (triggers rollout).
+# Set the AAP URL and token on operator deployments (triggers rollout).
 for pattern in osac-operator bmf-operator; do
     deploy=$(oc get deploy -n "${INSTALLER_NAMESPACE}" -o name | grep -m1 "${pattern}" || true)
     if [[ -z "${deploy}" ]]; then
         echo "  ${pattern}: not found, skipping"
         continue
     fi
-    oc set env "${deploy}" -n "${INSTALLER_NAMESPACE}" OSAC_AAP_URL="${AAP_URL}/api/controller"
+    oc set env "${deploy}" -n "${INSTALLER_NAMESPACE}" \
+        OSAC_AAP_URL="${AAP_URL}/api/controller" \
+        OSAC_AAP_TOKEN="${AAP_TOKEN}"
 done
 
 echo "AAP API token created and stored in secret osac-aap-api-token"

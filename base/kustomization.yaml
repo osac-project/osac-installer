@@ -33,7 +33,7 @@ images:
   newName: ghcr.io/osac-project/osac-aap
   newTag: sha-89f41e7
 - name: ghcr.io/osac-project/osac-operator
-  newTag: sha-08991cc
+  newTag: sha-7e4222b
 - name: ghcr.io/osac-project/bare-metal-fulfillment-operator
   newTag: sha-0a06955
 - name: envoy

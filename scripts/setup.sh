@@ -80,6 +80,15 @@ if [[ "${INGRESS_SERVICE}" == "true" ]]; then
 
     # Apply MetalLB CRD-based configuration (requires operator CRDs to be installed)
     oc apply -f prerequisites/metallb/metallb-config.yaml
+
+    # Patch IPAddressPool with address range matching this cluster's node subnet.
+    # The static config uses a placeholder range; derive the correct one from
+    # the first node's InternalIP (same logic as refresh-after-snapshot.py).
+    NODE_IP=$(oc get nodes -o 'jsonpath={.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+    SUBNET_PREFIX="${NODE_IP%.*}"
+    echo "Patching MetalLB address pool: ${SUBNET_PREFIX}.240-${SUBNET_PREFIX}.250"
+    oc patch ipaddresspool caas-address-pool -n metallb-system --type=merge \
+        -p "{\"spec\":{\"addresses\":[\"${SUBNET_PREFIX}.240-${SUBNET_PREFIX}.250\"]}}"
 fi
 
 # Optionally install Multicluster Engine and infrastructure operator

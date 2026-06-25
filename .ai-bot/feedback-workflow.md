@@ -33,7 +33,6 @@ yamllint --strict .
 pre-commit run --all-files
 bash scripts/kustomize-build-all.sh
 bash scripts/sync-image-tags.sh
-python3 scripts/sync-authconfig-rego.py
 ```
 
 Diff the kustomize build output for affected overlays against the

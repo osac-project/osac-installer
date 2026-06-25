@@ -13,9 +13,8 @@ using the Helm umbrella chart. Covers VMaaS and CaaS profiles.
   - [1.4 OpenShift Virtualization (CNV)](#14-openshift-virtualization-cnv)
   - [1.5 cert-manager and trust-manager](#15-cert-manager-and-trust-manager)
   - [1.6 CA Issuer](#16-ca-issuer)
-  - [1.7 Authorino Operator](#17-authorino-operator)
-  - [1.8 Keycloak](#18-keycloak)
-  - [1.9 AAP Operator](#19-aap-operator)
+  - [1.7 Keycloak](#17-keycloak)
+  - [1.8 AAP Operator](#18-aap-operator)
 - [Phase 2: Prepare Secrets and Configuration](#phase-2-prepare-secrets-and-configuration)
   - [2.1 CA Trust Bundle](#21-ca-trust-bundle)
   - [2.2 PostgreSQL Database](#22-postgresql-database)
@@ -85,7 +84,6 @@ Install in the order shown — some prerequisites depend on earlier ones
 |-------------|-----------|-------|
 | cert-manager + trust-manager | **Yes** | TLS certificates for all OSAC services |
 | CA Issuer | **Yes** | Self-signed CA for internal certificates |
-| Authorino | **Yes** | gRPC authorization for the fulfillment service |
 | Keycloak | **Yes** | Identity provider for OAuth/OIDC |
 | AAP Operator | **Yes** | Ansible Automation Platform for provisioning workflows |
 | LVMS | Only if no default StorageClass exists | Provides `lvms-vg1` StorageClass |
@@ -251,24 +249,7 @@ oc apply -f prerequisites/ca-issuer.yaml
 oc wait clusterissuer/default-ca --for=condition=Ready --timeout=300s
 ```
 
-### 1.7 Authorino Operator
-
-```bash
-oc apply -f prerequisites/authorino-operator.yaml
-
-# Wait for the Authorino CSV to appear
-until AUTHORINO_CSV=$(oc get csv --no-headers -n openshift-operators 2>/dev/null \
-  | awk '/authorino/ { print $1 }' | tail -1) && [[ -n "${AUTHORINO_CSV}" ]]; do
-  sleep 10
-done
-echo "Found CSV: ${AUTHORINO_CSV}"
-oc wait csv/${AUTHORINO_CSV} -n openshift-operators \
-  --for=jsonpath='{.status.phase}'=Succeeded --timeout=300s
-oc wait deployment/authorino-operator -n openshift-operators \
-  --for=condition=Available --timeout=300s
-```
-
-### 1.8 Keycloak
+### 1.7 Keycloak
 
 Keycloak provides identity management (OAuth/OIDC) for OSAC. It includes its
 own PostgreSQL database.
@@ -278,7 +259,7 @@ oc apply -k prerequisites/keycloak/
 oc wait deployment/keycloak-service -n keycloak --for=condition=Available --timeout=600s
 ```
 
-### 1.9 AAP Operator
+### 1.8 AAP Operator
 
 This installs the AAP operator only. The AAP instance itself (controller, EDA,
 gateway) is created by the Helm chart.
@@ -727,7 +708,6 @@ Expected deployments:
 - `fulfillment-rest-gateway` — Fulfillment REST API
 - `fulfillment-controller` — Fulfillment controller
 - `fulfillment-ingress-proxy` — Envoy proxy
-- `authorino` — Authorization service
 
 ---
 
@@ -823,14 +803,14 @@ INSTALLER_KUSTOMIZE_OVERLAY=development \
 
 ### VMaaS (VM as a Service)
 
-Prerequisites needed: LVMS (if no SC), CNV, cert-manager, Authorino,
+Prerequisites needed: LVMS (if no SC), CNV, cert-manager,
 Keycloak, AAP.
 
 ```bash
 export NAMESPACE=osac
 DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
 # Phase 1: Install LVMS (if needed), CNV, cert-manager, trust-manager,
-#           CA issuer, Authorino, Keycloak, AAP operator
+#           CA issuer, Keycloak, AAP operator
 # Phase 2: Create secrets (license, config-as-code, credentials)
 # Phase 3: Deploy
 helm upgrade --install osac charts/osac/ \
@@ -844,14 +824,14 @@ helm upgrade --install osac charts/osac/ \
 
 ### CaaS (Cluster as a Service)
 
-Prerequisites needed: LVMS (if no SC), MCE, cert-manager, Authorino,
+Prerequisites needed: LVMS (if no SC), MCE, cert-manager,
 Keycloak, AAP.
 
 ```bash
 export NAMESPACE=osac
 DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
 # Phase 1: Install LVMS (if needed), MCE, cert-manager, trust-manager,
-#           CA issuer, Authorino, Keycloak, AAP operator
+#           CA issuer, Keycloak, AAP operator
 # Phase 2: Create secrets (license, config-as-code, credentials)
 # Phase 3: Deploy
 helm upgrade --install osac charts/osac/ \
@@ -866,7 +846,7 @@ helm upgrade --install osac charts/osac/ \
 ### Both VMaaS + CaaS
 
 Prerequisites needed: All of the above (LVMS, MCE, CNV, cert-manager,
-Authorino, Keycloak, AAP).
+Keycloak, AAP).
 
 ```bash
 export NAMESPACE=osac
@@ -962,7 +942,7 @@ Common causes:
 - **`failed to read client identifier from file`** — Missing
   `fulfillment-controller-credentials` secret or `auth.controllerCredentials`
   not set in values (see [Phase 2.3](#23-fulfillment-controller-credentials))
-- **`PermissionDenied` from Authorino** — The OPA policy expects JWT username
+- **`PermissionDenied`** — The OPA policy expects JWT username
   `service-account-osac-controller`. Ensure the `fulfillment-controller-credentials`
   secret uses `client-id=osac-controller` (see [Phase 2.3](#23-fulfillment-controller-credentials))
 - Missing `fulfillment-db` secret (database not configured)
@@ -970,9 +950,9 @@ Common causes:
 
 ### Fulfillment Controller PermissionDenied
 
-The OPA policy in the AuthConfig expects JWT username
-`service-account-osac-controller`. This means the `fulfillment-controller-credentials`
-secret must use `client-id=osac-controller` (matching the Keycloak client name).
+The OPA policy in the expects JWT username `service-account-osac-controller`. This means the
+`fulfillment-controller-credentials` secret must use `client-id=osac-controller` (matching the
+Keycloak client name).
 
 If you see `PermissionDenied` errors, check the credentials secret:
 

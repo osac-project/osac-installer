@@ -1,0 +1,33 @@
+name: Cleanup Old Charts
+
+on:
+  schedule:
+    - cron: '41 4 * * 1'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Delete old dev/nightly chart versions
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - osac
+          - osac-operator-crds
+          - osac-operator
+          - fulfillment-service
+          - osac-aap
+          - bare-metal-fulfillment-operator-crds
+          - bare-metal-fulfillment-operator
+    steps:
+    - name: Delete old versions
+      uses: snok/container-retention-policy@d3bdcf5ce9b05f685154e4a16c39233b245e3d53  # v3.1.0
+      with:
+        account: osac-project
+        token: ${{ secrets.OSAC_BOT_PAT }}
+        image-names: charts/${{ matrix.image }}
+        image-tags: "!0.0.0-dev !0.0.0-nightly 0.0.0-dev.* 0.0.0-nightly.*"
+        tag-selection: both
+        cut-off: 4w
+        timestamp-to-use: updated_at
+        dry-run: false

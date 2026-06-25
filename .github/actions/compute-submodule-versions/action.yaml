@@ -1,0 +1,39 @@
+name: Compute Submodule Versions
+description: Resolve short commit SHAs for all component submodules
+
+outputs:
+  operator_sha:
+    description: osac-operator submodule short SHA
+    value: ${{ steps.shas.outputs.operator_sha }}
+  service_sha:
+    description: fulfillment-service submodule short SHA
+    value: ${{ steps.shas.outputs.service_sha }}
+  aap_sha:
+    description: osac-aap submodule short SHA
+    value: ${{ steps.shas.outputs.aap_sha }}
+  bmf_sha:
+    description: bare-metal-fulfillment-operator submodule short SHA
+    value: ${{ steps.shas.outputs.bmf_sha }}
+
+runs:
+  using: composite
+  steps:
+  - name: Resolve submodule SHAs
+    id: shas
+    shell: bash
+    run: |
+      OPERATOR_SHA=$(git -C base/osac-operator rev-parse --short=7 HEAD)
+      SERVICE_SHA=$(git -C base/osac-fulfillment-service rev-parse --short=7 HEAD)
+      AAP_SHA=$(git -C base/osac-aap rev-parse --short=7 HEAD)
+      BMF_SHA=$(git -C base/bare-metal-fulfillment-operator rev-parse --short=7 HEAD)
+
+      echo "operator_sha=${OPERATOR_SHA}" >> "$GITHUB_OUTPUT"
+      echo "service_sha=${SERVICE_SHA}" >> "$GITHUB_OUTPUT"
+      echo "aap_sha=${AAP_SHA}" >> "$GITHUB_OUTPUT"
+      echo "bmf_sha=${BMF_SHA}" >> "$GITHUB_OUTPUT"
+
+      echo "--- Submodule SHAs ---"
+      echo "osac-operator:                    ${OPERATOR_SHA}"
+      echo "fulfillment-service:              ${SERVICE_SHA}"
+      echo "osac-aap:                         ${AAP_SHA}"
+      echo "bare-metal-fulfillment-operator:  ${BMF_SHA}"

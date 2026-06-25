@@ -1,0 +1,44 @@
+name: Publish Helm Chart
+description: Package a Helm chart and push it to an OCI registry
+
+inputs:
+  chart-dir:
+    description: Path to the chart directory
+    required: true
+  version:
+    description: Chart version (e.g. 0.0.0-dev.abc1234)
+    required: true
+  floating-version:
+    description: Optional floating version to also publish (e.g. 0.0.0-dev)
+    required: false
+  registry:
+    description: OCI registry host (e.g. ghcr.io)
+    required: true
+  charts-repo:
+    description: OCI repository path under registry (e.g. osac-project/charts)
+    required: true
+
+runs:
+  using: composite
+  steps:
+  - name: Package and push chart
+    shell: bash
+    env:
+      CHART_DIR: ${{ inputs.chart-dir }}
+      VERSION: ${{ inputs.version }}
+      FLOATING_VERSION: ${{ inputs.floating-version }}
+      OCI_REPO: oci://${{ inputs.registry }}/${{ inputs.charts-repo }}
+    run: |
+      set -euo pipefail
+      name=$(yq -r '.name' "${CHART_DIR}/Chart.yaml")
+      mkdir -p /tmp/charts
+
+      echo "--- Publishing ${name} (${VERSION}) ---"
+      helm package "${CHART_DIR}" --version "${VERSION}" --app-version "${VERSION}" --destination /tmp/charts/
+      helm push "/tmp/charts/${name}-${VERSION}.tgz" "${OCI_REPO}"
+
+      if [ -n "${FLOATING_VERSION}" ]; then
+        echo "--- Publishing ${name} (${FLOATING_VERSION}, appVersion=${VERSION}) ---"
+        helm package "${CHART_DIR}" --version "${FLOATING_VERSION}" --app-version "${VERSION}" --destination /tmp/charts/
+        helm push "/tmp/charts/${name}-${FLOATING_VERSION}.tgz" "${OCI_REPO}"
+      fi

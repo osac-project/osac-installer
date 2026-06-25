@@ -125,38 +125,16 @@ jobs:
         echo "bmf-operator-crds:  ${bmf_crds_ver}"
         echo "bmf-operator:       ${bmf_ver}"
 
-    - name: Rewrite dependencies to OCI references
+    - name: Rewrite umbrella dependencies to OCI
       env:
-        CRDS_VER: ${{ steps.versions.outputs.crds_ver }}
+        OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+        OPERATOR_CRDS_VER: ${{ steps.versions.outputs.crds_ver }}
         OPERATOR_VER: ${{ steps.versions.outputs.operator_ver }}
         SERVICE_VER: ${{ steps.versions.outputs.service_ver }}
         AAP_VER: ${{ steps.versions.outputs.aap_ver }}
         BMF_CRDS_VER: ${{ steps.versions.outputs.bmf_crds_ver }}
         BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
-      run: |
-        cd charts/osac
-        OCI_REPO="oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}"
-
-        yq -i "
-          (.dependencies[] | select(.name == \"osac-operator-crds\")) .repository = \"${OCI_REPO}\" |
-          (.dependencies[] | select(.name == \"osac-operator-crds\")) .version = \"${CRDS_VER}\" |
-          (.dependencies[] | select(.name == \"osac-operator\")) .repository = \"${OCI_REPO}\" |
-          (.dependencies[] | select(.name == \"osac-operator\")) .version = \"${OPERATOR_VER}\" |
-          (.dependencies[] | select(.name == \"fulfillment-service\")) .repository = \"${OCI_REPO}\" |
-          (.dependencies[] | select(.name == \"fulfillment-service\")) .version = \"${SERVICE_VER}\" |
-          (.dependencies[] | select(.name == \"osac-aap\")) .repository = \"${OCI_REPO}\" |
-          (.dependencies[] | select(.name == \"osac-aap\")) .version = \"${AAP_VER}\" |
-          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator-crds\")) .repository = \"${OCI_REPO}\" |
-          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator-crds\")) .version = \"${BMF_CRDS_VER}\" |
-          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator\")) .repository = \"${OCI_REPO}\" |
-          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator\")) .version = \"${BMF_VER}\"
-        " Chart.yaml
-
-        # Remove stale Chart.lock so helm pulls fresh from OCI
-        rm -f Chart.lock
-
-        echo "--- Updated Chart.yaml ---"
-        cat Chart.yaml
+      run: ./scripts/rewrite-chart-deps.sh
 
     - name: Build dependencies from OCI
       run: helm dependency build charts/osac/
@@ -169,17 +147,10 @@ jobs:
           -e "s|tag: latest|tag: v${VERSION}|g" \
           charts/osac/values.yaml
 
-    - name: Package chart
-      env:
-        VERSION: ${{ steps.versions.outputs.version }}
-      run: |
-        helm package charts/osac/ \
-          --version "${VERSION}" \
-          --app-version "${VERSION}"
-
-    - name: Push chart to GHCR
-      env:
-        VERSION: ${{ steps.versions.outputs.version }}
-      run: |
-        helm push "osac-${VERSION}.tgz" \
-          oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+    - name: Publish umbrella chart
+      uses: ./.github/actions/publish-helm-chart
+      with:
+        chart-dir: charts/osac
+        version: ${{ steps.versions.outputs.version }}
+        registry: ${{ env.REGISTRY }}
+        charts-repo: ${{ env.CHARTS_REPO }}

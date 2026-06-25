@@ -1,0 +1,126 @@
+name: Publish Dev Charts
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: publish-dev-charts
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  CHARTS_REPO: ${{ github.repository_owner }}/charts
+
+jobs:
+  publish-dev-charts:
+    name: Publish dev charts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Set up Helm
+      uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2  # v5.0.0
+      with:
+        version: v3.17.0
+
+    - name: Log in to GHCR
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+    - name: Compute submodule versions
+      id: submodules
+      uses: ./.github/actions/compute-submodule-versions
+
+    - name: Compute installer version
+      id: versions
+      run: |
+        echo "installer_sha=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+    # --- Dependency charts ---
+
+    - name: Publish osac-operator-crds
+      uses: ./.github/actions/publish-helm-chart
+      with:
+        chart-dir: base/osac-operator/charts/operator-crds
+        version: 0.0.0-dev.${{ steps.submodules.outputs.operator_sha }}
+        floating-version: 0.0.0-dev
+        registry: ${{ env.REGISTRY }}
+        charts-repo: ${{ env.CHARTS_REPO }}
+
+    - name: Publish osac-operator
+      uses: ./.github/actions/publish-helm-chart
+      with:
+        chart-dir: base/osac-operator/charts/operator
+        version: 0.0.0-dev.${{ steps.submodules.outputs.operator_sha }}
+        floating-version: 0.0.0-dev
+        registry: ${{ env.REGISTRY }}
+        charts-repo: ${{ env.CHARTS_REPO }}
+
+    - name: Publish fulfillment-service
+      uses: ./.github/actions/publish-helm-chart
+      with:
+        chart-dir: base/osac-fulfillment-service/charts/service
+        version: 0.0.0-dev.${{ steps.submodules.outputs.service_sha }}
+        floating-version: 0.0.0-dev
+        registry: ${{ env.REGISTRY }}
+        charts-repo: ${{ env.CHARTS_REPO }}
+
+    - name: Publish osac-aap
+      uses: ./.github/actions/publish-helm-chart
+      with:
+        chart-dir: base/osac-aap/charts/aap
+        version: 0.0.0-dev.${{ steps.submodules.outputs.aap_sha }}
+        floating-version: 0.0.0-dev
+        registry: ${{ env.REGISTRY }}
+        charts-repo: ${{ env.CHARTS_REPO }}
+
+    - name: Publish bare-metal-fulfillment-operator-crds
+      uses: ./.github/actions/publish-helm-chart
+      with:
+        chart-dir: base/bare-metal-fulfillment-operator/charts/operator-crds
+        version: 0.0.0-dev.${{ steps.submodules.outputs.bmf_sha }}
+        floating-version: 0.0.0-dev
+        registry: ${{ env.REGISTRY }}
+        charts-repo: ${{ env.CHARTS_REPO }}
+
+    - name: Publish bare-metal-fulfillment-operator
+      uses: ./.github/actions/publish-helm-chart
+      with:
+        chart-dir: base/bare-metal-fulfillment-operator/charts/operator
+        version: 0.0.0-dev.${{ steps.submodules.outputs.bmf_sha }}
+        floating-version: 0.0.0-dev
+        registry: ${{ env.REGISTRY }}
+        charts-repo: ${{ env.CHARTS_REPO }}
+
+    # --- Umbrella chart ---
+
+    - name: Rewrite umbrella dependencies to OCI
+      env:
+        OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+        OPERATOR_CRDS_VER: 0.0.0-dev.${{ steps.submodules.outputs.operator_sha }}
+        OPERATOR_VER: 0.0.0-dev.${{ steps.submodules.outputs.operator_sha }}
+        SERVICE_VER: 0.0.0-dev.${{ steps.submodules.outputs.service_sha }}
+        AAP_VER: 0.0.0-dev.${{ steps.submodules.outputs.aap_sha }}
+        BMF_CRDS_VER: 0.0.0-dev.${{ steps.submodules.outputs.bmf_sha }}
+        BMF_VER: 0.0.0-dev.${{ steps.submodules.outputs.bmf_sha }}
+      run: ./scripts/rewrite-chart-deps.sh
+
+    - name: Build umbrella dependencies from OCI
+      run: helm dependency build charts/osac/
+
+    - name: Publish umbrella chart
+      uses: ./.github/actions/publish-helm-chart
+      with:
+        chart-dir: charts/osac
+        version: 0.0.0-dev.${{ steps.versions.outputs.installer_sha }}
+        floating-version: 0.0.0-dev
+        registry: ${{ env.REGISTRY }}
+        charts-repo: ${{ env.CHARTS_REPO }}

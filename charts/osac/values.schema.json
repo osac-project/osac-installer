@@ -92,7 +92,21 @@
             },
             "token": {
               "type": "string",
-              "description": "AAP API token"
+              "description": "AAP API token (literal value, alternative to tokenSecret)"
+            },
+            "tokenSecret": {
+              "type": "object",
+              "description": "Kubernetes Secret reference for the AAP API token (alternative to token)",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the Secret containing the AAP API token"
+                },
+                "key": {
+                  "type": "string",
+                  "description": "Key within the Secret that holds the token value"
+                }
+              }
             },
             "insecureSkipVerify": {
               "type": "string",
@@ -125,6 +139,17 @@
             }
           }
         },
+        "provisioning": {
+          "type": "object",
+          "description": "Provisioning backend configuration",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "description": "Provisioning provider (e.g. aap)",
+              "default": "aap"
+            }
+          }
+        },
         "controllers": {
           "type": "object",
           "description": "Enable or disable individual operator controllers",
@@ -148,6 +173,11 @@
               "type": "boolean",
               "description": "Enable networking controllers",
               "default": true
+            },
+            "storageController": {
+              "type": "boolean",
+              "description": "Enable storage controller",
+              "default": false
             }
           }
         },
@@ -267,6 +297,13 @@
             "controllerCredentials": {
               "type": "array",
               "description": "Controller credential volume sources"
+            },
+            "emergencyServiceAccounts": {
+              "type": "array",
+              "description": "Service accounts granted emergency access (bypass normal OIDC auth)",
+              "items": {
+                "type": "string"
+              }
             }
           }
         },
@@ -572,6 +609,16 @@
             "config": {
               "type": "object",
               "description": "Additional key-value pairs for the network instance group ConfigMap"
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "description": "Storage instance group extra config",
+          "properties": {
+            "config": {
+              "type": "object",
+              "description": "Additional key-value pairs for the storage instance group ConfigMap"
             }
           }
         }
@@ -941,6 +988,98 @@
             "SERVER_SSH_BASTION_KEY": {
               "type": "string",
               "description": "SSH private key for bastion access"
+            }
+          }
+        }
+      }
+    },
+    "importAgents": {
+      "type": "object",
+      "description": "ConfigMap-based bare metal agent import configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable ConfigMap-based bare metal agent import (sets OSAC_IMPORT_AGENTS_ENABLED in config-as-code-ig Secret)",
+          "default": false
+        },
+        "servers": {
+          "type": "array",
+          "description": "Server inventory for bare metal agent import. Each entry provisions a BareMetalHost CR.",
+          "items": {
+            "type": "object",
+            "required": ["name", "bmc_url", "bmc_secret", "boot_mac", "netris_server_name", "resource_class"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Server hostname, used as the BareMetalHost CR name"
+              },
+              "bmc_url": {
+                "type": "string",
+                "description": "Redfish BMC address for virtual media boot"
+              },
+              "bmc_secret": {
+                "type": "string",
+                "description": "Name of the Kubernetes Secret with BMC credentials"
+              },
+              "boot_mac": {
+                "type": "string",
+                "description": "Boot NIC MAC address"
+              },
+              "netris_server_name": {
+                "type": "string",
+                "description": "Netris server name label for the Agent"
+              },
+              "resource_class": {
+                "type": "string",
+                "description": "Hardware type label for the Agent"
+              },
+              "disable_bmc_cert_verification": {
+                "type": "boolean",
+                "description": "Per-server override for BMC TLS certificate verification"
+              }
+            }
+          }
+        }
+      }
+    },
+    "storageFulfillment": {
+      "type": "object",
+      "description": "ConfigMap and Secret for the AAP storage-operations instance group",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create storage-fulfillment ConfigMap and Secret",
+          "default": false
+        },
+        "config": {
+          "type": "object",
+          "description": "Environment variables for the storage-operations instance group",
+          "properties": {
+            "STORAGE_TIERS": {
+              "type": "string",
+              "description": "Comma-separated list of available storage tiers"
+            },
+            "STORAGE_SNAPSHOTS_ENABLED": {
+              "type": "string",
+              "description": "Enable storage snapshot support"
+            }
+          }
+        },
+        "secret": {
+          "type": "object",
+          "description": "Secret values for the storage-operations instance group",
+          "properties": {
+            "VAST_ENDPOINT": {
+              "type": "string",
+              "description": "VAST storage API endpoint URL"
+            },
+            "VAST_USERNAME": {
+              "type": "string",
+              "description": "VAST storage API username"
+            },
+            "VAST_PASSWORD": {
+              "type": "string",
+              "description": "VAST storage API password"
             }
           }
         }

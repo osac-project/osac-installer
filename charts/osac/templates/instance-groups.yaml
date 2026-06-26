@@ -55,4 +55,32 @@ metadata:
 type: Opaque
 data: {}
 {{- end }}
+{{- if not .Values.storageFulfillment.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storage-operations-ig
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac.labels" . | nindent 4 }}
+    osac.openshift.io/project: osac-aap
+data:
+  {{- range $key, $value := .Values.instanceGroups.storage.config }}
+  {{- if $value }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: storage-operations-ig
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac.labels" . | nindent 4 }}
+    osac.openshift.io/project: osac-aap
+type: Opaque
+data: {}
+{{- end }}
 {{- end }}

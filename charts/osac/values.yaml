@@ -117,6 +117,8 @@ instanceGroups:
     config: {}
   network:
     config: {}
+  storage:
+    config: {}
 
 # --- Bundled PostgreSQL ---
 # When enabled, auto-creates the fulfillment-db secret and client certificate.
@@ -243,6 +245,19 @@ networkFulfillment:
     NETRIS_TENANT_NAME: ""
   secret:
     NETRIS_PASSWORD: ""
+
+# --- Storage Fulfillment Instance Group ---
+# ConfigMap and Secret for the AAP storage-operations instance group.
+# Carries VAST management credentials for tenant storage provisioning.
+storageFulfillment:
+  enabled: false
+  config:
+    STORAGE_TIERS: ""
+    STORAGE_SNAPSHOTS_ENABLED: ""
+  secret:
+    VAST_ENDPOINT: ""
+    VAST_USERNAME: ""
+    VAST_PASSWORD: ""
 
 # --- MetalLB Address Pool ---
 metallb:

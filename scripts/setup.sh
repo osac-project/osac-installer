@@ -32,6 +32,9 @@ STORAGE_SERVICE=${STORAGE_SERVICE:-${EXTRA_SERVICES}}
 VIRT_SERVICE=${VIRT_SERVICE:-${EXTRA_SERVICES}}
 MCE_SERVICE=${MCE_SERVICE:-${EXTRA_SERVICES}}
 
+# Setup phase: "all" (default), "prerequisites" (infra operators only), or "deploy" (skip infra operators)
+SETUP_PHASE=${SETUP_PHASE:-"all"}
+
 echo "=== Setting up OSAC deployment ==="
 echo "Deploy mode: ${DEPLOY_MODE}"
 if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
@@ -40,7 +43,10 @@ else
     echo "Values file: ${VALUES_FILE}"
 fi
 echo "Namespace: ${INSTALLER_NAMESPACE}"
+echo "Setup phase: ${SETUP_PHASE}"
 echo ""
+
+if [[ "${SETUP_PHASE}" == "all" || "${SETUP_PHASE}" == "prerequisites" ]]; then
 
 # Optionally install LVMS as storage service (must be before keycloak which needs a default storage class)
 if [[ "${STORAGE_SERVICE}" == "true" ]]; then
@@ -166,6 +172,14 @@ if [[ "${VIRT_SERVICE}" == "true" ]]; then
         echo "Timed out waiting for HyperConverged to be Available"
         exit 1
     }
+fi
+
+fi # end SETUP_PHASE == all|prerequisites
+
+if [[ "${SETUP_PHASE}" == "prerequisites" ]]; then
+    echo ""
+    echo "=== Infrastructure prerequisites installed ==="
+    exit 0
 fi
 
 # Apply cert-manager prerequisites and wait for it to be ready

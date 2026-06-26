@@ -57,3 +57,10 @@ teardown: ## Teardown OSAC deployment
 helm-validate: helm-lint ## Validate Helm chart (lint + template)
 	helm template osac charts/osac/ --values $(VALUES_FILE) > /dev/null
 	@echo "Validation passed."
+
+.PHONY: validate-values-schema
+validate-values-schema: ## Check that every values key has a matching schema entry
+	python3 scripts/validate-values-schema.py charts/osac/values.schema.json \
+		charts/osac/values.yaml \
+		charts/osac/values-example.yaml \
+		values/*/values.yaml

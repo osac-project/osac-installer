@@ -1,2 +1,5 @@
 files/quay-pull-secret.json
 files/license.zip
+files/inventory.yaml
+files/clouds.yaml
+files/management.yaml

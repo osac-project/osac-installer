@@ -22,6 +22,15 @@ oc apply -k overlays/<overlay-name> -n <namespace>
 # Automated end-to-end deployment (installs prerequisites + deploys + configures)
 INSTALLER_NAMESPACE=<namespace> INSTALLER_KUSTOMIZE_OVERLAY=<overlay-name> ./scripts/setup.sh
 
+# Build Helm chart dependencies from OCI registry (default)
+make helm-deps
+
+# Build Helm chart dependencies from local submodules (for development)
+make dev-deps
+
+# Bump a subchart version in the umbrella chart
+make bump-chart BUMP_CHART=fulfillment-service BUMP_VERSION=0.0.68
+
 # Run pre-commit hooks
 pre-commit run --all-files
 
@@ -102,6 +111,7 @@ for d in overlays/*/; do kustomize build "$d" > "/tmp/after-$(basename $d).yaml"
 
 ## Helm Chart Conventions
 
+- **Subchart dependencies use OCI registry references** -- `charts/osac/Chart.yaml` pins subchart versions from `oci://ghcr.io/osac-project/charts`. To update a subchart: merge the change in the component repo, tag a release, then run `make bump-chart BUMP_CHART=<name> BUMP_VERSION=<ver>` in osac-installer. For local development with uncommitted subchart changes, use `make dev-deps` to temporarily swap in file:// refs from submodules.
 - **Every new value must have a matching schema entry** -- when adding or modifying keys in `charts/osac/values.yaml`, always add the corresponding property definition to `charts/osac/values.schema.json`. Use `enum` constraints for fields with a known set of valid values (e.g., network/DNS backend classes). The schema is both validation and documentation -- incomplete schemas allow silent misconfiguration.
 
 ## Key Conventions

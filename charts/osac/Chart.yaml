@@ -6,21 +6,23 @@ version: 0.0.1
 
 dependencies:
   - name: osac-operator-crds
-    version: ">=0.0.0"
-    repository: "file://../../base/osac-operator/charts/operator-crds"
+    version: "0.0.2"
+    repository: "oci://ghcr.io/osac-project/charts"
     alias: operatorCrds
   - name: osac-operator
-    version: ">=0.0.0"
-    repository: "file://../../base/osac-operator/charts/operator"
+    version: "0.0.2"
+    repository: "oci://ghcr.io/osac-project/charts"
     alias: operator
   - name: fulfillment-service
-    version: ">=0.0.0"
-    repository: "file://../../base/osac-fulfillment-service/charts/service"
+    version: "0.0.67"
+    repository: "oci://ghcr.io/osac-project/charts"
     alias: service
   - name: osac-aap
-    version: ">=0.0.0"
-    repository: "file://../../base/osac-aap/charts/aap"
+    version: "0.0.4"
+    repository: "oci://ghcr.io/osac-project/charts"
     alias: aap
+  # TODO: Switch to OCI once bare-metal-fulfillment-operator publishes its first
+  # tagged release (requires fixing publish-charts.yaml in that repo first).
   - name: bare-metal-fulfillment-operator-crds
     version: ">=0.0.0"
     repository: "file://../../base/bare-metal-fulfillment-operator/charts/operator-crds"

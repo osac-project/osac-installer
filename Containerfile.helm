@@ -1,0 +1,15 @@
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+ARG HELM_VERSION=v3.17.0
+ARG YQ_VERSION=v4.44.6
+
+RUN microdnf install -y tar gzip git make python3 && \
+    microdnf clean all && \
+    ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')" && \
+    curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz" | \
+    tar xz --strip-components=1 -C /usr/local/bin "linux-${ARCH}/helm" && \
+    curl -fsSL -o /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${ARCH}" && \
+    chmod +x /usr/local/bin/yq
+
+WORKDIR /charts
+ENTRYPOINT ["make"]

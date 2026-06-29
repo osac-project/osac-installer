@@ -1,0 +1,129 @@
+# OSAC BMaaS (Bare-Metal-as-a-Service) CI Environment Values
+# Based on caas-ci values with BMF operator enabled for Metal3 E2E testing.
+
+# --- Operator ---
+operator:
+  image:
+    repository: ghcr.io/osac-project/osac-operator
+    tag: sha-773d078
+    pullPolicy: Always
+  provisioning:
+    provider: "aap"
+  aap:
+    insecureSkipVerify: "true"
+    tokenSecret:
+      name: osac-aap-api-token
+      key: token
+  fulfillment:
+    serverAddress: "fulfillment-api:8000"
+    tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+  controllers:
+    clusterOrder: true
+    computeInstance: false
+    tenant: true
+    networking: true
+    storageController: true
+
+# --- Fulfillment Service ---
+service:
+  variant: openshift
+  externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
+  internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
+  images:
+    service: ghcr.io/osac-project/fulfillment-service:sha-075185e
+    envoy: ghcr.io/osac-project/envoy:v1.33.0
+  certs:
+    issuerRef:
+      kind: ClusterIssuer
+      name: default-ca
+    caBundle:
+      configMap: ca-bundle
+  auth:
+    issuerUrl: https://keycloak.keycloak.svc.cluster.local/realms/osac
+    emergencyServiceAccounts:
+    - admin
+    - osac-operator
+    - osac-operator-controller-manager
+    - template-publisher
+    controllerCredentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-id
+          param: client-id
+        - key: client-secret
+          param: client-secret
+  idp:
+    provider: keycloak
+    url: https://keycloak.keycloak.svc.cluster.local
+    credentials:
+    - secret:
+        name: fulfillment-controller-credentials
+        items:
+        - key: client-id
+          param: client-id
+        - key: client-secret
+          param: client-secret
+  database:
+    connection:
+    - secret:
+        name: fulfillment-db
+        items:
+        - key: url
+          param: url
+    - secret:
+        name: postgres-client-cert-service
+        items:
+        - key: tls.crt
+          param: sslcert
+        - key: tls.key
+          param: sslkey
+        - key: ca.crt
+          param: sslrootcert
+  log:
+    level: debug
+
+# --- AAP ---
+aap:
+  aap:
+    instance:
+      enabled: true
+      name: "osac-aap"
+  bootstrap:
+    enabled: true
+    image: ghcr.io/osac-project/osac-aap:sha-140bdb4
+    cliImage: quay.io/openshift/origin-cli:4.20.0
+    backoffLimit: 15
+  configAsCode:
+    manifestSecret: "config-as-code-manifest-ig"
+    secret: "config-as-code-ig"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-140bdb4"
+    projectGitUri: "https://github.com/osac-project/osac-aap"
+    projectGitBranch: "140bdb4fbfd81dd4000e583e3dfab8ad8b1e412a"
+
+# --- Validation ---
+validation:
+  enabled: true
+
+# --- Database migration ---
+dbMigrate:
+  enabled: false
+  image: ghcr.io/osac-project/fulfillment-service:sha-075185e
+
+clusterFulfillment:
+  enabled: true
+  config:
+    NETWORK_STEPS_COLLECTION: "ci.steps"
+    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "SingleReplica"
+    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "SingleReplica"
+
+networkFulfillment:
+  enabled: true
+
+# --- Bare Metal Fulfillment Operator ---
+bmf:
+  enabled: true
+  image:
+    repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
+    tag: sha-46edb67
+    pullPolicy: Always

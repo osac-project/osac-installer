@@ -291,50 +291,12 @@ if [[ "${DEPLOY_MODE}" == "helm" ]]; then
         -n "${INSTALLER_NAMESPACE}" \
         --dry-run=client -o yaml | oc apply -f -
 
-    # Deploy the fulfillment database. The fulfillment-service chart expects an
-    # external PostgreSQL with connection details in 'fulfillment-db' and client
-    # TLS in 'postgres-client-cert-service'.
-    echo "Deploying fulfillment database..."
-    helm upgrade --install fulfillment-db \
-        base/osac-fulfillment-service/it/charts/postgres/ \
-        --namespace "${INSTALLER_NAMESPACE}" \
-        --set certs.issuerRef.name=default-ca \
-        --set certs.caBundle.configMap=ca-bundle \
-        --set 'databases[0].name=service' \
-        --set 'databases[0].user=service' \
-        --timeout 5m \
-        --wait
-
-    # Create client certificate for the 'service' database user.
-    # The postgres chart does not generate per-user client certs yet.
-    oc apply -f - <<EOF
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  namespace: ${INSTALLER_NAMESPACE}
-  name: postgres-client-cert-service
-spec:
-  issuerRef:
-    kind: ClusterIssuer
-    name: default-ca
-  commonName: service
-  usages:
-  - client auth
-  secretName: postgres-client-cert-service
-  privateKey:
-    rotationPolicy: Always
-EOF
-    oc wait certificate/postgres-client-cert-service -n "${INSTALLER_NAMESPACE}" --for=condition=Ready --timeout=60s
-
-    # Create the connection secret for the fulfillment gRPC server.
-    DB_URL="postgres://service@postgres:5432/service?sslmode=verify-full"
-    DB_URL+="&sslcert=/etc/fulfillment-grpc-server/db/sslcert"
-    DB_URL+="&sslkey=/etc/fulfillment-grpc-server/db/sslkey"
-    DB_URL+="&sslrootcert=/etc/fulfillment-grpc-server/db/sslrootcert"
-    oc create secret generic fulfillment-db \
-        --from-literal=url="${DB_URL}" \
-        -n "${INSTALLER_NAMESPACE}" \
-        --dry-run=client -o yaml | oc apply -f -
+    # In-cluster PostgreSQL must exist before Helm install (operator-managed per
+    # INSTALL.md). Creates fulfillment-db and postgres-client-cert-service secrets
+    # separately, or enable bundledPostgres in values for secret auto-generation.
+    # CI full-install (bundledPostgres) may deploy the integration-test chart first.
+    maybe_deploy_ci_postgres "${INSTALLER_NAMESPACE}" "${VALUES_FILE}"
+    check_postgres_prerequisites "${INSTALLER_NAMESPACE}" "${VALUES_FILE}"
 
     # Create AAP license secret (required by the bootstrap job).
     # In kustomize mode this is handled by secretGenerator; in Helm mode we

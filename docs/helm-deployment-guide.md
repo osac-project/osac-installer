@@ -15,6 +15,7 @@ using the Helm umbrella chart. Covers VMaaS and CaaS profiles.
   - [1.6 CA Issuer](#16-ca-issuer)
   - [1.7 Keycloak](#17-keycloak)
   - [1.8 AAP Operator](#18-aap-operator)
+  - [1.9 PostgreSQL (Fulfillment Database)](#19-postgresql-fulfillment-database)
 - [Phase 2: Prepare Secrets and Configuration](#phase-2-prepare-secrets-and-configuration)
   - [2.1 CA Trust Bundle](#21-ca-trust-bundle)
   - [2.2 PostgreSQL Database](#22-postgresql-database)
@@ -86,6 +87,7 @@ Install in the order shown — some prerequisites depend on earlier ones
 | CA Issuer | **Yes** | Self-signed CA for internal certificates |
 | Keycloak | **Yes** | Identity provider for OAuth/OIDC |
 | AAP Operator | **Yes** | Ansible Automation Platform for provisioning workflows |
+| PostgreSQL (fulfillment DB) | **Yes** | In-cluster operator-managed database for fulfillment-service |
 | LVMS | Only if no default StorageClass exists | Provides `lvms-vg1` StorageClass |
 | MetalLB | Only if no LoadBalancer service exists | Provides bare-metal load balancing |
 | MCE | Only for CaaS (cluster provisioning) | Multicluster Engine + infrastructure operator |
@@ -296,6 +298,31 @@ oc wait deployment/automation-controller-operator-controller-manager -n ${AAP_NS
   --for=condition=Available --timeout=300s
 ```
 
+### 1.9 PostgreSQL (Fulfillment Database)
+
+The fulfillment-service connects to PostgreSQL via the URL in the
+`fulfillment-db` secret — any hostname routable from the pod network can work.
+This guide documents the **osac-installer supported path**: in-cluster
+PostgreSQL deployed via an operator (CloudNativePG, Crunchy PGO, or Zalando).
+`setup.sh` validates that the hostname in `fulfillment-db` resolves to a
+Kubernetes Service with ready endpoints; off-cluster databases (RDS, external
+hosts) are not validated by the installer prerequisite check.
+
+Deploy PostgreSQL **before Phase 2** using one of the operator paths documented
+in [`base/osac-fulfillment-service/docs/INSTALL.md`](../base/osac-fulfillment-service/docs/INSTALL.md).
+The operator creates Kubernetes Services (typically in a `postgres` namespace)
+with cluster DNS hostnames such as `osac-rw.postgres.svc.cluster.local`.
+
+Verify the database Service has ready endpoints before continuing:
+
+```bash
+# Example for CNPG — adjust service/namespace for your operator
+oc get endpoints osac-rw -n postgres
+```
+
+Phase 2 covers creating the `fulfillment-db` and `postgres-client-cert-service`
+secrets that point fulfillment-service at this database.
+
 ---
 
 ## Phase 2: Prepare Secrets and Configuration
@@ -348,48 +375,52 @@ oc get configmap ca-bundle -n ${NAMESPACE}
 
 ### 2.2 PostgreSQL Database
 
-The fulfillment-service requires a PostgreSQL database. The connection details
-are provided via a `fulfillment-db` secret.
+For **osac-installer** deployments, use an in-cluster operator-managed
+PostgreSQL cluster (see Phase 1.9). Connection details are provided via a
+`fulfillment-db` secret and a `postgres-client-cert-service` secret for mutual
+TLS client authentication.
 
 > **Shortcut:** If `bundledPostgres.enabled: true` is set in your values file,
 > the chart auto-creates the `fulfillment-db` secret and
-> `postgres-client-cert-service` Certificate. You only need to deploy the
-> postgres chart itself — skip the manual `oc create secret` and
-> `oc apply -f Certificate` steps below.
+> `postgres-client-cert-service` Certificate. You must still deploy an in-cluster
+> PostgreSQL Service named `postgres` on port 5432 in the install namespace
+> before Helm install — see [Phase 1.9](#19-postgresql-fulfillment-database).
 
-**Option A: Deploy the bundled dev postgres chart** (single-replica, non-HA,
-suitable for dev/test):
+**Deploy PostgreSQL via an in-cluster operator** (installer-supported path):
+
+1. Follow [`base/osac-fulfillment-service/docs/INSTALL.md`](../base/osac-fulfillment-service/docs/INSTALL.md)
+   to install CloudNativePG, Crunchy PGO, or Zalando and create a PostgreSQL
+   cluster. The operator exposes a Kubernetes Service (e.g.
+   `osac-rw.postgres.svc.cluster.local` for CNPG).
+2. Create the `fulfillment-db` connection secret using the operator's hostname
+   and credentials. Example for CNPG (set variables from your operator cluster;
+   see INSTALL.md § "Create the service secrets"):
 
 ```bash
-# Deploy PostgreSQL with TLS and a 'service' database
-helm install fulfillment-db base/osac-fulfillment-service/it/charts/postgres/ \
-  -n ${NAMESPACE} \
-  --set certs.issuerRef.name=default-ca \
-  --set certs.caBundle.configMap=ca-bundle \
-  --set 'databases[0].name=service' \
-  --set 'databases[0].user=service'
+POSTGRES_USER=service
+POSTGRES_HOST=<operator-service-host>   # e.g. osac-rw.postgres.svc.cluster.local
+POSTGRES_PORT=5432
+POSTGRES_DB=service
 
-# Create the connection secret.
-# The postgres chart enforces mutual TLS (pg_hba.conf uses "hostssl ... cert"),
-# so the URL must use sslmode=verify-full with paths to the client certificate
-# files. These paths correspond to where the fulfillment-service chart mounts
-# the projected database volume.
 oc create secret generic fulfillment-db \
-  --from-literal=url='postgres://service@postgres:5432/service?sslmode=verify-full&sslrootcert=/etc/fulfillment-grpc-server/db/sslrootcert&sslcert=/etc/fulfillment-grpc-server/db/sslcert&sslkey=/etc/fulfillment-grpc-server/db/sslkey' \
+  --from-literal=url="postgres://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=verify-full&sslrootcert=/etc/fulfillment-grpc-server/db/sslrootcert&sslcert=/etc/fulfillment-grpc-server/db/sslcert&sslkey=/etc/fulfillment-grpc-server/db/sslkey" \
   -n ${NAMESPACE}
 ```
 
-The postgres chart only creates a **server** certificate — client certificates
-must be created separately. Create a cert-manager Certificate for the
-`service` database user:
+> **Note:** Replace `<operator-service-host>` with your operator's cluster DNS
+> name — see INSTALL.md for PGO (`osac-primary.postgres.svc.cluster.local`) and
+> Zalando (`osac.postgres.svc.cluster.local`) examples.
+
+1. Create a cert-manager Certificate for the database user's client certificate
+   (required for mutual TLS):
 
 ```bash
-cat <<'EOF' | oc apply -f -
+cat <<EOF | oc apply -f -
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: postgres-client-service
-  namespace: osac
+  namespace: ${NAMESPACE}
 spec:
   issuerRef:
     kind: ClusterIssuer
@@ -402,24 +433,18 @@ spec:
     rotationPolicy: Always
 EOF
 
-# Wait for the certificate to be issued
 oc wait certificate/postgres-client-service -n ${NAMESPACE} \
   --for=condition=Ready --timeout=60s
 ```
 
-> **Note:** The values files already include a `database.connection` entry
-> that mounts the `postgres-client-cert-service` secret into the projected
-> volume at `/etc/fulfillment-grpc-server/db/`. This provides the `sslcert`,
-> `sslkey`, and `sslrootcert` files referenced in the connection URL above.
-
-**Option B: Use an existing database** — create the secret manually with
-your connection details:
-
-```bash
-oc create secret generic fulfillment-db \
-  --from-literal=url='postgres://user:password@host:5432/dbname?sslmode=require' \
-  -n ${NAMESPACE}
-```
+> **Note:** The values files include a `database.connection` entry that mounts
+> the `postgres-client-cert-service` secret into the projected volume at
+> `/etc/fulfillment-grpc-server/db/`. This provides the `sslcert`, `sslkey`,
+> and `sslrootcert` files referenced in the connection URL above.
+> **Supported deployments:** The installer-supported production path is
+> in-cluster operator-managed PostgreSQL per INSTALL.md. `setup.sh` validates
+> that the resolved Kubernetes Service has ready endpoints; unrecognized or
+> off-cluster hostnames fail with a pointer to INSTALL.md.
 
 ### 2.3 Fulfillment Controller Credentials
 
@@ -893,6 +918,11 @@ VALUES_FILE=values/caas-ci/values.yaml \
 The script handles prerequisite installation, secret creation, Helm deploy,
 and all post-install steps. Set `DEPLOY_MODE=helm` (default) to use Helm.
 
+For **osac-installer**, deploy in-cluster PostgreSQL via an operator **before**
+running `setup.sh` (see [Phase 1.9](#19-postgresql-fulfillment-database)). The
+script validates that the database Service has ready endpoints; it does not
+deploy PostgreSQL.
+
 **Shared cluster deployments:** If multiple developers share the same cluster
 and you need to impersonate a different user, set `OC_IMPERSONATE`:
 
@@ -1028,13 +1058,16 @@ oc logs -f job/osac-aap-bootstrap -n ${NAMESPACE}
 # Uninstall OSAC
 helm uninstall osac -n ${NAMESPACE}
 
-# Uninstall the fulfillment-db postgres (separate Helm release)
-helm uninstall fulfillment-db -n ${NAMESPACE} 2>/dev/null || true
-
 # Delete the namespace (waits for all resources to terminate).
 # This also removes AAP operator-managed resources (postgres StatefulSet,
 # PVCs) that are not part of any Helm release.
 oc delete namespace ${NAMESPACE} --wait
+
+# Operator-managed PostgreSQL (e.g. CNPG Cluster in the postgres namespace)
+# is not removed by helm uninstall. Delete it separately if needed:
+#   oc delete cluster -n postgres osac
+# or delete the entire postgres namespace:
+#   oc delete namespace postgres --wait
 
 # CRDs are preserved. To remove them:
 oc delete crd -l app.kubernetes.io/part-of=osac

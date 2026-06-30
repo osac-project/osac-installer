@@ -113,3 +113,11 @@ bmf:
 dbMigrate:
   enabled: false
   image: ghcr.io/osac-project/fulfillment-service:sha-075185e
+
+# CI full-install: chart-managed DB secrets; setup.sh deploys the integration-test
+# postgres chart when the postgres Service has no ready endpoints (see lib.sh).
+bundledPostgres:
+  enabled: true
+  database:
+    name: service
+    user: service

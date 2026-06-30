@@ -34,6 +34,8 @@ jobs:
       # Clone the installer from the PR's fork/branch so we test the actual PR content
       installer-repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       installer-ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      # Pass author_association for fork PR authorization (empty for non-fork PRs)
+      fork-pr-author-association: ${{ github.event.pull_request.head.repo.fork && github.event.pull_request.author_association || '' }}
       # Checkout osac-test-infra for tests/Containerfile (not the caller repo)
       test-infra-repository: osac-project/osac-test-infra
       test-infra-ref: ${{ inputs.test-infra-ref || 'main' }}

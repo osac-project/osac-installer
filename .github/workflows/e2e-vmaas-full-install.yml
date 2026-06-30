@@ -4,6 +4,8 @@ name: E2E VMaaS Full Install
 on:
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 */3 * * *"
   workflow_dispatch:
     inputs:
       test-suite:

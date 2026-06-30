@@ -127,5 +127,162 @@ http_json() {
     return 1
 }
 
+readonly POSTGRES_INSTALL_DOC="base/osac-fulfillment-service/docs/INSTALL.md"
+
+# PostgreSQL prerequisite helpers (production install via setup.sh).
+# Snapshot CI refresh mirrors host/endpoint resolution in
+# scripts/refresh-after-snapshot.py (_postgres_target and related helpers).
+# Keep both in sync when changing URL parsing or endpoint checks.
+
+_postgres_prereq_error() {
+    echo "ERROR: $1" >&2
+    echo "Deploy in-cluster PostgreSQL via an operator per ${POSTGRES_INSTALL_DOC}" >&2
+    exit 1
+}
+
+_bundled_postgres_enabled() {
+    local values_file="$1"
+    [[ -r "${values_file}" ]] || return 2
+    awk '
+        /^bundledPostgres:/ { bp=1; next }
+        bp && /^[^[:space:]#]/ { bp=0 }
+        bp && /^[[:space:]]+enabled:[[:space:]]*true([[:space:]]*#.*)?$/ { found=1 }
+        END { exit !found }
+    ' "$values_file"
+}
+
+_parse_db_host_from_url() {
+    local url="$1"
+    case "${url}" in
+        postgres://*) ;;
+        postgresql://*) url="postgres://${url#postgresql://}" ;;
+        *) return 1 ;;
+    esac
+    local hostport="${url#postgres://}"
+    hostport="${hostport#*@}"
+    hostport="${hostport%%/*}"
+    hostport="${hostport%%\?*}"
+    echo "${hostport%%:*}"
+}
+
+# Resolve a PostgreSQL host from fulfillment-db URL to service and namespace.
+# Prints "service target_namespace" on stdout; returns 1 if unrecognized.
+_resolve_postgres_service() {
+    local host="$1"
+    local install_namespace="$2"
+    local -a parts
+    local i
+
+    if [[ -z "${host}" ]]; then
+        return 1
+    fi
+
+    if [[ "${host}" != *.* ]]; then
+        printf '%s %s\n' "${host}" "${install_namespace}"
+        return 0
+    fi
+
+    IFS='.' read -ra parts <<< "${host}"
+    for i in "${!parts[@]}"; do
+        if [[ "${parts[$i]}" == "svc" ]] && (( i >= 2 )); then
+            printf '%s %s\n' "${parts[0]}" "${parts[1]}"
+            return 0
+        fi
+    done
+
+    if ((${#parts[@]} == 2)); then
+        printf '%s %s\n' "${parts[0]}" "${parts[1]}"
+        return 0
+    fi
+
+    return 1
+}
+
+_verify_postgres_endpoints() {
+    local service="$1"
+    local target_namespace="$2"
+
+    oc get endpoints "${service}" -n "${target_namespace}" \
+        -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .
+}
+
+readonly POSTGRES_IT_CHART="base/osac-fulfillment-service/it/charts/postgres/"
+
+# CI-only: deploy the integration-test postgres chart when bundledPostgres is enabled
+# but the postgres Service has no ready endpoints (e.g. e2e-full-install from a bare
+# OpenShift flavor). Mirrors maybe_upgrade_fulfillment_db() in refresh-after-snapshot.py.
+# Production installs with bundledPostgres disabled use operator-managed Postgres per
+# INSTALL.md; snapshot refresh uses the Python helper instead of this function.
+maybe_deploy_ci_postgres() {
+    local namespace="$1"
+    local values_file="$2"
+    local repo_root bundled_status
+
+    repo_root="$(cd "${_LIB_DIR}/.." && pwd)"
+    _bundled_postgres_enabled "${values_file}"
+    bundled_status=$?
+    if [[ ${bundled_status} -eq 2 ]]; then
+        _postgres_prereq_error "Values file ${values_file} not found or unreadable."
+    elif [[ ${bundled_status} -ne 0 ]]; then
+        return 0
+    fi
+
+    if _verify_postgres_endpoints "postgres" "${namespace}"; then
+        echo "PostgreSQL already available, skipping CI postgres deploy"
+        return 0
+    fi
+
+    echo "Deploying CI PostgreSQL (${POSTGRES_IT_CHART}) for bundledPostgres..."
+    helm upgrade --install fulfillment-db "${repo_root}/${POSTGRES_IT_CHART}" \
+        --namespace "${namespace}" \
+        --set certs.issuerRef.name=default-ca \
+        --set certs.caBundle.configMap=ca-bundle \
+        --set "databases[0].name=service" \
+        --set "databases[0].user=service" \
+        --timeout 5m \
+        --wait
+}
+
+# Verify in-cluster PostgreSQL is deployed before Helm install.
+# Usage: check_postgres_prerequisites <namespace> <values_file>
+check_postgres_prerequisites() {
+    local namespace="$1"
+    local values_file="$2"
+    local service target_namespace db_url db_host resolved bundled_status
+
+    _bundled_postgres_enabled "${values_file}"
+    bundled_status=$?
+    if [[ ${bundled_status} -eq 2 ]]; then
+        _postgres_prereq_error "Values file ${values_file} not found or unreadable."
+    elif [[ ${bundled_status} -eq 0 ]]; then
+        echo "Checking in-cluster PostgreSQL prerequisites (bundledPostgres)..."
+        service="postgres"
+        target_namespace="${namespace}"
+    else
+        echo "Checking in-cluster PostgreSQL prerequisites..."
+        oc get secret fulfillment-db -n "${namespace}" &>/dev/null || \
+            _postgres_prereq_error "Secret fulfillment-db not found in namespace ${namespace}."
+        oc get secret postgres-client-cert-service -n "${namespace}" &>/dev/null || \
+            _postgres_prereq_error "Secret postgres-client-cert-service not found in namespace ${namespace}."
+
+        db_url=$(oc get secret fulfillment-db -n "${namespace}" \
+            -o jsonpath='{.data.url}' | base64 -d 2>/dev/null || true)
+        [[ -n "${db_url}" ]] || \
+            _postgres_prereq_error "Secret fulfillment-db in ${namespace} has an empty url key."
+
+        db_host=$(_parse_db_host_from_url "${db_url}") || \
+            _postgres_prereq_error "Secret fulfillment-db in ${namespace} has an invalid PostgreSQL url."
+        resolved=$(_resolve_postgres_service "${db_host}" "${namespace}") || \
+            _postgres_prereq_error "Unrecognized database hostname in fulfillment-db url."
+        read -r service target_namespace <<< "${resolved}"
+    fi
+
+    if ! _verify_postgres_endpoints "${service}" "${target_namespace}"; then
+        _postgres_prereq_error "PostgreSQL Service referenced by fulfillment-db has no ready endpoints."
+    fi
+
+    echo "PostgreSQL prerequisites satisfied."
+}
+
 _LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_LIB_DIR}/oc.sh"

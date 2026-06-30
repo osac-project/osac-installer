@@ -73,8 +73,9 @@ operator:
   # Fulfillment service gRPC connection. The operator reports resource state
   # back to the fulfillment service for multi-cluster coordination.
   fulfillment:
-    # In-cluster gRPC address. Change only if the service name differs.
-    serverAddress: "fulfillment-api:8000"
+    # Internal gRPC address — must use the internal Envoy listener that
+    # routes both public and private API methods.
+    serverAddress: "fulfillment-internal-api:8001"
     # Path to the ServiceAccount token file used for authentication.
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
 

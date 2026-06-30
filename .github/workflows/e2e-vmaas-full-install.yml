@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  e2e-full-install:
+  e2e-vmaas-full-install:
     uses: osac-project/osac-test-infra/.github/workflows/e2e-vmaas-full-install.yml@main
     with:
       test-suite: ${{ inputs.test-suite || 'vmaas' }}

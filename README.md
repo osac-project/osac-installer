@@ -262,19 +262,26 @@ To test a specific revision of a component, you need to:
        newTag: <your-tag>
    ```
 
-   The component image names used in the base are:
+   Overlays include `../../base`, which already applies image transforms. Use the
+   **resolved** image name from base in overlay `images:` entries (not the
+   placeholder in component manifests), or the override is ignored:
 
-   | Component | Image name |
-   |-----------|-----------|
-   | Fulfillment Service | `fulfillment-service` |
-   | OSAC Operator | `osac-operator` |
-   | OSAC AAP | `osac-aap` |
-   | Bare Metal Fulfillment Operator | `bare-metal-fulfillment-operator` |
+   | Component | Overlay `images.name` |
+   |-----------|----------------------|
+   | Fulfillment Service | `ghcr.io/osac-project/fulfillment-service` |
+   | OSAC Operator | `ghcr.io/osac-project/osac-operator` |
+   | OSAC AAP | `ghcr.io/osac-project/osac-aap` |
+   | Bare Metal Fulfillment Operator | `ghcr.io/osac-project/bare-metal-fulfillment-operator` |
 
 #### OSAC AAP Customization
 
-For osac-aap, in addition to the image override, you must also update the AAP
-configuration secrets in your overlay's `kustomization.yaml`:
+The `aap-bootstrap` Job pulls its container image from overlay `images:` while
+`AAP_EE_IMAGE` registers the EE inside AAP — both must stay aligned. See
+[AAP Configuration](docs/aap-configuration.md#bootstrap-job-image-vs-aap_ee_image)
+for details.
+
+In addition to the image override, update the AAP configuration secrets in your
+overlay's `kustomization.yaml`:
 
 ```yaml
 secretGenerator:

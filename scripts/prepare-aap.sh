@@ -15,6 +15,10 @@ fi
 
 echo "Creating AAP API token for OSAC operator (namespace: ${INSTALLER_NAMESPACE})..."
 
+AAP_ROUTE_HOST=$(get_route_host "${INSTALLER_NAMESPACE}" osac-aap)
+require_host_resolvable "${AAP_ROUTE_HOST}"
+AAP_URL="https://${AAP_ROUTE_HOST}"
+
 SECRET_B64=""
 rc=0
 SECRET_B64=$(oc get secret osac-aap-admin-password -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.data.password}' 2>&1) || rc=$?

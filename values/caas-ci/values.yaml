@@ -89,6 +89,14 @@ aap:
     instance:
       enabled: true
       name: "osac-aap"
+      controller:
+        disabled: false
+      eda:
+        disabled: true
+      hub:
+        disabled: true
+      lightspeed:
+        disabled: true
   bootstrap:
     enabled: true
     image: ghcr.io/osac-project/osac-aap:sha-140bdb4

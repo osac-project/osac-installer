@@ -14,16 +14,19 @@ declare -A IMAGE_NAME=(
   [osac-fulfillment-service]="ghcr.io/osac-project/fulfillment-service"
   [osac-aap]="osac-aap"
   [bare-metal-fulfillment-operator]="ghcr.io/osac-project/bare-metal-fulfillment-operator"
+  [osac-ui]="osac-ui"
 )
 
 errors=0
 
-for submodule in osac-operator osac-fulfillment-service osac-aap bare-metal-fulfillment-operator; do
+for submodule in osac-operator osac-fulfillment-service osac-aap bare-metal-fulfillment-operator osac-ui; do
   commit=$(git -C "${REPO_ROOT}" submodule status "base/${submodule}" | awk '{print $1}' | tr -d ' +-')
   short="${commit:0:7}"
   tag="sha-${short}"
   image="${IMAGE_NAME[$submodule]}"
 
+  # Skip components not referenced in kustomization.yaml (e.g. osac-ui is Helm-only).
+  grep -q "name: ${image}$" "${KUSTOMIZATION}" || continue
   current_tag=$(grep -A2 "name: ${image}$" "${KUSTOMIZATION}" | grep "newTag:" | awk '{print $2}')
 
   if [[ "${current_tag}" == "${tag}" ]]; then
@@ -76,6 +79,7 @@ operator_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-operator | 
 fulfillment_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-fulfillment-service | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 aap_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-aap | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 bmf_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/bare-metal-fulfillment-operator | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
+ui_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-ui | awk '{print $1}' | tr -d ' +-' | cut -c1-7)"
 
 for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
   [[ ! -f "${values_file}" ]] && continue
@@ -86,7 +90,8 @@ for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
     "osac-operator:tag ${operator_tag}" \
     "fulfillment-service:inline ${fulfillment_tag}" \
     "osac-aap:inline ${aap_tag}" \
-    "bare-metal-fulfillment-operator:tag ${bmf_tag}"; do
+    "bare-metal-fulfillment-operator:tag ${bmf_tag}" \
+    "osac-ui:inline ${ui_tag}"; do
     component="${pair%%:*}"
     rest="${pair#*:}"
     mode="${rest%% *}"
@@ -108,7 +113,7 @@ for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
         errors=$((errors + 1))
       fi
     else
-      current=$(grep -o "${component}:sha-[a-f0-9]\{7\}" "${values_file}" | head -1 | sed "s/${component}://")
+      current=$(grep -o "${component}:sha-[a-f0-9]\{7\}" "${values_file}" | head -1 | sed "s/${component}://" || true)
       [[ -z "${current}" ]] && continue
       if [[ "${current}" == "${expected}" ]]; then
         echo "${name} ${component}: OK (${expected})"

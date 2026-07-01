@@ -83,6 +83,21 @@ service:
   log:
     level: debug
 
+# --- UI ---
+ui:
+  enabled: true
+  images:
+    ui: ghcr.io/osac-project/osac-ui:sha-8314b32
+  api:
+    fulfillment:
+      certs:
+        caBundle:
+          configMap: ca-bundle
+  auth:
+    certs:
+      caBundle:
+        configMap: ca-bundle
+
 # --- AAP ---
 aap:
   aap:

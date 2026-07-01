@@ -1,5 +1,22 @@
 # Full scenario: everything enabled, exercises all template branches.
 
+ui:
+  enabled: true
+  externalHostname: osac-ui.example.com
+  api:
+    fulfillment:
+      url: https://fulfillment-api:8000
+      certs:
+        caBundle:
+          configMap: ca-bundle
+  auth:
+    oidcClientId: osac-ui
+    certs:
+      caBundle:
+        configMap: ca-bundle
+  images:
+    ui: ghcr.io/osac-project/osac-ui:latest
+
 operator:
   aap:
     url: "https://aap.example.com/api/controller"

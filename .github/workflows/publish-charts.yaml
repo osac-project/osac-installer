@@ -27,6 +27,9 @@ on:
       bmf_version:
         description: 'bare-metal-fulfillment-operator chart version (e.g. 0.0.1)'
         required: true
+      ui_version:
+        description: 'osac-ui chart version (e.g. 0.0.1)'
+        required: true
 
 concurrency:
   group: publish-charts-${{ github.ref }}
@@ -67,6 +70,7 @@ jobs:
         INPUT_AAP_VERSION: ${{ inputs.aap_version }}
         INPUT_BMF_CRDS_VERSION: ${{ inputs.bmf_crds_version }}
         INPUT_BMF_VERSION: ${{ inputs.bmf_version }}
+        INPUT_UI_VERSION: ${{ inputs.ui_version }}
       run: |
         SEMVER_RE='^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$'
 
@@ -89,6 +93,7 @@ jobs:
         aap_ver="${INPUT_AAP_VERSION}"
         bmf_crds_ver="${INPUT_BMF_CRDS_VERSION}"
         bmf_ver="${INPUT_BMF_VERSION}"
+        ui_ver="${INPUT_UI_VERSION}"
 
         # When triggered by tag push (no inputs), use the umbrella version for all components
         : "${crds_ver:=${version}}"
@@ -97,9 +102,10 @@ jobs:
         : "${aap_ver:=${version}}"
         : "${bmf_crds_ver:=${version}}"
         : "${bmf_ver:=${version}}"
+        : "${ui_ver:=${version}}"
 
         # Validate all component versions
-        for pair in "osac-operator-crds:${crds_ver}" "osac-operator:${operator_ver}" "fulfillment-service:${service_ver}" "osac-aap:${aap_ver}" "bare-metal-fulfillment-operator-crds:${bmf_crds_ver}" "bare-metal-fulfillment-operator:${bmf_ver}"; do
+        for pair in "osac-operator-crds:${crds_ver}" "osac-operator:${operator_ver}" "fulfillment-service:${service_ver}" "osac-aap:${aap_ver}" "bare-metal-fulfillment-operator-crds:${bmf_crds_ver}" "bare-metal-fulfillment-operator:${bmf_ver}" "osac-ui:${ui_ver}"; do
           name="${pair%%:*}"
           ver="${pair#*:}"
           if ! [[ "${ver}" =~ ${SEMVER_RE} ]]; then
@@ -115,6 +121,7 @@ jobs:
         echo "aap_ver=${aap_ver}" >> "$GITHUB_OUTPUT"
         echo "bmf_crds_ver=${bmf_crds_ver}" >> "$GITHUB_OUTPUT"
         echo "bmf_ver=${bmf_ver}" >> "$GITHUB_OUTPUT"
+        echo "ui_ver=${ui_ver}" >> "$GITHUB_OUTPUT"
 
         echo "--- Resolved versions ---"
         echo "Umbrella:           ${version}"
@@ -124,6 +131,7 @@ jobs:
         echo "osac-aap:           ${aap_ver}"
         echo "bmf-operator-crds:  ${bmf_crds_ver}"
         echo "bmf-operator:       ${bmf_ver}"
+        echo "osac-ui:            ${ui_ver}"
 
     - name: Rewrite dependencies to OCI references
       env:
@@ -133,6 +141,7 @@ jobs:
         AAP_VER: ${{ steps.versions.outputs.aap_ver }}
         BMF_CRDS_VER: ${{ steps.versions.outputs.bmf_crds_ver }}
         BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
+        UI_VER: ${{ steps.versions.outputs.ui_ver }}
       run: |
         cd charts/osac
         OCI_REPO="oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}"
@@ -149,7 +158,9 @@ jobs:
           (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator-crds\")) .repository = \"${OCI_REPO}\" |
           (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator-crds\")) .version = \"${BMF_CRDS_VER}\" |
           (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator\")) .repository = \"${OCI_REPO}\" |
-          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator\")) .version = \"${BMF_VER}\"
+          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator\")) .version = \"${BMF_VER}\" |
+          (.dependencies[] | select(.name == \"osac-ui\")) .repository = \"${OCI_REPO}\" |
+          (.dependencies[] | select(.name == \"osac-ui\")) .version = \"${UI_VER}\"
         " Chart.yaml
 
         # Remove stale Chart.lock so helm pulls fresh from OCI

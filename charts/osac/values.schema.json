@@ -577,6 +577,97 @@
         }
       }
     },
+    "ui": {
+      "type": "object",
+      "description": "OSAC UI web console configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy the OSAC UI web console",
+          "default": true
+        },
+        "externalHostname": {
+          "type": "string",
+          "description": "Hostname for the OpenShift Route (auto-assigned if empty)"
+        },
+        "api": {
+          "type": "object",
+          "description": "Backend API connection settings",
+          "properties": {
+            "fulfillment": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "description": "Fulfillment API URL",
+                  "default": "https://fulfillment-api:8000"
+                },
+                "certs": {
+                  "type": "object",
+                  "properties": {
+                    "caBundle": {
+                      "type": "object",
+                      "properties": {
+                        "configMap": {
+                          "type": "string",
+                          "description": "ConfigMap name containing the CA bundle for the fulfillment API"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "auth": {
+          "type": "object",
+          "description": "Authentication configuration",
+          "properties": {
+            "oidcClientId": {
+              "type": "string",
+              "description": "OIDC client ID for the UI",
+              "default": "osac-ui"
+            },
+            "certs": {
+              "type": "object",
+              "properties": {
+                "caBundle": {
+                  "type": "object",
+                  "properties": {
+                    "configMap": {
+                      "type": "string",
+                      "description": "ConfigMap name containing the CA bundle for auth"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "log": {
+          "type": "object",
+          "description": "Logging configuration",
+          "properties": {
+            "level": {
+              "type": "string",
+              "description": "Log level (debug, info, warn, error)",
+              "default": "info"
+            }
+          }
+        },
+        "images": {
+          "type": "object",
+          "properties": {
+            "ui": {
+              "type": "string",
+              "description": "UI container image",
+              "default": "ghcr.io/osac-project/osac-ui:latest"
+            }
+          }
+        }
+      }
+    },
     "bundledPostgres": {
       "type": "object",
       "description": "Auto-generate secrets for bundled PostgreSQL (dev/test only)",

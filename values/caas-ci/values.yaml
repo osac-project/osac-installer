@@ -5,7 +5,7 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-a719c6f
+    tag: sha-065c4fd
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -30,7 +30,7 @@ service:
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-af02ff8
+    service: ghcr.io/osac-project/fulfillment-service:sha-221fdf8
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -91,15 +91,15 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-af03fc4
+    image: ghcr.io/osac-project/osac-aap:sha-8f8157e
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-af03fc4"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-8f8157e"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "af03fc45f1324a99fe892f4000464898a95e103a"
+    projectGitBranch: "8f8157e89c8291fd59a11265f9339f96d2e9f64c"
 
 # --- Validation ---
 validation:
@@ -108,7 +108,7 @@ validation:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-af02ff8
+  image: ghcr.io/osac-project/fulfillment-service:sha-221fdf8
 
 clusterFulfillment:
   enabled: true

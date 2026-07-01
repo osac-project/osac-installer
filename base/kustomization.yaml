@@ -31,7 +31,7 @@ images:
   newTag: sha-075185e
 - name: osac-aap
   newName: ghcr.io/osac-project/osac-aap
-  newTag: sha-140bdb4
+  newTag: sha-8781497
 - name: ghcr.io/osac-project/osac-operator
   newTag: sha-773d078
 - name: ghcr.io/osac-project/bare-metal-fulfillment-operator

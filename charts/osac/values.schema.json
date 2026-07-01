@@ -148,6 +148,16 @@
               "type": "boolean",
               "description": "Enable networking controllers",
               "default": true
+            },
+            "bareMetalInstance": {
+              "type": "boolean",
+              "description": "Enable BareMetalInstance controller",
+              "default": true
+            },
+            "storage": {
+              "type": "boolean",
+              "description": "Enable Storage controller",
+              "default": true
             }
           }
         },

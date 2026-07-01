@@ -217,7 +217,7 @@ aap:
       enabled: true
       # Name of the AAP instance CR. Used to derive route/service names.
       name: "osac-aap"
-      # AAP components to enable. Only controller and EDA are needed for OSAC.
+      # AAP components to enable. Only controller is needed for OSAC.
       controller:
         disabled: false
       eda:
@@ -248,8 +248,6 @@ aap:
     # Hostnames for AAP component routes. Leave empty to auto-detect
     # from the AAP instance CR status.
     gateway:
-      hostname: ""
-    eda:
       hostname: ""
     controller:
       hostname: ""

@@ -263,7 +263,7 @@ oc wait deployment/keycloak-service -n keycloak --for=condition=Available --time
 
 ### 1.8 AAP Operator
 
-This installs the AAP operator only. The AAP instance itself (controller, EDA,
+This installs the AAP operator only. The AAP instance itself (controller,
 gateway) is created by the Helm chart.
 
 > **Note:** Depending on the AAP version, the operator may install into the

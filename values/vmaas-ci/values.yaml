@@ -5,7 +5,7 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-c4ee968
+    tag: sha-75f48c7
     pullPolicy: Always
   provisioning:
     provider: "aap"

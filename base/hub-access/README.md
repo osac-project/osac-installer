@@ -3,6 +3,7 @@ The fulfillment service interacts with the target hub using the credentials you 
 This directory creates a `hub-access` service account with permissions to manage OSAC resources in the target namespace:
 
 - ClusterOrders, ComputeInstances, Tenants, VirtualNetworks, Subnets, SecurityGroups (full CRUD + status read)
+- Namespaces (full CRUD, cluster-scoped)
 - Console access (`console.osac.openshift.io/computeinstances/console`)
 - Secrets (create only, for cloud-init user-data)
 

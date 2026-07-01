@@ -28,7 +28,6 @@ prerequisites/
 │   └── overlays/lab/
 ├── ca-issuer.yaml
 ├── trust-manager.yaml
-├── authorino-operator.yaml
 ├── aap-installation.yaml
 └── vmaas-components.yaml           # Not included in unified deployment
 ```
@@ -40,7 +39,6 @@ prerequisites/
 | Cert Manager | TLS certificate management | `cert-manager/` |
 | Trust Manager | CA certificate distribution | `trust-manager.yaml` |
 | CA Issuer | ClusterIssuer for signing certificates | `ca-issuer.yaml` |
-| Authorino Operator | API authorization | `authorino-operator.yaml` |
 | Keycloak | Identity provider (OIDC) | `keycloak/` |
 | Red Hat AAP Operator | Ansible Automation Platform | `aap-installation.yaml` |
 | OpenShift Virtualization | VM as a Service support | `vmaas-components.yaml` |
@@ -90,7 +88,6 @@ The unified deployment includes:
 - Cert Manager
 - Trust Manager
 - CA Issuer
-- Authorino Operator
 - Keycloak
 - NFS Subdir Provisioner (lab overlay)
 - Red Hat AAP Operator
@@ -134,18 +131,7 @@ oc apply -f prerequisites/ca-issuer.yaml
 oc get clusterissuer default-ca
 ```
 
-#### Step 4: Authorino Operator
-
-Provides API authorization capabilities.
-
-```bash
-oc apply -f prerequisites/authorino-operator.yaml
-
-# Wait for the operator to be installed
-oc get csv -n openshift-operators | grep authorino
-```
-
-#### Step 5: Keycloak (Optional)
+#### Step 4: Keycloak (Optional)
 
 Identity provider for OIDC authentication. Skip if using an external identity provider.
 
@@ -156,7 +142,7 @@ oc apply -k prerequisites/keycloak/
 oc get pods -n keycloak
 ```
 
-#### Step 6: Red Hat AAP Operator
+#### Step 5: Red Hat AAP Operator
 
 Ansible Automation Platform for cluster provisioning workflows.
 
@@ -167,7 +153,7 @@ oc apply -f prerequisites/aap-installation.yaml
 oc get csv -n ansible-aap | grep ansible-automation-platform
 ```
 
-#### Step 7: OpenShift Virtualization (Optional)
+#### Step 6: OpenShift Virtualization (Optional)
 
 Required for VM as a Service (VMaaS) functionality.
 
@@ -188,7 +174,7 @@ oc apply -f prerequisites/vmaas-components.yaml
 oc wait --for=condition=Available hco kubevirt-hyperconverged -n openshift-cnv --timeout=600s
 ```
 
-#### Step 8: NFS Subdir Provisioner (Optional)
+#### Step 7: NFS Subdir Provisioner (Optional)
 
 Required for VM live migration with shared storage.
 
@@ -224,9 +210,6 @@ After installing all prerequisites, verify the components are running:
 ```bash
 # Cert Manager
 oc get pods -n cert-manager
-
-# Authorino
-oc get pods -n openshift-operators -l app=authorino-operator
 
 # AAP
 oc get pods -n ansible-aap

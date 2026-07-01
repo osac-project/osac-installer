@@ -111,11 +111,11 @@ uninstall_operator() {
 # all subsequent oc commands are safe.
 echo "Removing webhooks..."
 for wh in $(timeout 10 oc get validatingwebhookconfiguration --no-headers 2>/dev/null \
-    | awk '/virt|hco|trust-manager|authorino|cert-manager|hostpath|ssp|multicluster|open-cluster-management|managedcluster/ {print $1}'); do
+    | awk '/virt|hco|trust-manager|cert-manager|hostpath|ssp|multicluster|open-cluster-management|managedcluster/ {print $1}'); do
     timeout 30 oc delete validatingwebhookconfiguration "${wh}" --ignore-not-found
 done
 for wh in $(timeout 10 oc get mutatingwebhookconfiguration --no-headers 2>/dev/null \
-    | awk '/virt|hco|authorino|multicluster|open-cluster-management|managedcluster/ {print $1}'); do
+    | awk '/virt|hco|multicluster|open-cluster-management|managedcluster/ {print $1}'); do
     timeout 30 oc delete mutatingwebhookconfiguration "${wh}" --ignore-not-found
 done
 # Phase 1: Delete OSAC CRs while the operator is still running
@@ -287,7 +287,7 @@ echo "Cleaning up cluster-scoped resources..."
 timeout 30 oc delete sc lvms-vg1 --ignore-not-found
 timeout 30 oc delete csidriver topolvm.io --ignore-not-found
 
-CRD_PATTERN='cert-manager\.io|certmanagers\.operator|authorino|ansible\.com|kubevirt\.io|networkaddonsoperator|hostpathprovisioner|metallb\.io|topolvm\.io|agentserviceconfig|multicluster|open-cluster-management|hive\.openshift|hiveinternal|agent-install|cluster\.x-k8s|hypershift|metal3\.io'
+CRD_PATTERN='cert-manager\.io|certmanagers\.operator|ansible\.com|kubevirt\.io|networkaddonsoperator|hostpathprovisioner|metallb\.io|topolvm\.io|agentserviceconfig|multicluster|open-cluster-management|hive\.openshift|hiveinternal|agent-install|cluster\.x-k8s|hypershift|metal3\.io'
 
 echo "Final CRD cleanup (retries until all gone)..."
 for attempt in 1 2 3 4 5 6 7; do

@@ -5,7 +5,7 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-773d078
+    tag: sha-c4ee968
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -30,7 +30,7 @@ service:
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   variant: openshift
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-075185e
+    service: ghcr.io/osac-project/fulfillment-service:sha-b250664
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -112,4 +112,12 @@ bmf:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-075185e
+  image: ghcr.io/osac-project/fulfillment-service:sha-b250664
+
+# CI full-install: chart-managed DB secrets; setup.sh deploys the integration-test
+# postgres chart when the postgres Service has no ready endpoints (see lib.sh).
+bundledPostgres:
+  enabled: true
+  database:
+    name: service
+    user: service

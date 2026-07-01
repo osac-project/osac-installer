@@ -18,8 +18,6 @@ is structural (YAML lint, kustomize build, sync checks).
      `base/osac-fulfillment-service/`, `base/osac-aap/`).
    - If the fix involves submodule pointer updates, also run
      `bash scripts/sync-image-tags.sh --fix`.
-   - If the fix touches overlay AuthConfig Rego patches, also run
-     `python3 scripts/sync-authconfig-rego.py --fix`.
 
 4. **Validate changes**
    Run all validation commands in sequence. If any fail, revise your
@@ -29,7 +27,6 @@ is structural (YAML lint, kustomize build, sync checks).
    pre-commit run --all-files
    bash scripts/kustomize-build-all.sh
    bash scripts/sync-image-tags.sh
-   python3 scripts/sync-authconfig-rego.py
    ```
    Additionally, diff kustomize build output for affected overlays
    against the baseline to confirm only intended changes appear.

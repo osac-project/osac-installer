@@ -5,7 +5,7 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-773d078
+    tag: sha-c4ee968
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -15,7 +15,7 @@ operator:
       name: osac-aap-api-token
       key: token
   fulfillment:
-    serverAddress: "fulfillment-api:8000"
+    serverAddress: "fulfillment-internal-api:8001"
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
   controllers:
     clusterOrder: true
@@ -30,7 +30,7 @@ service:
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-075185e
+    service: ghcr.io/osac-project/fulfillment-service:sha-b250664
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -108,7 +108,7 @@ validation:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-075185e
+  image: ghcr.io/osac-project/fulfillment-service:sha-b250664
 
 clusterFulfillment:
   enabled: true

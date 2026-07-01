@@ -117,7 +117,7 @@
             "serverAddress": {
               "type": "string",
               "description": "Fulfillment service gRPC address",
-              "default": "fulfillment-api:8000"
+              "default": "fulfillment-internal-api:8001"
             },
             "tokenFile": {
               "type": "string",

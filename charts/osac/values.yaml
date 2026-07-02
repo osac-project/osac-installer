@@ -33,6 +33,8 @@ operator:
     computeInstance: true
     tenant: true
     networking: true
+    bareMetalInstance: true
+    storage: true
   configSecret:
     name: "osac-config"
     optional: true

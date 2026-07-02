@@ -97,47 +97,89 @@ keycloak_sync() {
 
     KC_URL="https://$(oc get route keycloak -n "${KEYCLOAK_NS}" -o jsonpath='{.spec.host}')"
     retry_until 300 5 '[[ "$(curl -sk -o /dev/null -w %{http_code} '"${KC_URL}"'/realms/osac)" == "200" ]]' || {
-        echo "Timed out waiting for Keycloak"
+        echo "ERROR: Timed out waiting for Keycloak realm" >&2
         exit 1
     }
-    KC_ADMIN_TOKEN=$(curl -sk "${KC_URL}/realms/master/protocol/openid-connect/token" \
-        -d "client_id=admin-cli" -d "username=admin" -d "password=admin" -d "grant_type=password" | jq -r '.access_token')
-    [[ -n "${KC_ADMIN_TOKEN}" && "${KC_ADMIN_TOKEN}" != "null" ]] || { echo "ERROR: Could not get Keycloak admin token" >&2; exit 1; }
+
+    KC_ADMIN_TOKEN=$(http_json "Could not get Keycloak admin token" 5 10 '.access_token' \
+        -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+        -d "client_id=admin-cli" -d "username=admin" -d "password=admin" -d "grant_type=password")
+    [[ -n "${KC_ADMIN_TOKEN}" && "${KC_ADMIN_TOKEN}" != "null" ]] || { echo "ERROR: Keycloak admin token is empty" >&2; exit 1; }
 
     echo "  Syncing clients and users via admin API..."
-    jq -c '.clients[] | select(.protocol == "openid-connect" and .publicClient != true and .bearerOnly != true)' "${REALM_JSON}" | while IFS= read -r CLIENT_JSON; do
+
+    # Sync clients. Capture jq output to a variable so errexit catches parse
+    # failures — process substitution in mapfile discards jq's exit status.
+    local client_lines clients
+    client_lines=$(jq -c '.clients[] | select(.protocol == "openid-connect" and .publicClient != true and .bearerOnly != true)' "${REALM_JSON}")
+    if [[ -n "${client_lines}" ]]; then
+        mapfile -t clients <<< "${client_lines}"
+    else
+        clients=()
+    fi
+    for CLIENT_JSON in "${clients[@]}"; do
         CID=$(echo "${CLIENT_JSON}" | jq -r '.clientId')
         CLIENT_UUID=$(echo "${CLIENT_JSON}" | jq -r '.id')
-        HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}")
+        HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}")
         if [[ "${HTTP_CODE}" == "200" ]]; then
-            curl -sk -X PUT -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
+            http_retry "Failed to update client ${CID}" 3 5 \
+                -X PUT -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
                 "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}" -d "${CLIENT_JSON}" >/dev/null
             echo "  Updated client: ${CID}"
-        else
-            curl -sk -X POST -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
+        elif [[ "${HTTP_CODE}" == "404" ]]; then
+            http_retry "Failed to create client ${CID}" 3 5 \
+                -X POST -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
                 "${KC_URL}/admin/realms/osac/clients" -d "${CLIENT_JSON}" >/dev/null
             echo "  Created client: ${CID}"
+        else
+            echo "ERROR: Unexpected HTTP ${HTTP_CODE} checking client ${CID}" >&2
+            exit 1
         fi
     done
 
-    jq -c '.users[]?' "${REALM_JSON}" | while IFS= read -r USER_JSON; do
+    # Sync users.
+    local user_lines users
+    user_lines=$(jq -c '.users[]?' "${REALM_JSON}")
+    if [[ -n "${user_lines}" ]]; then
+        mapfile -t users <<< "${user_lines}"
+    else
+        users=()
+    fi
+    for USER_JSON in "${users[@]}"; do
         USERNAME=$(echo "${USER_JSON}" | jq -r '.username')
         USER_UUID=$(echo "${USER_JSON}" | jq -r '.id')
-        HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" "${KC_URL}/admin/realms/osac/users/${USER_UUID}")
+        HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" "${KC_URL}/admin/realms/osac/users/${USER_UUID}")
         if [[ "${HTTP_CODE}" == "200" ]]; then
-            curl -sk -X PUT -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
+            http_retry "Failed to update user ${USERNAME}" 3 5 \
+                -X PUT -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
                 "${KC_URL}/admin/realms/osac/users/${USER_UUID}" -d "${USER_JSON}" >/dev/null
             echo "  Updated user: ${USERNAME}"
+        elif [[ "${HTTP_CODE}" == "404" ]]; then
+            # HTTP 409 means the user already exists under a different UUID
+            # (e.g. a service account whose real UUID differs from realm.json).
+            local create_code
+            create_code=$(curl -ksS -o /dev/null -w "%{http_code}" \
+                -X POST -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
+                "${KC_URL}/admin/realms/osac/users" -d "${USER_JSON}")
+            if [[ "${create_code}" == "201" ]]; then
+                echo "  Created user: ${USERNAME}"
+            elif [[ "${create_code}" == "409" ]]; then
+                echo "  User already exists: ${USERNAME} (UUID mismatch with realm.json)"
+            else
+                echo "ERROR: Failed to create user ${USERNAME} (HTTP ${create_code})" >&2
+                exit 1
+            fi
         else
-            curl -sk -X POST -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" -H "Content-Type: application/json" \
-                "${KC_URL}/admin/realms/osac/users" -d "${USER_JSON}" >/dev/null
-            echo "  Created user: ${USERNAME}"
+            echo "ERROR: Unexpected HTTP ${HTTP_CODE} checking user ${USERNAME}" >&2
+            exit 1
         fi
     done
 
     if [[ -f prerequisites/keycloak/service/password-setup-job.yaml ]]; then
         oc delete job keycloak-set-passwords -n "${KEYCLOAK_NS}" --ignore-not-found
-        oc apply -f prerequisites/keycloak/service/password-setup-job.yaml -n "${KEYCLOAK_NS}"
+        retry_command 60 10 oc apply -f prerequisites/keycloak/service/password-setup-job.yaml -n "${KEYCLOAK_NS}"
         oc wait --for=condition=Complete job/keycloak-set-passwords -n "${KEYCLOAK_NS}" --timeout=300s
     fi
     echo "[1/9] Keycloak sync complete"

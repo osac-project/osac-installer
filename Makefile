@@ -57,3 +57,6 @@ teardown: ## Teardown OSAC deployment
 helm-validate: helm-lint ## Validate Helm chart (lint + template)
 	helm template osac charts/osac/ --values $(VALUES_FILE) > /dev/null
 	@echo "Validation passed."
+
+make nothing"
+	echo ""

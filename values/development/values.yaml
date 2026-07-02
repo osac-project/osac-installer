@@ -15,7 +15,7 @@ operator:
     statusPollInterval: "30s"
     templatePrefix: "osac"
   fulfillment:
-    serverAddress: "fulfillment-api:8000"
+    serverAddress: "fulfillment-internal-api:8001"
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
   controllers:
     clusterOrder: true
@@ -81,6 +81,21 @@ service:
           param: sslrootcert
   log:
     level: info
+
+# --- UI ---
+ui:
+  enabled: true
+  images:
+    ui: ghcr.io/osac-project/osac-ui:latest
+  api:
+    fulfillment:
+      certs:
+        caBundle:
+          configMap: ca-bundle
+  auth:
+    certs:
+      caBundle:
+        configMap: ca-bundle
 
 # --- AAP ---
 aap:

@@ -10,3 +10,6 @@
 [submodule "base/bare-metal-fulfillment-operator"]
 	path = base/bare-metal-fulfillment-operator
 	url = https://github.com/osac-project/bare-metal-fulfillment-operator.git
+[submodule "base/osac-ui"]
+	path = base/osac-ui
+	url = https://github.com/osac-project/osac-ui.git

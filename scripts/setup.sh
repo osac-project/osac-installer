@@ -309,7 +309,7 @@ if [[ "${DEPLOY_MODE}" == "helm" ]]; then
         oc create secret generic config-as-code-manifest-ig \
             --from-file=license.zip="${AAP_LICENSE_FILE}" \
             -n "${INSTALLER_NAMESPACE}" \
-            --dry-run=client -o yaml | oc apply -f -
+            --dry-run=client -o yaml | oc apply --server-side -f -
         oc label secret config-as-code-manifest-ig \
             osac.openshift.io/project=osac-aap \
             -n "${INSTALLER_NAMESPACE}" --overwrite

@@ -1,11 +1,11 @@
-# OSAC CaaS (Cluster-as-a-Service) CI Environment Values
-# Replaces overlays/caas-ci/kustomization.yaml
+# OSAC BMaaS (Bare-Metal-as-a-Service) CI Environment Values
+# Based on caas-ci values with BMF operator enabled for Metal3 E2E testing.
 
 # --- Operator ---
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-f3a11a7
+    tag: sha-773d078
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -15,7 +15,7 @@ operator:
       name: osac-aap-api-token
       key: token
   fulfillment:
-    serverAddress: "fulfillment-internal-api:8001"
+    serverAddress: "fulfillment-api:8000"
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
   controllers:
     clusterOrder: true
@@ -30,7 +30,7 @@ service:
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-2f71463
+    service: ghcr.io/osac-project/fulfillment-service:sha-075185e
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -91,15 +91,15 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-7776425
+    image: ghcr.io/osac-project/osac-aap:sha-140bdb4
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-7776425"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-140bdb4"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "7776425c00926d453862e11da57ad160c8e9d78d"
+    projectGitBranch: "140bdb4fbfd81dd4000e583e3dfab8ad8b1e412a"
 
 # --- Validation ---
 validation:
@@ -108,7 +108,7 @@ validation:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-2f71463
+  image: ghcr.io/osac-project/fulfillment-service:sha-075185e
 
 clusterFulfillment:
   enabled: true
@@ -122,7 +122,7 @@ networkFulfillment:
 
 # --- Bare Metal Fulfillment Operator ---
 bmf:
-  enabled: false
+  enabled: true
   image:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
     tag: sha-46edb67

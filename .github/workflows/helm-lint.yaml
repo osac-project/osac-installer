@@ -51,5 +51,10 @@ jobs:
             > /dev/null
         done
 
-    - name: Validate values schema
+    - name: Validate values schema JSON
       run: python3 -m json.tool charts/osac/values.schema.json > /dev/null
+
+    - name: Check values keys have schema entries
+      run: |
+        pip install --quiet pyyaml
+        make validate-values-schema

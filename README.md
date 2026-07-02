@@ -101,9 +101,9 @@ OSAC supports two installation methods:
   values files in the `values/` directory.
 - **Kustomize** (legacy) — Uses Kustomize overlays in the `overlays/` directory.
 
-Both methods use Git submodules to import component manifests from each repository.
-The prerequisites (cert-manager, AAP operator, Authorino, Keycloak, etc.) are the
-same regardless of which method you choose.
+Both methods use Git submodules to import component manifests from each repository. The
+prerequisites (cert-manager, AAP operator, Keycloak, etc.) are the same regardless of which method
+you choose.
 
 ### Customizing Your Installation
 
@@ -153,29 +153,6 @@ Use Kustomize to manage your environment-specific configurations.
      ```
      Alternatively, run `scripts/ensure-ca-bundle.sh <project-name>` which
      handles both creation and patching.
-   - In `kustomization.yaml`: Update the `emergency_service_accounts` in the AuthConfig
-     patch to use your namespace. The Rego policy contains a hardcoded service account
-     reference that must match your deployment namespace:
-     ```
-     emergency_service_accounts := {
-       "system:serviceaccount:<project-name>:admin",
-       "system:serviceaccount:<project-name>:controller",
-       "system:serviceaccount:<project-name>:template-publisher",
-       "system:serviceaccount:<project-name>:osac-operator-controller-manager",
-     }
-     ```
-     If this is not updated, the `admin` ServiceAccount will get `PermissionDenied` errors
-     when calling private API methods (e.g., hub registration during `setup.sh`).
-   - The `authorino-tokenreview` ClusterRoleBinding grants Authorino permission to
-     validate Kubernetes service account tokens. It must include your namespace's
-     Authorino SA. **If using `setup.sh`**, this is handled automatically.
-     **If deploying manually**, patch the ClusterRoleBinding:
-     ```bash
-     oc patch clusterrolebinding authorino-tokenreview --type=json -p '[
-       {"op":"add","path":"/subjects/-","value":{"kind":"ServiceAccount","name":"authorino-authorino","namespace":"<project-name>"}}
-     ]'
-     ```
-     If this is not configured, all gRPC calls will fail with `Unauthenticated` errors.
    - In `kustomization.yaml`: Replace `osac-devel` with your project name and
      `<cluster-name>.<base-domain>` with your cluster's actual domain in the
      `OSAC_AAP_URL`, token-issuer, CORS, and certificate patches.
@@ -358,7 +335,7 @@ Ensure your overlay contains the necessary secret files that are excluded from G
 
 The `scripts/setup.sh` script automates the entire installation process, including:
 
-- Installing prerequisite operators (cert-manager, trust-manager, Authorino, Keycloak, AAP)
+- Installing prerequisite operators (cert-manager, trust-manager, Keycloak, AAP)
 - Optionally installing LVMS (storage service), MetalLB (ingress service), Multicluster Engine (MCE + infrastructure operator), and OpenShift Virtualization (CNV)
 - Setting up the CA issuer and network attachment definitions
 - Deploying OSAC components (via Helm or Kustomize)
@@ -461,9 +438,6 @@ oc wait --for=condition=Available deployment/trust-manager -n cert-manager --tim
 
 # CA issuer
 oc apply -f prerequisites/ca-issuer.yaml
-
-# Authorino operator
-oc apply -f prerequisites/authorino-operator.yaml
 
 # Keycloak
 oc apply -k prerequisites/keycloak/
@@ -603,9 +577,6 @@ $ oc apply -f prerequisites/trust-manager.yaml
 
 # Install CA issuer
 $ oc apply -f prerequisites/ca-issuer.yaml
-
-# Install Authorino operator
-$ oc apply -f prerequisites/authorino-operator.yaml
 
 # Install Keycloak
 $ oc apply -k prerequisites/keycloak/
@@ -809,11 +780,10 @@ The script removes resources in reverse order:
 6. LVMS storage service (if `STORAGE_SERVICE=true`)
 7. MetalLB ingress service (if `INGRESS_SERVICE=true`)
 8. OpenShift Virtualization (if `VIRT_SERVICE=true`)
-9. Authorino operator
-10. CA issuer, trust-manager, and cert-manager
-11. Stale API services cleanup
-12. NetworkAttachmentDefinition
-13. Local `kubeconfig.hub-access` file
+9. CA issuer, trust-manager, and cert-manager
+10. Stale API services cleanup
+11. NetworkAttachmentDefinition
+12. Local `kubeconfig.hub-access` file
 
 The script waits for all namespaces to be fully deleted before completing.
 

@@ -43,6 +43,25 @@ metadata:
 spec: {}
 EOF
 
+# Create stub hub secrets so the storage controller can skip AAP-based
+# backend provisioning (Stage 1) and proceed to storage class resolution
+# (Stage 2).  In production these are created by AAP playbooks against a
+# real VAST backend; in dev/CI environments without VAST, the stubs let
+# the controller resolve the labeled StorageClasses directly.
+for TENANT_NAME in "${INSTALLER_NAMESPACE}" "shared"; do
+    cat <<HUBEOF | oc apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vast-tenant-config-${TENANT_NAME}
+  namespace: ${INSTALLER_NAMESPACE}
+  labels:
+    osac.openshift.io/tenant: "${TENANT_NAME}"
+type: Opaque
+data: {}
+HUBEOF
+done
+
 # Wait for both tenants to be Ready
 retry_until 120 5 '[[ "$(oc get tenant ${INSTALLER_NAMESPACE} -n ${INSTALLER_NAMESPACE} -o jsonpath='"'"'{.status.phase}'"'"' 2>/dev/null)" == "Ready" ]]' || {
     echo "Timed out waiting for Tenant ${INSTALLER_NAMESPACE} to be Ready"

@@ -1,5 +1,22 @@
 # Full scenario: everything enabled, exercises all template branches.
 
+ui:
+  enabled: true
+  externalHostname: osac-ui.example.com
+  api:
+    fulfillment:
+      url: https://fulfillment-api:8000
+      certs:
+        caBundle:
+          configMap: ca-bundle
+  auth:
+    oidcClientId: osac-ui
+    certs:
+      caBundle:
+        configMap: ca-bundle
+  images:
+    ui: ghcr.io/osac-project/osac-ui:latest
+
 operator:
   aap:
     url: "https://aap.example.com/api/controller"
@@ -8,7 +25,7 @@ operator:
     statusPollInterval: "30s"
     templatePrefix: "osac"
   fulfillment:
-    serverAddress: "fulfillment-api:8000"
+    serverAddress: "fulfillment-internal-api:8001"
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
 service:
@@ -56,9 +73,6 @@ dbMigrate:
   enabled: true
   image: ghcr.io/osac-project/fulfillment-service:latest
   dbUrlFile: "/etc/fulfillment-service/db/url"
-
-importAgents:
-  enabled: false
 
 clusterFulfillment:
   enabled: true

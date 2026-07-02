@@ -28,12 +28,12 @@ images:
   newName: quay.io/sclorg/postgresql-18-c10s
   newTag: latest
 - name: ghcr.io/osac-project/fulfillment-service
-  newTag: sha-6b1f439
+  newTag: sha-221fdf8
 - name: osac-aap
   newName: ghcr.io/osac-project/osac-aap
-  newTag: sha-89f41e7
+  newTag: sha-8f8157e
 - name: ghcr.io/osac-project/osac-operator
-  newTag: sha-773d078
+  newTag: sha-065c4fd
 - name: ghcr.io/osac-project/bare-metal-fulfillment-operator
   newTag: sha-0a06955
 - name: envoy

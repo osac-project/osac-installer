@@ -67,7 +67,7 @@ An overlay's `files/` directory must contain `quay-pull-secret.json` and `licens
 
 ### Prerequisites
 
-`prerequisites/` contains cluster-wide operator manifests (cert-manager, trust-manager, Authorino, Keycloak, AAP). Some require the apply-wait-reapply pattern because operator CRDs must exist before dependent resources can be created. `setup.sh` handles this automatically.
+`prerequisites/` contains cluster-wide operator manifests (cert-manager, trust-manager, Keycloak, AAP). Some require the apply-wait-reapply pattern because operator CRDs must exist before dependent resources can be created. `setup.sh` handles this automatically.
 
 ### Scripts
 

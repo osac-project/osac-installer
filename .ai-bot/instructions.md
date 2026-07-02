@@ -31,12 +31,6 @@ must pass -- CI enforces all of them on every PR.
    bash scripts/sync-image-tags.sh
    ```
 
-5. **AuthConfig Rego sync** (verifies overlay Rego patches match the
-   base AuthConfig in the fulfillment-service submodule):
-   ```
-   python3 scripts/sync-authconfig-rego.py
-   ```
-
 If image tags or Rego policies are out of sync, the scripts support
 `--fix` mode. Run them with `--fix` and verify the output before
 committing.

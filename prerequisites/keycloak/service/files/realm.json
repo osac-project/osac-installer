@@ -430,7 +430,8 @@
           "containerId": "23cad6d9-db0b-43b2-9d20-63e90b1b571e",
           "attributes": {}
         }
-      ]
+      ],
+      "osac-admin": []
     }
   },
   "groups": [
@@ -739,6 +740,24 @@
       },
       "notBefore": 0,
       "groups": []
+    },
+    {
+      "id": "c3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a",
+      "username": "service-account-osac-admin",
+      "enabled": true,
+      "totp": false,
+      "emailVerified": false,
+      "serviceAccountClientId": "osac-admin",
+      "createdTimestamp": 1757683950000,
+      "credentials": [],
+      "disableableCredentialTypes": [],
+      "requiredActions": [],
+      "realmRoles": [
+        "default-roles-my realm"
+      ],
+      "clientRoles": {},
+      "notBefore": 0,
+      "groups": []
     }
   ],
   "scopeMappings": [
@@ -1028,7 +1047,65 @@
       "consentRequired": false,
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "client.secret.creation.time": "1757684016",
+        "backchannel.logout.session.required": "true",
+        "standard.token.exchange.enabled": "false",
+        "post.logout.redirect.uris": "+",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "organization",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "id": "a1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+      "clientId": "osac-admin",
+      "name": "OSAC administrator",
+      "description": "Service account for the OSAC administrator",
+      "rootUrl": "",
+      "adminUrl": "",
+      "baseUrl": "",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "kP9xRmNvQw3hYjL8sT5uA2dF7gB0cE4i",
+      "redirectUris": [
+        "/*"
+      ],
+      "webOrigins": [
+        "/*"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "publicClient": false,
       "frontchannelLogout": true,

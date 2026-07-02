@@ -5,7 +5,7 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-773d078
+    tag: sha-065c4fd
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -30,7 +30,7 @@ service:
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   variant: openshift
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-6b1f439
+    service: ghcr.io/osac-project/fulfillment-service:sha-221fdf8
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -83,6 +83,21 @@ service:
   log:
     level: debug
 
+# --- UI ---
+ui:
+  enabled: true
+  images:
+    ui: ghcr.io/osac-project/osac-ui:sha-dd99ceb
+  api:
+    fulfillment:
+      certs:
+        caBundle:
+          configMap: ca-bundle
+  auth:
+    certs:
+      caBundle:
+        configMap: ca-bundle
+
 # --- AAP ---
 aap:
   aap:
@@ -91,15 +106,15 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-89f41e7
+    image: ghcr.io/osac-project/osac-aap:sha-8f8157e
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-89f41e7"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-8f8157e"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "89f41e712b550cae30fe9569c8a9614e2c462208"
+    projectGitBranch: "8f8157e89c8291fd59a11265f9339f96d2e9f64c"
 
 # --- Validation ---
 validation:
@@ -112,4 +127,12 @@ bmf:
 # --- Database migration ---
 dbMigrate:
   enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-6b1f439
+  image: ghcr.io/osac-project/fulfillment-service:sha-221fdf8
+
+# CI full-install: chart-managed DB secrets; setup.sh deploys the integration-test
+# postgres chart when the postgres Service has no ready endpoints (see lib.sh).
+bundledPostgres:
+  enabled: true
+  database:
+    name: service
+    user: service

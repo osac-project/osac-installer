@@ -57,8 +57,8 @@ if [[ "${STORAGE_SERVICE}" == "true" ]]; then
         exit 1
     }
     LVMS_CSV=$(oc get csv --no-headers -n openshift-storage | awk '/lvms/ { print $1 }' | tail -1)
-    wait_for_resource clusterserviceversion/${LVMS_CSV} jsonpath='{.status.phase}'=Succeeded 300 openshift-storage
-    wait_for_resource deployment/lvms-operator condition=Available 300 openshift-storage
+    wait_for_resource clusterserviceversion/${LVMS_CSV} jsonpath='{.status.phase}'=Succeeded 600 openshift-storage
+    wait_for_resource deployment/lvms-operator condition=Available 900 openshift-storage
 
     # Apply LVMCluster configuration (requires operator CRDs to be installed)
     oc apply -f prerequisites/lvms/lvms-config.yaml

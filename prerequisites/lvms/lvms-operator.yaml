@@ -33,6 +33,7 @@ metadata:
   name: lvms-operator
   namespace: openshift-storage
 spec:
+  channel: stable-4.19
   name: lvms-operator
   source: redhat-operators
   sourceNamespace: openshift-marketplace

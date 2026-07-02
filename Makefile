@@ -53,6 +53,10 @@ teardown: ## Teardown OSAC deployment
 
 ##@ Validation
 
+.PHONY: generate-images
+generate-images: helm-deps ## Generate images.txt from chart templates
+	bash scripts/generate-images-txt.sh
+
 .PHONY: helm-validate
 helm-validate: helm-lint ## Validate Helm chart (lint + template)
 	helm template osac charts/osac/ --values $(VALUES_FILE) > /dev/null

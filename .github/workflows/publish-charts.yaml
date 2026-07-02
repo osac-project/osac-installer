@@ -44,7 +44,7 @@ jobs:
     name: Publish osac umbrella chart
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
     - name: Checkout repository
@@ -180,6 +180,9 @@ jobs:
           -e "s|tag: latest|tag: v${VERSION}|g" \
           charts/osac/values.yaml
 
+    - name: Generate images.txt
+      run: bash scripts/generate-images-txt.sh images.txt
+
     - name: Package chart
       env:
         VERSION: ${{ steps.versions.outputs.version }}
@@ -194,3 +197,14 @@ jobs:
       run: |
         helm push "osac-${VERSION}.tgz" \
           oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: ${{ steps.versions.outputs.version }}
+      run: |
+        gh release create "v${VERSION}" \
+          --title "v${VERSION}" \
+          --generate-notes \
+          images.txt

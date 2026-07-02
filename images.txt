@@ -1,0 +1,5 @@
+ghcr.io/osac-project/envoy:v1.33.0
+ghcr.io/osac-project/fulfillment-service:latest
+ghcr.io/osac-project/osac-aap:latest
+ghcr.io/osac-project/osac-operator:latest
+quay.io/openshift/origin-cli:4.20.0

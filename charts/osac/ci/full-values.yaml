@@ -96,6 +96,9 @@ clusterFulfillment:
     IMPORT_AGENTS_INFRAENV_NAME: "infraenv"
     IMPORT_AGENTS_PULL_SECRET_NAME: "pull-secret"
     IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION: "true"
+    BCM_API_URL: "https://bcm-head.example.com:8081"
+    BCM_VALIDATE_CERTS: "false"
+    BCM_DISABLE_BMC_CERT_VERIFICATION: "true"
   secret:
     NETRIS_PASSWORD: "test-password"
 

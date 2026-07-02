@@ -1,0 +1,35 @@
+---
+name: E2E Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'charts/**'
+      - 'values/**'
+      - 'scripts/**'
+      - 'base/**'
+      - 'prerequisites/**'
+  workflow_dispatch:
+    inputs:
+      test-suite:
+        description: "Test suite (vmaas, caas, or empty for all)"
+        required: false
+        default: "vmaas"
+      test-filter:
+        description: "pytest -k filter"
+        required: false
+        default: ""
+      deploy-mode:
+        description: "Deploy mode: snapshot or full-install"
+        required: false
+        default: "snapshot"
+
+jobs:
+  e2e:
+    uses: osac-project/osac-test-infra/.github/workflows/e2e.yml@main
+    with:
+      test-suite: ${{ github.event.inputs.test-suite || 'vmaas' }}
+      test-filter: ${{ github.event.inputs.test-filter || '' }}
+      deploy-mode: ${{ github.event.inputs.deploy-mode || 'snapshot' }}
+      installer-ref: ${{ github.head_ref || 'main' }}

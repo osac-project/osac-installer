@@ -110,8 +110,12 @@ aap:
     projectGitUri: ""
     projectGitBranch: ""
     importAgentsEnabled: false
+    importBcmAgentsEnabled: false
   importAgents:
     servers: []
+  importBcmAgents:
+    cert: ""
+    key: ""
 
 # --- Instance Groups ---
 instanceGroups:
@@ -242,6 +246,9 @@ clusterFulfillment:
     IMPORT_AGENTS_INFRAENV_NAME: ""
     IMPORT_AGENTS_PULL_SECRET_NAME: ""
     IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION: ""
+    BCM_API_URL: ""
+    BCM_VALIDATE_CERTS: "true"
+    BCM_DISABLE_BMC_CERT_VERIFICATION: "false"
   secret:
     NETRIS_PASSWORD: ""
     AWS_ACCESS_KEY_ID: ""

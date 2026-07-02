@@ -497,6 +497,11 @@
               "type": "boolean",
               "description": "Enable ConfigMap-based bare metal agent import. Sets OSAC_IMPORT_AGENTS_ENABLED=true in the config-as-code-ig Secret and gates the import-agents-inventory ConfigMap.",
               "default": false
+            },
+            "importBcmAgentsEnabled": {
+              "type": "boolean",
+              "description": "Enable BCM inventory backend. Sets OSAC_IMPORT_BCM_AGENTS_ENABLED=true in the config-as-code-ig Secret and gates the bcm-certs Secret.",
+              "default": false
             }
           }
         },
@@ -541,6 +546,20 @@
                   }
                 }
               }
+            }
+          }
+        },
+        "importBcmAgents": {
+          "type": "object",
+          "description": "BCM mTLS client credentials. Enable via aap.configAsCode.importBcmAgentsEnabled.",
+          "properties": {
+            "cert": {
+              "type": "string",
+              "description": "PEM-encoded client certificate for BCM mTLS authentication"
+            },
+            "key": {
+              "type": "string",
+              "description": "PEM-encoded client private key for BCM mTLS authentication"
             }
           }
         }
@@ -1006,6 +1025,21 @@
             "IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION": {
               "type": "string",
               "description": "Default BMC TLS certificate verification skip (effective default: true)"
+            },
+            "BCM_API_URL": {
+              "type": "string",
+              "pattern": "^$|^https?://",
+              "description": "BCM head node API endpoint (e.g., https://bcm-head:8081)"
+            },
+            "BCM_VALIDATE_CERTS": {
+              "type": "string",
+              "enum": ["", "true", "false"],
+              "description": "Verify BCM TLS certificates (effective default: true)"
+            },
+            "BCM_DISABLE_BMC_CERT_VERIFICATION": {
+              "type": "string",
+              "enum": ["", "true", "false"],
+              "description": "Skip BMC TLS certificate verification during BCM system discovery (effective default: false)"
             }
           }
         },

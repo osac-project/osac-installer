@@ -264,6 +264,10 @@ aap:
     # OSAC_IMPORT_AGENTS_ENABLED=true in the config-as-code-ig Secret
     # and gates the import-agents-inventory ConfigMap.
     importAgentsEnabled: false
+    # Enable BCM (NVIDIA Base Command Manager) inventory backend. Sets
+    # OSAC_IMPORT_BCM_AGENTS_ENABLED=true in the config-as-code-ig Secret
+    # and gates the bcm-certs Secret.
+    importBcmAgentsEnabled: false
 
   # Server inventory for bare metal agent import.
   # Each entry provisions a BareMetalHost CR via the import-agents playbook.
@@ -285,6 +289,16 @@ aap:
     #     netris_server_name: "server-02"
     #     resource_class: "fc430"
     #     disable_bmc_cert_verification: false
+
+  # BCM (NVIDIA Base Command Manager) mTLS client credentials.
+  # When importBcmAgentsEnabled is true, these are written to the bcm-certs Secret.
+  # BCM API connection settings are configured in clusterFulfillment.config below.
+  # See osac-aap/docs/bcm-inventory-integration.md for setup details.
+  importBcmAgents:
+    # PEM-encoded client certificate for BCM mTLS authentication.
+    cert: ""
+    # PEM-encoded client private key for BCM mTLS authentication.
+    key: ""
 
 # ---------------------
 # Bundled PostgreSQL (dev/test)
@@ -387,6 +401,18 @@ clusterFulfillment:
     IMPORT_AGENTS_PULL_SECRET_NAME: ""
     # Effective default: "true"
     IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION: ""
+
+    # --- BCM Inventory ---
+    # Playbook variables for BCM-based agent import.
+    # These override the playbook defaults when non-empty.
+    # BCM head node API endpoint (e.g., https://bcm-head:8081).
+    BCM_API_URL: ""
+    # Verify BCM TLS certificates. Set to "false" for lab environments
+    # with self-signed certificates. Effective default: "true" (production).
+    BCM_VALIDATE_CERTS: "true"
+    # Skip BMC TLS certificate verification during system discovery.
+    # Effective default: "false".
+    BCM_DISABLE_BMC_CERT_VERIFICATION: "false"
   secret:
     NETRIS_PASSWORD: ""
     # AWS credentials (used by the Route 53 DNS backend).

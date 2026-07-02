@@ -366,13 +366,16 @@ if [[ "${DEPLOY_MODE}" == "helm" ]]; then
         --wait
 else
     # --- Kustomize deployment mode (legacy) ---
-    echo "Deploying OSAC using Kustomize..."
-    oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}" --server-side --force-conflicts
 
-    # Ensure the shared ca-bundle Bundle exists and includes our namespace
+    # Create the namespace early so pre-deploy resources can target it.
+    oc create namespace "${INSTALLER_NAMESPACE}" --dry-run=client -o yaml | oc apply -f -
+
+    # Ensure the shared ca-bundle Bundle exists and the ConfigMap is populated.
     "${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
+    echo "Waiting for ca-bundle ConfigMap..."
+    retry_until 120 3 'oc get configmap ca-bundle -n '"${INSTALLER_NAMESPACE}"' -o jsonpath='"'"'{.data.bundle\.pem}'"'"' 2>/dev/null | grep -q "BEGIN CERTIFICATE"'
 
-    # Create controller OAuth credentials from the Keycloak realm config
+    # Create controller OAuth credentials from the Keycloak realm config.
     FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
     [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
     oc create secret generic fulfillment-controller-credentials \
@@ -380,6 +383,31 @@ else
         --from-literal=client-secret="${FC_CLIENT_SECRET}" \
         -n "${INSTALLER_NAMESPACE}" \
         --dry-run=client -o yaml | oc apply -f -
+
+    # Remove Authorino resources from the fulfillment-service submodule
+    # kustomization files. Authorino is no longer deployed; the fulfillment-service
+    # now uses built-in JWT authentication. This is a temporary workaround until
+    # the upstream submodule removes these files.
+    FS_MANIFESTS="base/osac-fulfillment-service/manifests/base"
+    sed -i '/^- authorino$/d' "${FS_MANIFESTS}/kustomization.yaml"
+    sed -i '/^- authconfig\.yaml$/d' "${FS_MANIFESTS}/grpc-server/kustomization.yaml"
+
+    # Create empty stub files listed in .buildfiles so kustomize can resolve
+    # secretGenerator file sources (the real files are gitignored).
+    OVERLAY_DIR="overlays/${INSTALLER_KUSTOMIZE_OVERLAY}"
+    if [[ -f "${OVERLAY_DIR}/.buildfiles" ]]; then
+        while read -r buildfile; do
+            buildpath="${OVERLAY_DIR}/${buildfile}"
+            if ! [[ -f "${buildpath}" ]]; then
+                echo "Creating empty stub file ${buildpath}"
+                mkdir -p "${buildpath%/*}"
+                touch "${buildpath}"
+            fi
+        done <"${OVERLAY_DIR}/.buildfiles"
+    fi
+
+    echo "Deploying OSAC using Kustomize..."
+    oc apply -k "${OVERLAY_DIR}" --server-side --force-conflicts
 fi
 
 # Apply cluster-fulfillment-ig configmap/secret overrides from environment variables

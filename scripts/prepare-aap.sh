@@ -13,12 +13,25 @@ if [[ -z "${INSTALLER_NAMESPACE:-}" ]]; then
     [[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: INSTALLER_NAMESPACE not set and could not determine from overlay" && exit 1
 fi
 
-# Get the AAP gateway route URL
-AAP_ROUTE_HOST=$(oc get routes -n "${INSTALLER_NAMESPACE}" --no-headers osac-aap -o jsonpath='{.spec.host}')
+echo "Creating AAP API token for OSAC operator (namespace: ${INSTALLER_NAMESPACE})..."
+
+AAP_ROUTE_HOST=$(get_route_host "${INSTALLER_NAMESPACE}" osac-aap)
+require_host_resolvable "${AAP_ROUTE_HOST}"
 AAP_URL="https://${AAP_ROUTE_HOST}"
 
-# Get the AAP admin password
-AAP_ADMIN_PASSWORD=$(oc get secret osac-aap-admin-password -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.data.password}' | base64 -d)
+SECRET_B64=""
+rc=0
+SECRET_B64=$(oc get secret osac-aap-admin-password -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.data.password}' 2>&1) || rc=$?
+if (( rc != 0 )); then
+    echo "ERROR: failed to get secret osac-aap-admin-password in ${INSTALLER_NAMESPACE}:" >&2
+    echo "${SECRET_B64}" >&2
+    exit 1
+fi
+AAP_ADMIN_PASSWORD=$(printf '%s' "${SECRET_B64}" | base64 -d)
+[[ -n "${AAP_ADMIN_PASSWORD}" ]] || {
+    echo "ERROR: Secret osac-aap-admin-password is missing or empty in ${INSTALLER_NAMESPACE}" >&2
+    exit 1
+}
 
 AAP_TOKEN=$(http_json "Failed to create AAP API token (gateway may be rolling out)" 30 10 \
     '.token // empty' \
@@ -28,11 +41,10 @@ AAP_TOKEN=$(http_json "Failed to create AAP API token (gateway may be rolling ou
     "${AAP_URL}/api/gateway/v1/tokens/")
 
 if [[ -z "${AAP_TOKEN}" || "${AAP_TOKEN}" == "null" ]]; then
-    echo "ERROR: AAP API token was empty"
+    echo "ERROR: Failed to create AAP API token (empty or null token in response)" >&2
     exit 1
 fi
 
-# Store the token in a Kubernetes secret
 oc create secret generic osac-aap-api-token \
     --from-literal=token="${AAP_TOKEN}" \
     -n "${INSTALLER_NAMESPACE}" \

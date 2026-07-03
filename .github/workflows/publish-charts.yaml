@@ -44,7 +44,7 @@ jobs:
     name: Publish osac umbrella chart
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
     - name: Checkout repository
@@ -194,3 +194,48 @@ jobs:
       run: |
         helm push "osac-${VERSION}.tgz" \
           oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+
+    - name: Create GitHub Release
+      if: always() && steps.versions.outcome == 'success'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: ${{ steps.versions.outputs.version }}
+        OPERATOR_VER: ${{ steps.versions.outputs.operator_ver }}
+        CRDS_VER: ${{ steps.versions.outputs.crds_ver }}
+        SERVICE_VER: ${{ steps.versions.outputs.service_ver }}
+        AAP_VER: ${{ steps.versions.outputs.aap_ver }}
+        BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
+        BMF_CRDS_VER: ${{ steps.versions.outputs.bmf_crds_ver }}
+        UI_VER: ${{ steps.versions.outputs.ui_ver }}
+      run: |
+        BODY=$(mktemp)
+        cat > "$BODY" <<EOF
+        ## Component versions
+
+        | Component | Version | Chart |
+        |-----------|---------|-------|
+        | fulfillment-service | ${SERVICE_VER} | oci://ghcr.io/osac-project/charts/fulfillment-service |
+        | osac-operator | ${OPERATOR_VER} | oci://ghcr.io/osac-project/charts/osac-operator |
+        | osac-operator-crds | ${CRDS_VER} | oci://ghcr.io/osac-project/charts/osac-operator-crds |
+        | osac-aap | ${AAP_VER} | oci://ghcr.io/osac-project/charts/osac-aap |
+        | bare-metal-fulfillment-operator | ${BMF_VER} | oci://ghcr.io/osac-project/charts/bare-metal-fulfillment-operator |
+        | bare-metal-fulfillment-operator-crds | ${BMF_CRDS_VER} | oci://ghcr.io/osac-project/charts/bare-metal-fulfillment-operator-crds |
+        | osac-ui | ${UI_VER} | oci://ghcr.io/osac-project/charts/osac-ui |
+
+        ## Install
+
+        \`\`\`bash
+        helm install osac oci://ghcr.io/osac-project/charts/osac --version ${VERSION}
+        \`\`\`
+        EOF
+        # Strip leading whitespace from heredoc (indented for YAML readability)
+        sed -i 's/^        //' "$BODY"
+
+        gh release create "v${VERSION}" \
+          --repo "${{ github.repository }}" \
+          --title "OSAC v${VERSION}" \
+          --notes-file "$BODY" \
+        || gh release edit "v${VERSION}" \
+          --repo "${{ github.repository }}" \
+          --notes-file "$BODY"
+        rm -f "$BODY"

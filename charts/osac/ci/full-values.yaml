@@ -104,6 +104,15 @@ clusterFulfillment:
   secret:
     NETRIS_PASSWORD: "test-password"
 
+networkManagers:
+  enabled: true
+  fabricManagers:
+    netris:
+      enabled: true
+      description: "Netris fabric manager for CI testing."
+      capabilities:
+        - ipv4
+
 networkFulfillment:
   enabled: true
   config:

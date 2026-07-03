@@ -1,0 +1,38 @@
+{{/*
+Grants the osac-operator ServiceAccount namespaced access to ConfigMaps so it
+can discover network-manager registration ConfigMaps (see
+charts/osac/templates/network-managers.yaml) and read ca-bundle, without
+granting cluster-wide ConfigMap access.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: osac-operator-configmaps-{{ .Release.Namespace }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: osac-operator-configmaps-{{ .Release.Namespace }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "osac.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: osac-operator-configmaps-{{ .Release.Namespace }}
+subjects:
+- kind: ServiceAccount
+  name: osac-operator
+  namespace: {{ .Release.Namespace }}

@@ -233,6 +233,22 @@ bmf:
   env:
     aapInsecureSkipVerify: "true"
 
+# --- Network Manager Registration ---
+# ConfigMaps that register networking managers for the two-manager model.
+# The operator discovers managers by selecting ConfigMaps with labels
+# osac.openshift.io/network-fabric-manager or osac.openshift.io/network-k8s-manager.
+networkManagers:
+  enabled: false
+  fabricManagers:
+    netris:
+      enabled: true
+      description: >-
+        Netris SDN controller for physical fabric management.
+        Manages VLAN/VxLAN segments, ACLs, public IP allocation, and NAT gateways.
+      capabilities:
+        - ipv4
+  k8sManagers: {}
+
 # --- Validation hooks ---
 validation:
   enabled: true

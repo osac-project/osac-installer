@@ -1,0 +1,25 @@
+{{- define "osac.networkManagerConfigMaps" -}}
+{{- range $name, $mgr := .managers }}
+{{- if or (not (hasKey $mgr "enabled")) $mgr.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: osac-network-{{ $.kind }}-manager-{{ $name | replace "_" "-" }}
+  namespace: {{ $.root.Release.Namespace }}
+  labels:
+    {{- include "osac.labels" $.root | nindent 4 }}
+    osac.openshift.io/network-{{ $.kind }}-manager: "true"
+data:
+  name: {{ $name | quote }}
+  {{- if $mgr.description }}
+  description: {{ $mgr.description | quote }}
+  {{- end }}
+  capabilities: {{ $mgr.capabilities | join "," | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+{{- if .Values.networkManagers.enabled }}
+{{- include "osac.networkManagerConfigMaps" (dict "managers" .Values.networkManagers.fabricManagers "kind" "fabric" "root" $) }}
+{{- include "osac.networkManagerConfigMaps" (dict "managers" .Values.networkManagers.k8sManagers "kind" "k8s" "root" $) }}
+{{- end }}

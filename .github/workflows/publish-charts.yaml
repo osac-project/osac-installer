@@ -224,15 +224,15 @@ jobs:
         cat > "$BODY" <<EOF
         ## Component versions
 
-        | Component | Version | Chart |
-        |-----------|---------|-------|
-        | fulfillment-service | ${SERVICE_VER} | oci://ghcr.io/osac-project/charts/fulfillment-service |
-        | osac-operator | ${OPERATOR_VER} | oci://ghcr.io/osac-project/charts/osac-operator |
-        | osac-operator-crds | ${CRDS_VER} | oci://ghcr.io/osac-project/charts/osac-operator-crds |
-        | osac-aap | ${AAP_VER} | oci://ghcr.io/osac-project/charts/osac-aap |
-        | bare-metal-fulfillment-operator | ${BMF_VER} | oci://ghcr.io/osac-project/charts/bare-metal-fulfillment-operator |
-        | bare-metal-fulfillment-operator-crds | ${BMF_CRDS_VER} | oci://ghcr.io/osac-project/charts/bare-metal-fulfillment-operator-crds |
-        | osac-ui | ${UI_VER} | oci://ghcr.io/osac-project/charts/osac-ui |
+        | Component | Version | Chart | Release |
+        |-----------|---------|-------|---------|
+        | fulfillment-service | ${SERVICE_VER} | oci://ghcr.io/osac-project/charts/fulfillment-service | [v${SERVICE_VER}](https://github.com/osac-project/fulfillment-service/releases/tag/v${SERVICE_VER}) |
+        | osac-operator | ${OPERATOR_VER} | oci://ghcr.io/osac-project/charts/osac-operator | [v${OPERATOR_VER}](https://github.com/osac-project/osac-operator/releases/tag/v${OPERATOR_VER}) |
+        | osac-operator-crds | ${CRDS_VER} | oci://ghcr.io/osac-project/charts/osac-operator-crds | [v${CRDS_VER}](https://github.com/osac-project/osac-operator/releases/tag/v${CRDS_VER}) |
+        | osac-aap | ${AAP_VER} | oci://ghcr.io/osac-project/charts/osac-aap | [v${AAP_VER}](https://github.com/osac-project/osac-aap/releases/tag/v${AAP_VER}) |
+        | bare-metal-fulfillment-operator | ${BMF_VER} | oci://ghcr.io/osac-project/charts/bare-metal-fulfillment-operator | [v${BMF_VER}](https://github.com/osac-project/bare-metal-fulfillment-operator/releases/tag/v${BMF_VER}) |
+        | bare-metal-fulfillment-operator-crds | ${BMF_CRDS_VER} | oci://ghcr.io/osac-project/charts/bare-metal-fulfillment-operator-crds | [v${BMF_CRDS_VER}](https://github.com/osac-project/bare-metal-fulfillment-operator/releases/tag/v${BMF_CRDS_VER}) |
+        | osac-ui | ${UI_VER} | oci://ghcr.io/osac-project/charts/osac-ui | [v${UI_VER}](https://github.com/osac-project/osac-ui/releases/tag/v${UI_VER}) |
 
         ## Install
 

@@ -174,11 +174,23 @@ jobs:
 
     - name: Update image tags in values.yaml
       env:
-        VERSION: ${{ steps.versions.outputs.version }}
+        OPERATOR_VER: ${{ steps.versions.outputs.operator_ver }}
+        SERVICE_VER: ${{ steps.versions.outputs.service_ver }}
+        AAP_VER: ${{ steps.versions.outputs.aap_ver }}
+        BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
+        UI_VER: ${{ steps.versions.outputs.ui_ver }}
       run: |
-        sed -i \
-          -e "s|tag: latest|tag: v${VERSION}|g" \
-          charts/osac/values.yaml
+        yq -i "
+          .operator.image.tag = \"v${OPERATOR_VER}\" |
+          .bmf.image.tag = \"v${BMF_VER}\" |
+          .service.images.service = \"ghcr.io/osac-project/fulfillment-service:v${SERVICE_VER}\" |
+          .aap.bootstrap.image = \"ghcr.io/osac-project/osac-aap:v${AAP_VER}\" |
+          .ui.images.ui = \"ghcr.io/osac-project/osac-ui:v${UI_VER}\" |
+          .dbMigrate.image = \"ghcr.io/osac-project/fulfillment-service:v${SERVICE_VER}\"
+        " charts/osac/values.yaml
+
+        echo "--- Updated values.yaml image references ---"
+        grep -E "tag:|image:" charts/osac/values.yaml
 
     - name: Package chart
       env:

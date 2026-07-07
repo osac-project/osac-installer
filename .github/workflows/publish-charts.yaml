@@ -208,7 +208,6 @@ jobs:
           oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
 
     - name: Create GitHub Release
-      if: always() && steps.versions.outcome == 'success'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         VERSION: ${{ steps.versions.outputs.version }}

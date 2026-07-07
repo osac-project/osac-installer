@@ -266,7 +266,7 @@ echo "Waiting for ca-bundle ConfigMap..."
 retry_until 120 3 'oc get configmap ca-bundle -n '"${INSTALLER_NAMESPACE}"' -o jsonpath='"'"'{.data.bundle\.pem}'"'"' 2>/dev/null | grep -q "BEGIN CERTIFICATE"'
 
 # Create controller OAuth credentials from the Keycloak realm config.
-FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
+FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json || true)
 [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
 oc create secret generic fulfillment-controller-credentials \
     --from-literal=client-id=osac-controller \
@@ -317,8 +317,7 @@ for resource in \
     secret/config-as-code-ig \
     secret/config-as-code-manifest-ig \
     secret/fulfillment-controller-credentials \
-    secret/fulfillment-db \
-    configmap/ca-bundle; do
+    secret/fulfillment-db; do
   if oc get "${resource}" -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
     oc label "${resource}" -n "${INSTALLER_NAMESPACE}" \
         app.kubernetes.io/managed-by=Helm --overwrite

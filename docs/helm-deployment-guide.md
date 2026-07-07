@@ -646,7 +646,8 @@ git submodule update --init --recursive
 To customize, copy and edit:
 
 ```bash
-cp values/development/values.yaml values/my-env.yaml
+mkdir -p values/my-env
+cp values/development/values.yaml values/my-env/values.yaml
 ```
 
 Key settings to review in your values file:

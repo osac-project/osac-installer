@@ -35,7 +35,7 @@ for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
     if [[ "${mode}" == "tag" ]]; then
       # Skip components not configured in this values file (e.g. BMF disabled in vmaas-ci).
       grep -q "repository: ghcr.io/osac-project/${component}$" "${values_file}" || continue
-      current=$(grep -A1 "repository: ghcr.io/osac-project/${component}$" "${values_file}" | grep "tag:" | awk '{print $2}')
+      current=$(grep -A1 "repository: ghcr.io/osac-project/${component}$" "${values_file}" | grep "tag:" | awk '{print $2}' || true)
       [[ -z "${current}" ]] && continue
       if [[ "${current}" == "${expected}" ]]; then
         echo "${name} ${component}: OK (${expected})"

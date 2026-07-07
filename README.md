@@ -116,7 +116,7 @@ Place the downloaded `license.zip` file in your values directory (e.g., `values/
 The OSAC installer uses Git submodules for version tracking:
 
 ```bash
-$ git submodule update --init --recursive --remote
+$ git submodule update --init --recursive
 ```
 
 #### 2. Populate Local Secrets
@@ -255,6 +255,7 @@ helm dependency build charts/osac/
 Copy and customize a values file for your environment:
 
 ```bash
+mkdir -p values/<project-name>
 cp values/development/values.yaml values/<project-name>/values.yaml
 # Edit values/<project-name>/values.yaml to set:
 #   - operator.aap.url: your AAP controller URL

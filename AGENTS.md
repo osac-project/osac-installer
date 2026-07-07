@@ -33,7 +33,7 @@ yamllint --strict .
 
 ### Helm Chart
 
-```
+```text
 charts/osac/                         # Umbrella chart
   Chart.yaml                         # Dependencies on subchart repos
   values.yaml                        # Default values

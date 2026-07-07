@@ -26,6 +26,7 @@ After addressing all review comments, run the full validation suite:
 yamllint --strict .
 pre-commit run --all-files
 helm lint charts/osac/
+for f in values/*/values.yaml; do helm template osac charts/osac/ --values "$f" > /dev/null; done
 bash scripts/sync-image-tags.sh
 ```
 

@@ -21,13 +21,18 @@ must pass -- CI enforces all of them on every PR.
    ```
 
 3. **Helm lint** (validates chart structure and templates):
-   ```
+   ```bash
    helm lint charts/osac/
    ```
 
-4. **Image tag sync** (verifies Helm values image tags match submodule
-   commit SHAs):
+4. **Helm template render** (renders chart against each values file):
+   ```bash
+   for f in values/*/values.yaml; do helm template osac charts/osac/ --values "$f" > /dev/null; done
    ```
+
+5. **Image tag sync** (verifies Helm values image tags match submodule
+   commit SHAs):
+   ```bash
    bash scripts/sync-image-tags.sh
    ```
 
@@ -88,5 +93,5 @@ scripts/                         # Automation scripts (setup, teardown, sync)
 ## What Not to Modify
 
 - Do not modify files inside `base/osac-operator/`, `base/osac-fulfillment-service/`,
-  or `base/osac-aap/` -- these are submodules. Changes to component
-  manifests belong in the component repos.
+  `base/osac-aap/`, or `base/bare-metal-fulfillment-operator/` -- these are
+  submodules. Changes to component manifests belong in the component repos.

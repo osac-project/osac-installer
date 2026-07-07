@@ -11,22 +11,7 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-- certificate.yaml
-- service.yaml
-- route.yaml
-- sa.yaml
-- rbac.yaml
-- deployment.yaml
-- password-setup-job.yaml
-
-generatorOptions:
-  disableNameSuffixHash: true
-
-configMapGenerator:
-- name: keycloak-realm
-  files:
-  - realm.json=files/realm.json
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keycloak-service

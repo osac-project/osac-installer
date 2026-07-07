@@ -31,7 +31,13 @@ oc create secret generic fulfillment-controller-credentials \
   --from-literal=client-secret=<client-secret>
 ```
 
-`client-secret` must match the secret configured for the `osac-controller` client in the Keycloak realm ([prerequisites/keycloak/service/files/realm.json](../../prerequisites/keycloak/service/files/realm.json)).
+`client-secret` must match the `osac-controller` value generated at first boot by the
+`keycloak-service` init container, stored in the `keycloak-client-secrets` Secret in the
+`keycloak` namespace:
+
+```sh
+oc get secret keycloak-client-secrets -n keycloak -o jsonpath='{.data.osac-controller}' | base64 -d
+```
 
 ## Deployment
 

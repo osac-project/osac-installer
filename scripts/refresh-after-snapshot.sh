@@ -79,6 +79,19 @@ fi
 # Keycloak sync and fulfillment credentials run in parallel.
 # Credentials read from realm.json (local file) — no dependency on Keycloak being up.
 # Kustomize apply needs the credentials secret, so we wait for it before proceeding.
+#
+# realm.json ships with __OSAC_CONTROLLER_CLIENT_SECRET__/__OSAC_ADMIN_CLIENT_SECRET__
+# placeholders (see OSAC-2115) resolved at pod startup by the keycloak-service init
+# container. Anything that talks to Keycloak directly (admin API sync, credential
+# extraction) needs the same real values, read back from the keycloak-client-secrets
+# Secret that init container generates/persists.
+RESOLVED_REALM_JSON=$(mktemp)
+CONTROLLER_SECRET=$(oc get secret keycloak-client-secrets -n "${KEYCLOAK_NS}" -o jsonpath='{.data.osac-controller}' | base64 -d)
+ADMIN_SECRET=$(oc get secret keycloak-client-secrets -n "${KEYCLOAK_NS}" -o jsonpath='{.data.osac-admin}' | base64 -d)
+sed \
+    -e "s#__OSAC_CONTROLLER_CLIENT_SECRET__#${CONTROLLER_SECRET}#" \
+    -e "s#__OSAC_ADMIN_CLIENT_SECRET__#${ADMIN_SECRET}#" \
+    "${REALM_JSON}" > "${RESOLVED_REALM_JSON}"
 
 keycloak_sync() {
     echo "[1/9] Syncing Keycloak realm..."
@@ -105,7 +118,7 @@ keycloak_sync() {
     [[ -n "${KC_ADMIN_TOKEN}" && "${KC_ADMIN_TOKEN}" != "null" ]] || { echo "ERROR: Could not get Keycloak admin token" >&2; exit 1; }
 
     echo "  Syncing clients and users via admin API..."
-    jq -c '.clients[] | select(.protocol == "openid-connect" and .publicClient != true and .bearerOnly != true)' "${REALM_JSON}" | while IFS= read -r CLIENT_JSON; do
+    jq -c '.clients[] | select(.protocol == "openid-connect" and .publicClient != true and .bearerOnly != true)' "${RESOLVED_REALM_JSON}" | while IFS= read -r CLIENT_JSON; do
         CID=$(echo "${CLIENT_JSON}" | jq -r '.clientId')
         CLIENT_UUID=$(echo "${CLIENT_JSON}" | jq -r '.id')
         HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}")
@@ -120,7 +133,7 @@ keycloak_sync() {
         fi
     done
 
-    jq -c '.users[]?' "${REALM_JSON}" | while IFS= read -r USER_JSON; do
+    jq -c '.users[]?' "${RESOLVED_REALM_JSON}" | while IFS= read -r USER_JSON; do
         USERNAME=$(echo "${USER_JSON}" | jq -r '.username')
         USER_UUID=$(echo "${USER_JSON}" | jq -r '.id')
         HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${KC_ADMIN_TOKEN}" "${KC_URL}/admin/realms/osac/users/${USER_UUID}")
@@ -145,8 +158,8 @@ keycloak_sync() {
 
 create_fulfillment_credentials() {
     echo "[2/9] Recreating fulfillment controller credentials..."
-    FC_CLIENT_ID=${FC_CLIENT:-$(jq -er 'first(.clients[] | select(.serviceAccountsEnabled==true)) | .clientId' "${REALM_JSON}")}
-    FC_CLIENT_SECRET=$(jq -er ".clients[] | select(.clientId == \"${FC_CLIENT_ID}\") | .secret // empty" "${REALM_JSON}")
+    FC_CLIENT_ID=${FC_CLIENT:-$(jq -er 'first(.clients[] | select(.serviceAccountsEnabled==true)) | .clientId' "${RESOLVED_REALM_JSON}")}
+    FC_CLIENT_SECRET=$(jq -er ".clients[] | select(.clientId == \"${FC_CLIENT_ID}\") | .secret // empty" "${RESOLVED_REALM_JSON}")
     [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for ${FC_CLIENT_ID} in realm.json" >&2; exit 1; }
     oc delete secret fulfillment-controller-credentials -n "${INSTALLER_NAMESPACE}" --ignore-not-found
     oc create secret generic fulfillment-controller-credentials \

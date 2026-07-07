@@ -90,6 +90,8 @@ spec:
           value: keycloak
         - name: KC_DB_PASSWORD
           value: ""
+        - name: KC_SPI_IMPORT_REALM_FILE_STRATEGY
+          value: OVERWRITE
         args:
         - start
         - --import-realm

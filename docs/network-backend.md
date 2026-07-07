@@ -2,10 +2,9 @@
 
 The network backend controls how hosted clusters get their networking
 infrastructure (server clusters, NAT, DNS, MetalLB). The backend is selected by
-the `NETWORK_CLASS` variable in `osac-aap-configuration.env`.
+the `NETWORK_CLASS` environment variable.
 
-For general AAP configuration (env files, how the script works, base variables),
-see [AAP Configuration](aap-configuration.md).
+For general AAP configuration see [AAP Configuration](aap-configuration.md).
 
 ## Supported Backends
 
@@ -18,7 +17,7 @@ see [AAP Configuration](aap-configuration.md).
 
 When using `NETWORK_CLASS=netris`, the following additional variables must be set.
 
-### ConfigMap Variables (add to `osac-aap-configuration.env`)
+### ConfigMap Variables
 
 | Variable | Description |
 |----------|-------------|
@@ -36,7 +35,7 @@ When using `NETWORK_CLASS=netris`, the following additional variables must be se
 | `SERVER_MGMT_ROUTE_DESTINATION` | Management route destination CIDR |
 | `SERVER_MGMT_ROUTE_GATEWAY` | Management route gateway IP |
 
-### Secret Variables (add to `osac-aap-secrets.env`)
+### Secret Variables
 
 Values must be plaintext — the script base64-encodes them automatically.
 
@@ -44,12 +43,15 @@ Values must be plaintext — the script base64-encodes them automatically.
 |----------|-------------|
 | `NETRIS_PASSWORD` | Netris API password |
 
-### SSH Key Files (place in overlay `files/` directory)
+### SSH Keys
 
-| File | Description |
-|------|-------------|
-| `server-ssh-key` | Private key for SSH to bare-metal servers |
-| `server-ssh-bastion-key` | Private key for SSH to the bastion host |
+SSH private keys must be added directly to the `cluster-fulfillment-ig`
+Kubernetes Secret:
+
+| Key | Description |
+|-----|-------------|
+| `SERVER_SSH_KEY` | Private key for SSH to bare-metal servers |
+| `SERVER_SSH_BASTION_KEY` | Private key for SSH to the bastion host |
 
 ### `NETRIS_RESOURCE_CLASS_MAP` Format
 
@@ -69,8 +71,8 @@ lists the data-plane NIC names.
 
 ## Helm Chart Configuration
 
-When deploying with Helm, Netris configuration is provided via values instead of
-env files. Two values sections control the fulfillment instance groups:
+Netris configuration is provided via Helm values. Two values sections control
+the fulfillment instance groups:
 
 ### Enabling the Instance Groups
 

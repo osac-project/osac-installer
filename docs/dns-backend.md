@@ -2,11 +2,10 @@
 
 The DNS backend controls how hosted clusters get their DNS records created and
 deleted during provisioning. A pluggable dispatcher (`dns.api.dns`) delegates
-to a configurable backend driver selected by the `DNS_CLASS` variable in
-`osac-aap-configuration.env`.
+to a configurable backend driver selected by the `DNS_CLASS` environment
+variable.
 
-For general AAP configuration (env files, how the script works, base variables),
-see [AAP Configuration](aap-configuration.md).
+For general AAP configuration see [AAP Configuration](aap-configuration.md).
 
 ## Supported Backends
 
@@ -14,7 +13,7 @@ see [AAP Configuration](aap-configuration.md).
 |-------------|------------|-------------|
 | `dns.route53.dns` (default) | `dns.route53` | AWS Route 53 |
 
-## ConfigMap Variables (add to `osac-aap-configuration.env`)
+## ConfigMap Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -25,7 +24,7 @@ see [AAP Configuration](aap-configuration.md).
 
 The default Route 53 backend requires AWS credentials to manage DNS records.
 
-### Secret Variables (add to `osac-aap-secrets.env`)
+### Secret Variables
 
 Values must be plaintext — the script base64-encodes them automatically.
 
@@ -67,7 +66,6 @@ To add support for a new provider (e.g., Cloudflare):
    `osac-aap` repository.
 2. Implement `tasks/create.yaml` and `tasks/delete.yaml` using the interface
    above.
-3. Set `DNS_CLASS=dns.<provider>.dns` in your overlay's
-   `osac-aap-configuration.env`.
+3. Set `DNS_CLASS=dns.<provider>.dns` as an environment variable.
 
 No changes to `dns.api` or any existing code are required.

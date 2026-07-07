@@ -23,7 +23,7 @@ INSTALLER_NAMESPACE=<project-name> ./scripts/aap-configuration.sh
 
 All configuration is passed via shell environment variables.
 
-## ConfigMap Variables (`osac-aap-configuration.env`)
+## ConfigMap Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -38,7 +38,7 @@ All configuration is passed via shell environment variables.
 | `DNS_CLASS` | `dns.route53.dns` | DNS backend driver role (see [DNS Backend](dns-backend.md)) |
 | `DNS_ZONE` | `EXTERNAL_ACCESS_BASE_DOMAIN` | DNS zone for record management |
 
-## Secret Variables (`osac-aap-secrets.env`)
+## Secret Variables
 
 Values must be **plaintext** — the script base64-encodes them when patching the
 Kubernetes Secret. Do not pre-encode them.

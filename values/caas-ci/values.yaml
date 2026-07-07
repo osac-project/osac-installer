@@ -1,5 +1,5 @@
 # OSAC CaaS (Cluster-as-a-Service) CI Environment Values
-# Replaces overlays/caas-ci/kustomization.yaml
+# CaaS CI values
 
 bundledPostgres:
   enabled: true

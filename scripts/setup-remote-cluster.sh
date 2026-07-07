@@ -11,10 +11,7 @@ source "${SCRIPT_DIR}/lib.sh"
 HUB_KUBECONFIG=${HUB_KUBECONFIG:?"HUB_KUBECONFIG must be set"}
 REMOTE_KUBECONFIG=${REMOTE_KUBECONFIG:?"REMOTE_KUBECONFIG must be set"}
 REMOTE_API_ADDRESS=${REMOTE_API_ADDRESS:?"REMOTE_API_ADDRESS must be set (e.g. https://192.168.128.10:6443)"}
-INSTALLER_KUSTOMIZE_OVERLAY=${INSTALLER_KUSTOMIZE_OVERLAY:-"development"}
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-INSTALLER_NAMESPACE=$(grep "^namespace:" "${REPO_ROOT}/overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')
-[[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: Could not determine namespace from overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" && exit 1
+INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-"osac"}
 
 hub="--kubeconfig ${HUB_KUBECONFIG}"
 remote="--kubeconfig ${REMOTE_KUBECONFIG}"

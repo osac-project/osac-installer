@@ -37,7 +37,7 @@ spec:
           secretName: keycloak-tls-cert
       initContainers:
       - name: wait-for-database
-        image: postgres
+        image: quay.io/sclorg/postgresql-18-c10s:latest
         imagePullPolicy: IfNotPresent
         command:
         - /bin/bash
@@ -49,7 +49,7 @@ spec:
           done
       containers:
       - name: keycloak
-        image: keycloak
+        image: quay.io/keycloak/keycloak:latest
         imagePullPolicy: IfNotPresent
         volumeMounts:
         - name: realm

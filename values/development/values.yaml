@@ -1,5 +1,5 @@
 # OSAC Development Environment Values
-# Replaces overlays/development/kustomization.yaml
+# Development values
 
 # --- Operator ---
 operator:

@@ -1,5 +1,0 @@
-nameReference:
-  - kind: Issuer
-    fieldSpecs:
-      - kind: Certificate
-        path: spec/issuerRef/name

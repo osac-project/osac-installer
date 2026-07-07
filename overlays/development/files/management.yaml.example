@@ -1,5 +1,0 @@
-name: my-management
-type: openstack
-options:
-  openstack:
-    cloud: openstack

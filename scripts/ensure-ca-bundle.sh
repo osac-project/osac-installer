@@ -6,10 +6,9 @@ set -o pipefail
 
 # Ensure the shared ca-bundle Bundle exists and includes the given namespace.
 #
-# The Bundle is cluster-scoped and shared across overlays. It is NOT applied via
-# kustomize because that would overwrite the namespaceSelector and break other
-# developers' deployments. This script creates the Bundle on first deploy and
-# additively patches the selector on subsequent deploys.
+# The Bundle is cluster-scoped and shared across deployments. This script
+# creates the Bundle on first deploy and additively patches the selector on
+# subsequent deploys.
 #
 # Usage: ensure-ca-bundle.sh <namespace>
 

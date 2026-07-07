@@ -1,6 +1,6 @@
 {{/*
 TODO: Remove once the osac-operator Helm subchart includes publicipattachments
-in its ClusterRole. The kustomize manifests (config/rbac/role.yaml) have it
+in its ClusterRole. The upstream manifests (config/rbac/role.yaml) have it
 but the Helm chart (charts/operator/templates/clusterrole.yaml) does not.
 */}}
 apiVersion: rbac.authorization.k8s.io/v1

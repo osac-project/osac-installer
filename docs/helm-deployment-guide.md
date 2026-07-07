@@ -226,13 +226,13 @@ exist yet — this is expected. Apply, wait for the operator, then apply again:
 ```bash
 # First apply: creates Namespace, OperatorGroup, Subscription.
 # The CertManager CR will fail — that's expected.
-oc apply -k prerequisites/cert-manager/ || true
+oc apply -f prerequisites/cert-manager/cert-manager.yaml || true
 
 # Wait for the operator to install and register the CRD
 oc wait crd/certmanagers.operator.openshift.io --for=condition=Established --timeout=300s
 
 # Second apply: now the CertManager CR succeeds
-oc apply -k prerequisites/cert-manager/
+oc apply -f prerequisites/cert-manager/cert-manager.yaml
 
 # Wait for cert-manager deployments
 oc wait deployment/cert-manager -n cert-manager --for=condition=Available --timeout=300s
@@ -257,7 +257,9 @@ Keycloak provides identity management (OAuth/OIDC) for OSAC. It includes its
 own PostgreSQL database.
 
 ```bash
-oc apply -k prerequisites/keycloak/
+oc apply -f prerequisites/keycloak/namespace.yaml
+oc apply -f prerequisites/keycloak/database/ -n keycloak
+oc apply -f prerequisites/keycloak/service/ -n keycloak
 oc wait deployment/keycloak-service -n keycloak --for=condition=Available --timeout=600s
 ```
 
@@ -470,11 +472,10 @@ The AAP bootstrap job requires a subscription manifest (license.zip). Obtain
 it from the [Red Hat Customer Portal](https://access.redhat.com/) under
 **Subscriptions > Subscription Allocations > Export Manifest**.
 
-> **Note:** `scripts/setup.sh` creates this secret automatically when
-> `DEPLOY_MODE=helm`. Place `license.zip` in
-> `overlays/<overlay>/files/license.zip` or set the `AAP_LICENSE_FILE`
-> environment variable to its path. The manual command below is only needed
-> if you are not using `setup.sh`.
+> **Note:** `scripts/setup.sh` creates this secret automatically. Place
+> `license.zip` in your values directory (e.g., `values/<env>/license.zip`)
+> or set the `AAP_LICENSE_FILE` environment variable to its path. The manual
+> command below is only needed if you are not using `setup.sh`.
 
 ```bash
 # Create the license secret (manual method)
@@ -488,8 +489,8 @@ oc create secret generic config-as-code-manifest-ig \
 This tells the AAP bootstrap job which execution environment image and git
 repository to use for configuration playbooks.
 
-> **Note:** `scripts/setup.sh` creates this secret automatically when
-> `DEPLOY_MODE=helm`, using sensible defaults. Override via `AAP_EE_IMAGE`,
+> **Note:** `scripts/setup.sh` creates this secret automatically using
+> sensible defaults. Override via `AAP_EE_IMAGE`,
 > `AAP_PROJECT_GIT_URI`, and `AAP_PROJECT_GIT_BRANCH` environment variables.
 > The manual command below is only needed if you are not using `setup.sh`.
 
@@ -599,19 +600,16 @@ oc create configmap publish-templates-ig \
 
 </details>
 
-#### Alternative: Use env files
+#### Alternative: Use environment variables
 
 Instead of creating each ConfigMap/Secret manually, you can use the
-`scripts/aap-configuration.sh` script. Copy and edit the env files:
+`scripts/aap-configuration.sh` script with environment variables:
 
 ```bash
-cp overlays/development/files/osac-aap-secrets.env.example \
-   overlays/development/files/osac-aap-secrets.env
-# Edit osac-aap-secrets.env with your credentials
-# Edit overlays/development/files/osac-aap-configuration.env with your settings
-
-# Apply after Helm deploy:
-INSTALLER_NAMESPACE=${NAMESPACE} INSTALLER_KUSTOMIZE_OVERLAY=development \
+# Set your configuration as environment variables, then apply after Helm deploy:
+INSTALLER_NAMESPACE=${NAMESPACE} \
+NETWORK_CLASS=esi \
+HOSTED_CLUSTER_BASE_DOMAIN=box.massopen.cloud \
   ./scripts/aap-configuration.sh
 ```
 
@@ -818,7 +816,6 @@ from env files):
 
 ```bash
 INSTALLER_NAMESPACE=${NAMESPACE} \
-INSTALLER_KUSTOMIZE_OVERLAY=development \
   ./scripts/aap-configuration.sh
 ```
 
@@ -916,7 +913,7 @@ VALUES_FILE=values/caas-ci/values.yaml \
 ```
 
 The script handles prerequisite installation, secret creation, Helm deploy,
-and all post-install steps. Set `DEPLOY_MODE=helm` (default) to use Helm.
+and all post-install steps.
 
 For **osac-installer**, deploy in-cluster PostgreSQL via an operator **before**
 running `setup.sh` (see [Phase 1.9](#19-postgresql-fulfillment-database)). The

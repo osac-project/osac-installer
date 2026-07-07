@@ -1,5 +1,5 @@
 # OSAC VMaaS (VM-as-a-Service) CI Environment Values
-# Replaces overlays/vmaas-ci/kustomization.yaml
+# VMaaS CI values
 
 # --- Operator ---
 operator:

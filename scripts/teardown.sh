@@ -109,7 +109,7 @@ done
 # Phase 2: Delete application-level resources via Helm
 echo "Uninstalling OSAC Helm release..."
 if helm status osac -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
-    helm uninstall osac -n "${INSTALLER_NAMESPACE}" --wait --timeout 5m
+    helm uninstall osac -n "${INSTALLER_NAMESPACE}" --wait --timeout 20m
 else
     echo "  No Helm release found, skipping"
 fi

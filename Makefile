@@ -1,6 +1,5 @@
 INSTALLER_NAMESPACE ?= osac
-VALUES_FILE ?= values/development.yaml
-DEPLOY_MODE ?= helm
+VALUES_FILE ?= values/development/values.yaml
 
 .PHONY: help
 help: ## Display this help
@@ -44,8 +43,8 @@ helm-undeploy: ## Uninstall OSAC from current cluster
 	helm uninstall osac --namespace $(INSTALLER_NAMESPACE)
 
 .PHONY: setup
-setup: ## Run setup.sh with DEPLOY_MODE=helm
-	DEPLOY_MODE=$(DEPLOY_MODE) ./scripts/setup.sh
+setup: ## Run setup.sh
+	./scripts/setup.sh
 
 .PHONY: teardown
 teardown: ## Teardown OSAC deployment

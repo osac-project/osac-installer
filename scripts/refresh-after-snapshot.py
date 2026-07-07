@@ -444,6 +444,10 @@ def keycloak_sync(config: RefreshConfig) -> None:
         raise subprocess.CalledProcessError(
             apply_result.returncode, ["oc", "apply", "-f", "-"],
             output=apply_result.stdout, stderr=apply_result.stderr)
+    oc("set", "env", "deploy/keycloak-service",
+       "KC_SPI_IMPORT_REALM_FILE_STRATEGY=OVERWRITE",
+       "-n", config.keycloak_ns)
+    oc("rollout", "restart", "deploy/keycloak-service", "-n", config.keycloak_ns)
     oc("rollout", "status", "deploy/keycloak-service", "-n", config.keycloak_ns,
        "--timeout=300s")
 

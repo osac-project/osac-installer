@@ -215,6 +215,15 @@ else
     KEYCLOAK_NS="keycloak"
     wait_for_namespace_cleanup keycloak
     oc apply -f prerequisites/keycloak/namespace.yaml
+    oc create configmap keycloak-db-server-config \
+        --from-file=server.conf=prerequisites/keycloak/database/files/server.conf \
+        -n keycloak --dry-run=client -o yaml | oc apply -f -
+    oc create configmap keycloak-db-access-config \
+        --from-file=access.conf=prerequisites/keycloak/database/files/access.conf \
+        -n keycloak --dry-run=client -o yaml | oc apply -f -
+    oc create configmap keycloak-realm \
+        --from-file=realm.json=prerequisites/keycloak/service/files/realm.json \
+        -n keycloak --dry-run=client -o yaml | oc apply -f -
     oc apply -f prerequisites/keycloak/database/ -n keycloak
     oc apply -f prerequisites/keycloak/service/ -n keycloak
 fi
@@ -226,8 +235,6 @@ if oc get deployment automation-controller-operator-controller-manager -n aap &>
     AAP_NS="aap"
 elif oc get deployment automation-controller-operator-controller-manager -n ansible-aap &>/dev/null; then
     AAP_NS="ansible-aap"
-elif oc get deployment automation-controller-operator-controller-manager -n aap &>/dev/null; then
-    AAP_NS="aap"
 elif oc get deployment automation-controller-operator-controller-manager -n openshift-operators &>/dev/null; then
     AAP_NS="openshift-operators"
 fi

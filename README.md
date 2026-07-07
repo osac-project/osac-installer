@@ -217,6 +217,15 @@ oc apply -f prerequisites/ca-issuer.yaml
 
 # Keycloak
 oc apply -f prerequisites/keycloak/namespace.yaml
+oc create configmap keycloak-db-server-config \
+    --from-file=server.conf=prerequisites/keycloak/database/files/server.conf \
+    -n keycloak --dry-run=client -o yaml | oc apply -f -
+oc create configmap keycloak-db-access-config \
+    --from-file=access.conf=prerequisites/keycloak/database/files/access.conf \
+    -n keycloak --dry-run=client -o yaml | oc apply -f -
+oc create configmap keycloak-realm \
+    --from-file=realm.json=prerequisites/keycloak/service/files/realm.json \
+    -n keycloak --dry-run=client -o yaml | oc apply -f -
 oc apply -f prerequisites/keycloak/database/ -n keycloak
 oc apply -f prerequisites/keycloak/service/ -n keycloak
 oc wait --for=condition=Available deployment/keycloak-service -n keycloak --timeout=600s

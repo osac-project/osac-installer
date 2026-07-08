@@ -66,6 +66,7 @@ spec:
           fi
           CONTROLLER_SECRET=$(oc get secret keycloak-client-secrets -o jsonpath='{.data.osac-controller}' | base64 -d)
           ADMIN_SECRET=$(oc get secret keycloak-client-secrets -o jsonpath='{.data.osac-admin}' | base64 -d)
+          [[ -n "${CONTROLLER_SECRET}" && -n "${ADMIN_SECRET}" ]] || { echo "ERROR: keycloak-client-secrets is missing osac-controller or osac-admin" >&2; exit 1; }
           sed \
             -e "s#__OSAC_CONTROLLER_CLIENT_SECRET__#${CONTROLLER_SECRET}#" \
             -e "s#__OSAC_ADMIN_CLIENT_SECRET__#${ADMIN_SECRET}#" \

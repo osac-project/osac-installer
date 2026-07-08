@@ -37,6 +37,26 @@ grep -q 'wait_for_cluster_stability()' "${LIB_SH}" || \
     fail "lib.sh must define wait_for_cluster_stability (OSAC-1964-csv-exist)"
 pass "lib.sh defines wait_for_cluster_stability"
 
+grep -q '_should_skip_mcp_stability_check()' "${LIB_SH}" || \
+    fail "lib.sh must define _should_skip_mcp_stability_check for CI MCP skip"
+pass "lib.sh defines _should_skip_mcp_stability_check"
+
+grep -q 'SETUP_PHASE:-all' "${LIB_SH}" || \
+    fail "MCP skip logic must consider SETUP_PHASE (CI prerequisites vs full install)"
+pass "lib.sh gates MCP skip on SETUP_PHASE"
+
+grep -q 'Skipping MCP stability check (CI prerequisites phase' "${LIB_SH}" || \
+    fail "wait_for_cluster_stability must skip MCP wait only in CI prerequisites phase"
+pass "lib.sh skips MCP stability check in CI prerequisites phase"
+
+grep -q 'machine_count' "${LIB_SH}" || \
+    fail "lib.sh must skip empty MachineConfigPools when checking MCP stability"
+pass "lib.sh skips empty MachineConfigPools in MCP check"
+
+grep -q 'MachineConfigPool diagnostics' "${LIB_SH}" || \
+    fail "lib.sh should dump MCP diagnostics on stability timeout"
+pass "lib.sh dumps MCP diagnostics on stability timeout"
+
 grep -q 'wait_for_machineconfigpools_stable()' "${LIB_SH}" || \
     fail "lib.sh must define wait_for_machineconfigpools_stable for portable MCP checks"
 pass "lib.sh defines wait_for_machineconfigpools_stable"

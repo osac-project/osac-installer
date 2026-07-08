@@ -32,8 +32,8 @@ if [[ "${SETUP_PHASE}" == "all" || "${SETUP_PHASE}" == "prerequisites" ]]; then
 
 # Optionally install LVMS as storage service (must be before keycloak which needs a default storage class)
 if [[ "${STORAGE_SERVICE}" == "true" ]]; then
-    # OSAC-1964-csv-exist: defer LVMS until MCP rollout and API are stable (KubeletConfig
-    # in CI can leave the master pool updating while the API returns EOF).
+    # OSAC-1964-csv-exist: defer LVMS until the API is stable (KubeletConfig in CI can
+    # leave the API returning EOF). CI prerequisites already wait for mcp/master Updated.
     wait_for_cluster_stability || exit 1
 
     wait_for_namespace_cleanup openshift-storage

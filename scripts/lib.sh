@@ -19,14 +19,23 @@ retry_until() {
     done
 }
 
-# Returns 0 when every present MachineConfigPool is Updated with matching configuration.
+# Returns 0 when every MCP with machines has Updated=True.
 _machineconfigpools_updated() {
-    local mcp status config desired
+    local mcp status machine_count
     for mcp in $(oc get mcp --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
+        machine_count=$(oc get mcp "${mcp}" -o jsonpath='{.status.machineCount}' 2>/dev/null || echo 0)
+        (( machine_count > 0 )) || continue
         status=$(oc get mcp "${mcp}" -o jsonpath='{.status.conditions[?(@.type=="Updated")].status}' 2>/dev/null || true)
-        config=$(oc get mcp "${mcp}" -o jsonpath='{.status.configuration.name}' 2>/dev/null || true)
-        desired=$(oc get mcp "${mcp}" -o jsonpath='{.status.desiredConfiguration.name}' 2>/dev/null || true)
-        [[ "${status}" == "True" && "${config}" == "${desired}" ]] || return 1
+        [[ "${status}" == "True" ]] || return 1
+    done
+}
+
+# Dump MCP state to aid CI triage when the stability gate times out.
+_dump_machineconfigpool_diagnostics() {
+    echo "=== MachineConfigPool diagnostics ==="
+    oc get mcp -o wide || true
+    for mcp in $(oc get mcp --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
+        oc describe mcp "${mcp}" || true
     done
 }
 
@@ -45,6 +54,7 @@ wait_for_machineconfigpools_stable() {
     echo "Waiting for MachineConfigPools to be Updated..."
     retry_until "${timeout}" 10 '_machineconfigpools_updated' || {
         echo "Timed out waiting for MachineConfigPools to reach Updated state"
+        _dump_machineconfigpool_diagnostics
         return 1
     }
 }
@@ -61,13 +71,34 @@ wait_for_api_connectivity() {
     }
 }
 
+# Returns 0 when MCP stability wait should be skipped.
+# CI E2E runs "Prepare cluster prerequisites" (mcp/master wait + settle) before
+# SETUP_PHASE=prerequisites setup.sh. Manual installs (SETUP_PHASE=all, no CI) still
+# need the MCP gate when KubeletConfig or other MCO changes may be in flight.
+# Override with SKIP_MCP_STABILITY_CHECK=true if needed.
+_should_skip_mcp_stability_check() {
+    if [[ "${SKIP_MCP_STABILITY_CHECK:-}" == "true" ]]; then
+        return 0
+    fi
+    if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        [[ "${SETUP_PHASE:-all}" == "prerequisites" ]]
+        return $?
+    fi
+    return 1
+}
+
 # Combined gate before operator installs that need a responsive API after MCP rollouts.
+# Skips MCP wait only in CI prerequisites phase (workflow already gated MCP).
 # Usage: wait_for_cluster_stability [mcp_timeout_seconds] [api_timeout_seconds]
 wait_for_cluster_stability() {
     local mcp_timeout="${1:-600}"
     local api_timeout="${2:-120}"
 
-    wait_for_machineconfigpools_stable "${mcp_timeout}" || return 1
+    if _should_skip_mcp_stability_check; then
+        echo "Skipping MCP stability check (CI prerequisites phase; workflow already gated MCP rollout)"
+    else
+        wait_for_machineconfigpools_stable "${mcp_timeout}" || return 1
+    fi
     wait_for_api_connectivity "${api_timeout}" || return 1
 }
 

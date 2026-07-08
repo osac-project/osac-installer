@@ -50,6 +50,13 @@ setup: ## Run setup.sh
 teardown: ## Teardown OSAC deployment
 	./scripts/teardown.sh
 
+.PHONY: test-setup-lvms-timeouts
+test-setup-lvms-timeouts: ## Regression test for OSAC-1964 LVMS wait timeouts
+	bash scripts/test/setup-lvms-timeouts.test.sh
+
+.PHONY: test
+test: test-setup-lvms-timeouts ## Run installer regression tests
+
 ##@ Validation
 
 .PHONY: helm-validate

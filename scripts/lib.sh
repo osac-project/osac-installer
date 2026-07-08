@@ -19,6 +19,58 @@ retry_until() {
     done
 }
 
+# Returns 0 when every present MachineConfigPool is Updated with matching configuration.
+_machineconfigpools_updated() {
+    local mcp status config desired
+    for mcp in $(oc get mcp --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
+        status=$(oc get mcp "${mcp}" -o jsonpath='{.status.conditions[?(@.type=="Updated")].status}' 2>/dev/null || true)
+        config=$(oc get mcp "${mcp}" -o jsonpath='{.status.configuration.name}' 2>/dev/null || true)
+        desired=$(oc get mcp "${mcp}" -o jsonpath='{.status.desiredConfiguration.name}' 2>/dev/null || true)
+        [[ "${status}" == "True" && "${config}" == "${desired}" ]] || return 1
+    done
+}
+
+# Wait for MachineConfigPools to finish applying pending changes.
+# On HyperShift or custom control-plane topologies, mcp/master may be absent or
+# non-representative; wait for all present MCPs, or skip when none exist.
+# Usage: wait_for_machineconfigpools_stable [timeout_seconds]
+wait_for_machineconfigpools_stable() {
+    local timeout="${1:-600}"
+
+    if ! oc get mcp &>/dev/null || [[ -z "$(oc get mcp --no-headers 2>/dev/null)" ]]; then
+        echo "No MachineConfigPools found; skipping MCP stability check (typical for HyperShift or custom CP topologies)"
+        return 0
+    fi
+
+    echo "Waiting for MachineConfigPools to be Updated..."
+    retry_until "${timeout}" 10 '_machineconfigpools_updated' || {
+        echo "Timed out waiting for MachineConfigPools to reach Updated state"
+        return 1
+    }
+}
+
+# Wait for stable API server connectivity (healthz + namespace list).
+# Usage: wait_for_api_connectivity [timeout_seconds]
+wait_for_api_connectivity() {
+    local timeout="${1:-120}"
+
+    echo "Waiting for API server connectivity..."
+    retry_until "${timeout}" 5 'oc get --raw /healthz &>/dev/null && oc get ns default &>/dev/null' || {
+        echo "Timed out waiting for API server connectivity"
+        return 1
+    }
+}
+
+# Combined gate before operator installs that need a responsive API after MCP rollouts.
+# Usage: wait_for_cluster_stability [mcp_timeout_seconds] [api_timeout_seconds]
+wait_for_cluster_stability() {
+    local mcp_timeout="${1:-600}"
+    local api_timeout="${2:-120}"
+
+    wait_for_machineconfigpools_stable "${mcp_timeout}" || return 1
+    wait_for_api_connectivity "${api_timeout}" || return 1
+}
+
 # Wait for a namespace to finish terminating if it exists in Terminating state
 # Usage: wait_for_namespace_cleanup <namespace> [timeout_seconds]
 wait_for_namespace_cleanup() {

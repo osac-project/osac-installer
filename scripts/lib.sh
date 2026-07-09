@@ -20,12 +20,15 @@ retry_until() {
 }
 
 # Returns 0 when every MCP with machines has Updated=True.
+# Fails closed on API errors so retry_until keeps polling during transient EOF.
 _machineconfigpools_updated() {
-    local mcp status machine_count
-    for mcp in $(oc get mcp --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
-        machine_count=$(oc get mcp "${mcp}" -o jsonpath='{.status.machineCount}' 2>/dev/null || echo 0)
+    local mcp status machine_count mcp_list
+    mcp_list=$(oc get mcp --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null) || return 1
+    [[ -n "${mcp_list}" ]] || return 1
+    for mcp in ${mcp_list}; do
+        machine_count=$(oc get mcp "${mcp}" -o jsonpath='{.status.machineCount}' 2>/dev/null) || return 1
         (( machine_count > 0 )) || continue
-        status=$(oc get mcp "${mcp}" -o jsonpath='{.status.conditions[?(@.type=="Updated")].status}' 2>/dev/null || true)
+        status=$(oc get mcp "${mcp}" -o jsonpath='{.status.conditions[?(@.type=="Updated")].status}' 2>/dev/null) || return 1
         [[ "${status}" == "True" ]] || return 1
     done
 }
@@ -46,7 +49,9 @@ _dump_machineconfigpool_diagnostics() {
 wait_for_machineconfigpools_stable() {
     local timeout="${1:-600}"
 
-    if ! oc get mcp &>/dev/null || [[ -z "$(oc get mcp --no-headers 2>/dev/null)" ]]; then
+    # Skip only when the MCP API is reachable but no pools exist (HyperShift/custom CP).
+    # API failures fall through to retry_until so transient EOF does not bypass the gate.
+    if oc get mcp &>/dev/null && [[ -z "$(oc get mcp --no-headers 2>/dev/null)" ]]; then
         echo "No MachineConfigPools found; skipping MCP stability check (typical for HyperShift or custom CP topologies)"
         return 0
     fi

@@ -65,6 +65,19 @@ grep -q '_machineconfigpools_updated()' "${LIB_SH}" || \
     fail "lib.sh must define _machineconfigpools_updated helper"
 pass "lib.sh defines _machineconfigpools_updated helper"
 
+grep -q 'mcp_list=$(oc get mcp' "${LIB_SH}" || \
+    fail "lib.sh must capture MCP list before iterating _machineconfigpools_updated"
+pass "lib.sh captures MCP list before iterating"
+
+grep -q 'mcp_list=$(oc get mcp.*) || return 1' "${LIB_SH}" || \
+    fail "_machineconfigpools_updated must fail closed when MCP list retrieval fails"
+pass "lib.sh fails closed on MCP list API errors"
+
+if grep -F 'machine_count=$(oc get mcp' "${LIB_SH}" | grep -q '|| echo 0'; then
+    fail "_machineconfigpools_updated must not silently skip pools on machineCount API failure"
+fi
+pass "lib.sh does not mask machineCount API failures"
+
 if grep -E 'oc get mcp/master|mcp/master -o' "${LIB_SH}"; then
     fail "lib.sh must not hardcode mcp/master; use wait_for_machineconfigpools_stable for HyperShift/custom CP topologies"
 fi

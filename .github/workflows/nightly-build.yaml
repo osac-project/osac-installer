@@ -23,10 +23,10 @@ env:
     osac-aap:osac-aap:base/osac-aap:inline:base/osac-aap/charts/aap
     bare-metal-fulfillment-operator:bare-metal-fulfillment-operator:base/bare-metal-fulfillment-operator:tag:base/bare-metal-fulfillment-operator/charts/operator
     osac-ui:osac-ui:base/osac-ui:inline:base/osac-ui/charts/ui
-  # CRD charts (no image, just chart paths)
+  # CRD charts: name, submodule path, chart path (no image, so no tag-mode field)
   CRD_CHARTS: >-
-    osac-operator-crds:base/osac-operator/charts/operator-crds
-    bare-metal-fulfillment-operator-crds:base/bare-metal-fulfillment-operator/charts/operator-crds
+    osac-operator-crds:base/osac-operator:base/osac-operator/charts/operator-crds
+    bare-metal-fulfillment-operator-crds:base/bare-metal-fulfillment-operator:base/bare-metal-fulfillment-operator/charts/operator-crds
 
 jobs:
   # -------------------------------------------------------------------
@@ -40,6 +40,8 @@ jobs:
       packages: read
     outputs:
       version: ${{ steps.version.outputs.version }}
+      base-version: ${{ steps.version.outputs.base-version }}
+      nightly-suffix: ${{ steps.version.outputs.nightly-suffix }}
       temp-branch: ${{ steps.push.outputs.branch }}
       temp-sha: ${{ steps.push.outputs.sha }}
 
@@ -122,11 +124,26 @@ jobs:
       env:
         COMMIT_SHA: ${{ steps.push.outputs.sha }}
       run: |
-        BASE_VERSION=$(yq '.version' charts/osac/Chart.yaml)
+        set -euo pipefail
         DATE=$(date -u +%Y%m%d)
         SHORT_SHA="${COMMIT_SHA:0:7}"
-        VERSION="${BASE_VERSION}-nightly.${DATE}.${SHORT_SHA}.${GITHUB_RUN_NUMBER}"
+        NIGHTLY_SUFFIX="nightly.${DATE}.${SHORT_SHA}.${GITHUB_RUN_NUMBER}"
+
+        # Use the umbrella chart's own latest real release tag (not the
+        # Chart.yaml placeholder, which is never bumped) so the nightly
+        # version reflects where this build actually sits relative to
+        # real releases. Fail loudly rather than silently guessing a
+        # version if no real tag is reachable.
+        if ! BASE_TAG=$(git describe --tags --abbrev=0 --exclude '*-nightly*' 2>/dev/null); then
+          echo "ERROR: no real (non-nightly) release tag reachable from HEAD — refusing to guess a version" >&2
+          exit 1
+        fi
+        BASE_VERSION="${BASE_TAG#v}"
+        VERSION="${BASE_VERSION}-${NIGHTLY_SUFFIX}"
+
         echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        echo "base-version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "nightly-suffix=${NIGHTLY_SUFFIX}" >> "$GITHUB_OUTPUT"
         echo "Nightly version: ${VERSION} (base: ${BASE_VERSION})"
 
   # -------------------------------------------------------------------
@@ -159,6 +176,8 @@ jobs:
       packages: write
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
+      BASE_VERSION: ${{ needs.prepare.outputs.base-version }}
+      NIGHTLY_SUFFIX: ${{ needs.prepare.outputs.nightly-suffix }}
 
     steps:
     - name: Checkout temporary branch
@@ -184,20 +203,33 @@ jobs:
         GHCR_USER: ${{ github.actor }}
       run: printf '%s' "${GHCR_TOKEN}" | helm registry login "${{ env.REGISTRY }}" -u "${GHCR_USER}" --password-stdin
 
+    - name: Compute per-chart versions
+      run: ./scripts/generate-chart-versions.sh
+
+    - name: Upload chart-versions.txt
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      with:
+        name: chart-versions-${{ needs.prepare.outputs.version }}
+        path: chart-versions.txt
+        retention-days: 1
+
     - name: Publish component charts
       env:
         OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
       run: |
         set -euo pipefail
+        get_version() { ./scripts/get-chart-version.sh "$1"; }
         published=""
 
         for entry in ${CRD_CHARTS}; do
           chart_name="${entry%%:*}"
-          chart_path="${entry#*:}"
-          echo "--- Publishing ${chart_name} ---"
-          helm package "${chart_path}" --version "${VERSION}"
-          helm push "${chart_name}-${VERSION}.tgz" "${OCI_REPO}"
-          published="${published}\n${chart_name}:${VERSION}"
+          rest="${entry#*:}"
+          chart_path="${rest#*:}"
+          version=$(get_version "${chart_name}")
+          echo "--- Publishing ${chart_name} (${version}) ---"
+          helm package "${chart_path}" --version "${version}"
+          helm push "${chart_name}-${version}.tgz" "${OCI_REPO}"
+          published="${published}\n${chart_name}:${version}"
         done
 
         for entry in ${COMPONENTS}; do
@@ -206,10 +238,11 @@ jobs:
           rest="${rest#*:}"
           rest="${rest#*:}"
           chart_path="${rest#*:}"
-          echo "--- Publishing ${component} ---"
-          helm package "${chart_path}" --version "${VERSION}"
-          helm push "${component}-${VERSION}.tgz" "${OCI_REPO}"
-          published="${published}\n${component}:${VERSION}"
+          version=$(get_version "${component}")
+          echo "--- Publishing ${component} (${version}) ---"
+          helm package "${chart_path}" --version "${version}"
+          helm push "${component}-${version}.tgz" "${OCI_REPO}"
+          published="${published}\n${component}:${version}"
         done
 
         echo -e "Published charts:${published}"
@@ -219,15 +252,18 @@ jobs:
         OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
       run: |
         set -euo pipefail
+        get_version() { ./scripts/get-chart-version.sh "$1"; }
         for entry in ${CRD_CHARTS}; do
           chart_name="${entry%%:*}"
-          echo "Verifying ${chart_name}..."
-          helm show chart "${OCI_REPO}/${chart_name}" --version "${VERSION}"
+          version=$(get_version "${chart_name}")
+          echo "Verifying ${chart_name} (${version})..."
+          helm show chart "${OCI_REPO}/${chart_name}" --version "${version}"
         done
         for entry in ${COMPONENTS}; do
           component="${entry%%:*}"
-          echo "Verifying ${component}..."
-          helm show chart "${OCI_REPO}/${component}" --version "${VERSION}"
+          version=$(get_version "${component}")
+          echo "Verifying ${component} (${version})..."
+          helm show chart "${OCI_REPO}/${component}" --version "${version}"
         done
 
     - name: Rewrite umbrella chart to use published components
@@ -235,17 +271,22 @@ jobs:
         OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
       run: |
         set -euo pipefail
+        GET_VERSION_SCRIPT="$(pwd)/scripts/get-chart-version.sh"
+        CHART_VERSIONS_FILE="$(pwd)/chart-versions.txt"
+        get_version() { "${GET_VERSION_SCRIPT}" "$1" 1 "${CHART_VERSIONS_FILE}"; }
         cd charts/osac
 
         for entry in ${CRD_CHARTS}; do
           chart_name="${entry%%:*}"
+          version=$(get_version "${chart_name}")
           yq -i "(.dependencies[] | select(.name == \"${chart_name}\")).repository = \"${OCI_REPO}\"" Chart.yaml
-          yq -i "(.dependencies[] | select(.name == \"${chart_name}\")).version = \"${VERSION}\"" Chart.yaml
+          yq -i "(.dependencies[] | select(.name == \"${chart_name}\")).version = \"${version}\"" Chart.yaml
         done
         for entry in ${COMPONENTS}; do
           component="${entry%%:*}"
+          version=$(get_version "${component}")
           yq -i "(.dependencies[] | select(.name == \"${component}\")).repository = \"${OCI_REPO}\"" Chart.yaml
-          yq -i "(.dependencies[] | select(.name == \"${component}\")).version = \"${VERSION}\"" Chart.yaml
+          yq -i "(.dependencies[] | select(.name == \"${component}\")).version = \"${version}\"" Chart.yaml
         done
 
         rm -f Chart.lock
@@ -305,6 +346,8 @@ jobs:
         helm show chart "${OCI_REPO}/osac" --version "${VERSION}"
 
     - name: Generate images.txt
+      env:
+        REPO_OWNER: ${{ github.repository_owner }}
       run: |
         set -euo pipefail
         helm template osac "osac-${VERSION}.tgz" \
@@ -337,30 +380,28 @@ jobs:
         done
         grep -v -F -f images.txt images-raw.txt | sort >> images.txt || true
 
+        get_version() { ./scripts/get-chart-version.sh "$1" 1; }
+        get_source_tag() { ./scripts/get-chart-version.sh "$1" 2; }
+        get_source_sha() { ./scripts/get-chart-version.sh "$1" 3; }
+        OCI_BASE="${REGISTRY}/${REPO_OWNER}/charts"
         echo "" >> images.txt
-        echo "# Component versions" >> images.txt
-        for entry in ${COMPONENTS}; do
-          component="${entry%%:*}"
-          rest="${entry#*:}"
-          rest="${rest#*:}"
-          submodule_path="${rest%%:*}"
-          version=$(git -C "${submodule_path}" describe --tags --abbrev=0 2>/dev/null || echo "unknown")
-          sha=$(git -C "${submodule_path}" rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
-          echo "# ${component}=${version} (${sha})" >> images.txt
-        done
-
-        OCI_BASE="${REGISTRY}/${{ github.repository_owner }}/charts"
-        echo "" >> images.txt
-        echo "# Chart versions (${VERSION})" >> images.txt
+        echo "# Chart source & versions" >> images.txt
         for entry in ${CRD_CHARTS}; do
           chart_name="${entry%%:*}"
-          echo "# oci://${OCI_BASE}/${chart_name}:${VERSION}" >> images.txt
+          chart_version=$(get_version "${chart_name}")
+          src_tag=$(get_source_tag "${chart_name}")
+          src_sha=$(get_source_sha "${chart_name}")
+          echo "# ${chart_name}: source=${src_tag} (${src_sha}), chart=oci://${OCI_BASE}/${chart_name}:${chart_version}" >> images.txt
         done
         for entry in ${COMPONENTS}; do
           component="${entry%%:*}"
-          echo "# oci://${OCI_BASE}/${component}:${VERSION}" >> images.txt
+          chart_version=$(get_version "${component}")
+          src_tag=$(get_source_tag "${component}")
+          src_sha=$(get_source_sha "${component}")
+          echo "# ${component}: source=${src_tag} (${src_sha}), chart=oci://${OCI_BASE}/${component}:${chart_version}" >> images.txt
         done
-        echo "# oci://${OCI_BASE}/osac:${VERSION}" >> images.txt
+        UMBRELLA_SHA=$(git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
+        echo "# osac: source=v${BASE_VERSION} (${UMBRELLA_SHA}), chart=oci://${OCI_BASE}/osac:${VERSION}" >> images.txt
 
         rm -f images-raw.txt
 
@@ -398,6 +439,11 @@ jobs:
         ref: ${{ needs.prepare.outputs.temp-branch }}
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Download chart-versions.txt
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+      with:
+        name: chart-versions-${{ needs.prepare.outputs.version }}
 
     - name: Create nightly tag
       run: |
@@ -439,7 +485,53 @@ jobs:
         RUN_ID: ${{ github.run_id }}
         REPO_OWNER: ${{ github.repository_owner }}
       run: |
-        OCI_BASE="oci://ghcr.io/${REPO_OWNER}/charts"
+        set -euo pipefail
+        get_version() { ./scripts/get-chart-version.sh "$1"; }
+        OCI_BASE="oci://${REGISTRY}/${REPO_OWNER}/charts"
+
+        # Every chart shares the same OCI_BASE prefix, so state it once in
+        # the header instead of repeating the full path in every row (each
+        # chart's own version differs by more than just a shared suffix —
+        # e.g. the source commit SHA embedded per component — so the full
+        # version string is kept per row).
+        declare -a NAMES VERSIONS
+        for entry in ${CRD_CHARTS}; do
+          chart_name="${entry%%:*}"
+          NAMES+=("${chart_name}")
+          VERSIONS+=("$(get_version "${chart_name}")")
+        done
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          NAMES+=("${component}")
+          VERSIONS+=("$(get_version "${component}")")
+        done
+        NAMES+=("osac (umbrella)")
+        VERSIONS+=("${VERSION}")
+
+        max_len() {
+          local max=${#1}
+          shift
+          for s in "$@"; do
+            (( ${#s} > max )) && max=${#s}
+          done
+          echo "${max}"
+        }
+        NAME_W=$(max_len "Chart" "${NAMES[@]}")
+        VERSION_W=$(max_len "Version" "${VERSIONS[@]}")
+
+        hline() { printf '─%.0s' $(seq 1 "$(($1 + 2))"); }
+        row() { printf '│ %-*s │ %-*s │' "${NAME_W}" "$1" "${VERSION_W}" "$2"; }
+
+        TABLE="┌$(hline "${NAME_W}")┬$(hline "${VERSION_W}")┐\n"
+        TABLE="${TABLE}$(row "Chart" "Version")\n"
+        TABLE="${TABLE}├$(hline "${NAME_W}")┼$(hline "${VERSION_W}")┤\n"
+        for i in "${!NAMES[@]}"; do
+          TABLE="${TABLE}$(row "${NAMES[$i]}" "${VERSIONS[$i]}")\n"
+        done
+        TABLE="${TABLE}└$(hline "${NAME_W}")┴$(hline "${VERSION_W}")┘"
+
+        SUMMARY_TEXT="*Charts published to* \`${OCI_BASE}/<chart>\`*:*\n\`\`\`\n${TABLE}\n\`\`\`\n*Tag:* \`v${VERSION}\`\n*Run:* <${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}|View workflow>"
+
         curl -sf --max-time 15 -X POST "${SLACK_WEBHOOK_URL}" \
           -H "Content-Type: application/json" \
           -d @- <<PAYLOAD
@@ -453,7 +545,7 @@ jobs:
               "type": "section",
               "text": {
                 "type": "mrkdwn",
-                "text": "*Charts published to GHCR:*\n\`\`\`\nosac-operator-crds            ${VERSION}  ${OCI_BASE}/osac-operator-crds\nosac-operator                 ${VERSION}  ${OCI_BASE}/osac-operator\nfulfillment-service           ${VERSION}  ${OCI_BASE}/fulfillment-service\nosac-aap                      ${VERSION}  ${OCI_BASE}/osac-aap\nbare-metal-fulfillment-operator-crds  ${VERSION}  ${OCI_BASE}/bare-metal-fulfillment-operator-crds\nbare-metal-fulfillment-operator       ${VERSION}  ${OCI_BASE}/bare-metal-fulfillment-operator\nosac-ui                       ${VERSION}  ${OCI_BASE}/osac-ui\nosac (umbrella)               ${VERSION}  ${OCI_BASE}/osac\n\`\`\`\n*Tag:* \`v${VERSION}\`\n*Run:* <${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}|View workflow>"
+                "text": "${SUMMARY_TEXT}"
               }
             }
           ]

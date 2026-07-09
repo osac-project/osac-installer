@@ -43,7 +43,7 @@ spec:
           claimName: keycloak-database
       initContainers:
       - name: password-generator
-        image: quay.io/openshift/origin-cli:latest
+        image: quay.io/openshift/origin-cli:4.21
         command:
         - /bin/bash
         - -c
@@ -56,7 +56,7 @@ spec:
           fi
       containers:
       - name: server
-        image: quay.io/sclorg/postgresql-18-c10s:latest
+        image: quay.io/sclorg/postgresql-18-c10s:c10s
         imagePullPolicy: IfNotPresent
         env:
         - name: POSTGRESQL_USER

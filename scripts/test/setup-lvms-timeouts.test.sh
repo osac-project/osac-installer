@@ -78,6 +78,10 @@ if grep -F 'machine_count=$(oc get mcp' "${LIB_SH}" | grep -q '|| echo 0'; then
 fi
 pass "lib.sh does not mask machineCount API failures"
 
+grep -q 'mcp_list=$(oc get mcp --no-headers 2>/dev/null) && \[\[ -z "${mcp_list}" \]\]' "${LIB_SH}" || \
+    fail "wait_for_machineconfigpools_stable must use single oc get mcp call for skip check (avoid TOCTOU)"
+pass "lib.sh uses single-call MCP skip check"
+
 if grep -E 'oc get mcp/master|mcp/master -o' "${LIB_SH}"; then
     fail "lib.sh must not hardcode mcp/master; use wait_for_machineconfigpools_stable for HyperShift/custom CP topologies"
 fi

@@ -48,10 +48,12 @@ _dump_machineconfigpool_diagnostics() {
 # Usage: wait_for_machineconfigpools_stable [timeout_seconds]
 wait_for_machineconfigpools_stable() {
     local timeout="${1:-600}"
+    local mcp_list
 
     # Skip only when the MCP API is reachable but no pools exist (HyperShift/custom CP).
+    # Single oc get call avoids TOCTOU between reachability and emptiness checks.
     # API failures fall through to retry_until so transient EOF does not bypass the gate.
-    if oc get mcp &>/dev/null && [[ -z "$(oc get mcp --no-headers 2>/dev/null)" ]]; then
+    if mcp_list=$(oc get mcp --no-headers 2>/dev/null) && [[ -z "${mcp_list}" ]]; then
         echo "No MachineConfigPools found; skipping MCP stability check (typical for HyperShift or custom CP topologies)"
         return 0
     fi

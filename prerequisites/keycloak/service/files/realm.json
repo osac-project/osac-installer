@@ -1035,7 +1035,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "t2N7qNiOYZzt6InsHOVsV5AzcZZbA7Sg",
+      "secret": "__OSAC_CONTROLLER_CLIENT_SECRET__",
       "redirectUris": [
         "/*"
       ],
@@ -1093,7 +1093,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "kP9xRmNvQw3hYjL8sT5uA2dF7gB0cE4i",
+      "secret": "__OSAC_ADMIN_CLIENT_SECRET__",
       "redirectUris": [
         "/*"
       ],

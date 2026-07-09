@@ -459,15 +459,18 @@ oc wait certificate/postgres-client-service -n ${NAMESPACE} \
 
 ### 2.3 Fulfillment Controller Credentials
 
-OAuth client credentials for the fulfillment controller, extracted from the
-Keycloak realm configuration. The Keycloak client is named `osac-controller`
-and the OPA authorization policy expects JWT username
-`service-account-osac-controller`:
+OAuth client credentials for the fulfillment controller. The Keycloak client
+is named `osac-controller` and the OPA authorization policy expects JWT
+username `service-account-osac-controller`.
+
+`realm.json` no longer ships a static secret for this client — the
+`keycloak-service` init container generates one on first boot and stores it
+in the `keycloak-client-secrets` Secret in the `keycloak` namespace (see
+OSAC-2115). Read it from there:
 
 ```bash
-FC_CLIENT_SECRET=$(jq -r \
-  '.clients[] | select(.clientId == "osac-controller") | .secret' \
-  prerequisites/keycloak/service/files/realm.json)
+FC_CLIENT_SECRET=$(oc get secret keycloak-client-secrets -n keycloak \
+  -o jsonpath='{.data.osac-controller}' | base64 -d)
 
 oc create secret generic fulfillment-controller-credentials \
   --from-literal=client-id=osac-controller \
@@ -1002,9 +1005,8 @@ oc get secret fulfillment-controller-credentials -n ${NAMESPACE} \
 If it shows a different value, recreate the secret:
 
 ```bash
-FC_CLIENT_SECRET=$(jq -r \
-  '.clients[] | select(.clientId == "osac-controller") | .secret' \
-  prerequisites/keycloak/service/files/realm.json)
+FC_CLIENT_SECRET=$(oc get secret keycloak-client-secrets -n keycloak \
+  -o jsonpath='{.data.osac-controller}' | base64 -d)
 
 oc create secret generic fulfillment-controller-credentials \
   --from-literal=client-id=osac-controller \

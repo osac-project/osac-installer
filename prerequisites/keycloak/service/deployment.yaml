@@ -25,10 +25,13 @@ spec:
       labels:
         app: keycloak-service
     spec:
+      serviceAccountName: keycloak-service
       volumes:
-      - name: realm
+      - name: realm-raw
         configMap:
           name: keycloak-realm
+      - name: realm
+        emptyDir: {}
       - name: database-client-cert
         secret:
           secretName: keycloak-database-client-cert
@@ -47,6 +50,33 @@ spec:
           until pg_isready --host keycloak-database --timeout 1; do
             sleep 1
           done
+      - name: resolve-realm-secrets
+        image: quay.io/openshift/origin-cli:4.21
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          if ! oc get secret keycloak-client-secrets > /dev/null 2>&1; then
+            echo "generating osac-controller/osac-admin client secrets"
+            oc create secret generic keycloak-client-secrets \
+              --from-literal=osac-controller="$(openssl rand -base64 18)" \
+              --from-literal=osac-admin="$(openssl rand -base64 18)"
+          fi
+          CONTROLLER_SECRET=$(oc get secret keycloak-client-secrets -o jsonpath='{.data.osac-controller}' | base64 -d)
+          ADMIN_SECRET=$(oc get secret keycloak-client-secrets -o jsonpath='{.data.osac-admin}' | base64 -d)
+          [[ -n "${CONTROLLER_SECRET}" && -n "${ADMIN_SECRET}" ]] || { echo "ERROR: keycloak-client-secrets is missing osac-controller or osac-admin" >&2; exit 1; }
+          sed \
+            -e "s#__OSAC_CONTROLLER_CLIENT_SECRET__#${CONTROLLER_SECRET}#" \
+            -e "s#__OSAC_ADMIN_CLIENT_SECRET__#${ADMIN_SECRET}#" \
+            /realm-raw/realm.json > /realm/realm.json
+        volumeMounts:
+        - name: realm-raw
+          mountPath: /realm-raw
+          readOnly: true
+        - name: realm
+          mountPath: /realm
       containers:
       - name: keycloak
         image: quay.io/keycloak/keycloak:26.6.4

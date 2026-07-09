@@ -265,9 +265,10 @@ oc create namespace "${INSTALLER_NAMESPACE}" --dry-run=client -o yaml | oc apply
 echo "Waiting for ca-bundle ConfigMap..."
 retry_until 120 3 'oc get configmap ca-bundle -n '"${INSTALLER_NAMESPACE}"' -o jsonpath='"'"'{.data.bundle\.pem}'"'"' 2>/dev/null | grep -q "BEGIN CERTIFICATE"'
 
-# Create controller OAuth credentials from the Keycloak realm config.
-FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json || true)
-[[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
+# Create controller OAuth credentials. The init container generates the secret
+# at first boot and persists it in keycloak-client-secrets (OSAC-2115).
+FC_CLIENT_SECRET=$(oc get secret keycloak-client-secrets -n "${KEYCLOAK_NS}" -o jsonpath='{.data.osac-controller}' | base64 -d)
+[[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller from keycloak-client-secrets" >&2; exit 1; }
 oc create secret generic fulfillment-controller-credentials \
     --from-literal=client-id=osac-controller \
     --from-literal=client-secret="${FC_CLIENT_SECRET}" \

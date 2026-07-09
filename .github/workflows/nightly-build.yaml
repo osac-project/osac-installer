@@ -1,0 +1,524 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # Run nightly at 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: true
+
+permissions: {}
+
+env:
+  REGISTRY: ghcr.io
+  CHARTS_REPO: ${{ github.repository_owner }}/charts
+  VALUES_FILE: values/development/values.yaml
+  # Single source of truth for submodule components: repo, image, path, tag-mode (tag|inline), chart-path
+  COMPONENTS: >-
+    osac-operator:osac-operator:base/osac-operator:tag:base/osac-operator/charts/operator
+    fulfillment-service:fulfillment-service:base/osac-fulfillment-service:inline:base/osac-fulfillment-service/charts/service
+    osac-aap:osac-aap:base/osac-aap:inline:base/osac-aap/charts/aap
+    bare-metal-fulfillment-operator:bare-metal-fulfillment-operator:base/bare-metal-fulfillment-operator:tag:base/bare-metal-fulfillment-operator/charts/operator
+    osac-ui:osac-ui:base/osac-ui:inline:base/osac-ui/charts/ui
+  # CRD charts (no image, just chart paths)
+  CRD_CHARTS: >-
+    osac-operator-crds:base/osac-operator/charts/operator-crds
+    bare-metal-fulfillment-operator-crds:base/bare-metal-fulfillment-operator/charts/operator-crds
+
+jobs:
+  # -------------------------------------------------------------------
+  # Job 1: Bump submodules and push to a temporary branch for E2E testing
+  # -------------------------------------------------------------------
+  prepare:
+    name: Prepare nightly state
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      temp-branch: ${{ steps.push.outputs.branch }}
+      temp-sha: ${{ steps.push.outputs.sha }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        submodules: recursive
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update submodules to latest main
+      run: |
+        set -euo pipefail
+        check_image() {
+          local repo=$1
+          local image=$2
+          local sha
+          sha=$(git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=10 \
+            ls-remote "https://github.com/osac-project/${repo}.git" refs/heads/main | cut -f1)
+          local tag="sha-${sha:0:7}"
+          local token
+          token=$(curl -sf --max-time 15 "https://ghcr.io/token?scope=repository:osac-project/${image}:pull" | jq -r .token)
+          local code
+          code=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${token}" \
+            -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
+            "https://ghcr.io/v2/osac-project/${image}/manifests/${tag}")
+          if [[ "${code}" != "200" ]]; then
+            echo "WARN: ${repo} main HEAD ${sha:0:7} has no published image (tag ${tag}), keeping pinned submodule" >&2
+            return 1
+          fi
+          echo "${sha}"
+        }
+
+        for entry in ${COMPONENTS}; do
+          repo="${entry%%:*}"
+          rest="${entry#*:}"
+          image="${rest%%:*}"
+          rest="${rest#*:}"
+          path="${rest%%:*}"
+
+          sha=$(check_image "${repo}" "${image}") || continue
+          current=$(git -C "${path}" rev-parse HEAD)
+          if [[ "${current}" != "${sha}" ]]; then
+            git -C "${path}" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=10 fetch origin
+            git -C "${path}" checkout "${sha}"
+            echo "${repo}: updated ${current:0:7} -> ${sha:0:7}"
+          else
+            echo "${repo}: already at ${sha:0:7}"
+          fi
+        done
+
+    - name: Sync image tags
+      run: ./scripts/sync-image-tags.sh --fix
+
+    - name: Push temporary branch
+      id: push
+      run: |
+        set -euo pipefail
+        DATE=$(date -u +%Y%m%d)
+        SHORT_SHA=$(git rev-parse --short=7 HEAD)
+        BRANCH="nightly/${DATE}-${SHORT_SHA}"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git checkout -b "${BRANCH}"
+        git add -A
+        git diff --cached --quiet || git commit -m "nightly: bump submodules to latest main"
+
+        git push origin "${BRANCH}"
+        COMMIT_SHA=$(git rev-parse HEAD)
+
+        echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+        echo "sha=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+        echo "Pushed temp branch: ${BRANCH} (${COMMIT_SHA})"
+
+    - name: Generate nightly version
+      id: version
+      env:
+        COMMIT_SHA: ${{ steps.push.outputs.sha }}
+      run: |
+        BASE_VERSION=$(yq '.version' charts/osac/Chart.yaml)
+        DATE=$(date -u +%Y%m%d)
+        SHORT_SHA="${COMMIT_SHA:0:7}"
+        VERSION="${BASE_VERSION}-nightly.${DATE}.${SHORT_SHA}.${GITHUB_RUN_NUMBER}"
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+        echo "Nightly version: ${VERSION} (base: ${BASE_VERSION})"
+
+  # -------------------------------------------------------------------
+  # Job 2: Run E2E tests against the temporary branch
+  # -------------------------------------------------------------------
+  e2e-test:
+    name: E2E validation
+    needs: prepare
+    permissions:
+      contents: read
+    uses: osac-project/osac-test-infra/.github/workflows/e2e-vmaas-full-install.yml@2f7c8d6335f057d55426846a6e5b5880c0ea77ab  # main
+    with:
+      test-suite: vmaas
+      installer-repo: ${{ github.repository }}
+      installer-ref: ${{ needs.prepare.outputs.temp-branch }}
+      test-infra-repository: osac-project/osac-test-infra
+      test-infra-ref: main
+    secrets: inherit
+
+  # -------------------------------------------------------------------
+  # Job 3: Publish charts (only if E2E passes)
+  # -------------------------------------------------------------------
+  publish:
+    name: Publish nightly charts
+    needs: [prepare, e2e-test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Push/pull chart OCI artifacts to GHCR
+      packages: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+
+    steps:
+    - name: Checkout temporary branch
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        ref: ${{ needs.prepare.outputs.temp-branch }}
+        submodules: recursive
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+        persist-credentials: false
+
+    - name: Set up Helm
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
+      with:
+        version: v3.17.0
+
+    - name: Set up chart-testing
+      uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f  # v2.8.0
+
+    - name: Log in to GHCR
+      env:
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GHCR_USER: ${{ github.actor }}
+      run: printf '%s' "${GHCR_TOKEN}" | helm registry login "${{ env.REGISTRY }}" -u "${GHCR_USER}" --password-stdin
+
+    - name: Publish component charts
+      env:
+        OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+      run: |
+        set -euo pipefail
+        published=""
+
+        for entry in ${CRD_CHARTS}; do
+          chart_name="${entry%%:*}"
+          chart_path="${entry#*:}"
+          echo "--- Publishing ${chart_name} ---"
+          helm package "${chart_path}" --version "${VERSION}"
+          helm push "${chart_name}-${VERSION}.tgz" "${OCI_REPO}"
+          published="${published}\n${chart_name}:${VERSION}"
+        done
+
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          rest="${entry#*:}"
+          rest="${rest#*:}"
+          rest="${rest#*:}"
+          chart_path="${rest#*:}"
+          echo "--- Publishing ${component} ---"
+          helm package "${chart_path}" --version "${VERSION}"
+          helm push "${component}-${VERSION}.tgz" "${OCI_REPO}"
+          published="${published}\n${component}:${VERSION}"
+        done
+
+        echo -e "Published charts:${published}"
+
+    - name: Verify component chart publications
+      env:
+        OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+      run: |
+        set -euo pipefail
+        for entry in ${CRD_CHARTS}; do
+          chart_name="${entry%%:*}"
+          echo "Verifying ${chart_name}..."
+          helm show chart "${OCI_REPO}/${chart_name}" --version "${VERSION}"
+        done
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          echo "Verifying ${component}..."
+          helm show chart "${OCI_REPO}/${component}" --version "${VERSION}"
+        done
+
+    - name: Rewrite umbrella chart to use published components
+      env:
+        OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+      run: |
+        set -euo pipefail
+        cd charts/osac
+
+        for entry in ${CRD_CHARTS}; do
+          chart_name="${entry%%:*}"
+          yq -i "(.dependencies[] | select(.name == \"${chart_name}\")).repository = \"${OCI_REPO}\"" Chart.yaml
+          yq -i "(.dependencies[] | select(.name == \"${chart_name}\")).version = \"${VERSION}\"" Chart.yaml
+        done
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          yq -i "(.dependencies[] | select(.name == \"${component}\")).repository = \"${OCI_REPO}\"" Chart.yaml
+          yq -i "(.dependencies[] | select(.name == \"${component}\")).version = \"${VERSION}\"" Chart.yaml
+        done
+
+        rm -f Chart.lock
+
+        echo "--- Updated Chart.yaml ---"
+        cat Chart.yaml
+
+    - name: Build umbrella chart dependencies from OCI
+      run: helm dependency build charts/osac/
+
+    - name: Update image tags to submodule SHAs
+      run: |
+        set -euo pipefail
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          rest="${entry#*:}"
+          rest="${rest#*:}"
+          submodule_path="${rest%%:*}"
+          mode="${rest#*:}"
+          mode="${mode%%:*}"
+
+          sha=$(git -C "${submodule_path}" rev-parse HEAD 2>/dev/null) || continue
+          tag="sha-${sha:0:7}"
+
+          if [[ "${mode}" == "tag" ]]; then
+            sed -i "/repository: ghcr.io\/osac-project\/${component}$/{n;s|tag: .*|tag: ${tag}|}" \
+              charts/osac/values.yaml
+          else
+            sed -i "s|${component}:latest|${component}:${tag}|g" charts/osac/values.yaml
+          fi
+          echo "${component}: ${tag}"
+        done
+
+        echo "--- Updated values.yaml image tags ---"
+        grep -E '(repository:|tag:|fulfillment-service:|osac-aap:)' charts/osac/values.yaml || true
+
+    - name: Lint chart
+      run: ct lint --all --config ct.yaml
+
+    - name: Package umbrella chart
+      run: |
+        helm package charts/osac/ \
+          --version "${VERSION}" \
+          --app-version "${VERSION}"
+
+    - name: Push umbrella chart to GHCR
+      env:
+        OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+      run: |
+        helm push "osac-${VERSION}.tgz" "${OCI_REPO}"
+
+    - name: Verify umbrella chart publication
+      env:
+        OCI_REPO: oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+      run: |
+        echo "Verifying umbrella chart was published successfully..."
+        helm show chart "${OCI_REPO}/osac" --version "${VERSION}"
+
+    - name: Generate images.txt
+      run: |
+        set -euo pipefail
+        helm template osac "osac-${VERSION}.tgz" \
+          --values "${VALUES_FILE}" \
+          --set service.externalHostname=placeholder.example.com \
+          --set service.internalHostname=placeholder-internal.example.com \
+        | grep -oP 'image:\s*\K\S+' \
+        | tr -d '"' \
+        | sort -u \
+        > images-raw.txt || true
+
+        if ! test -s images-raw.txt; then
+          echo "ERROR: images.txt is empty — helm template or image extraction failed"
+          exit 1
+        fi
+
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          rest="${entry#*:}"
+          rest="${rest#*:}"
+          submodule_path="${rest%%:*}"
+          sha=$(git -C "${submodule_path}" rev-parse HEAD 2>/dev/null) || continue
+          sed -i "s|${component}:latest|${component}:sha-${sha:0:7}|g" images-raw.txt
+        done
+
+        > images.txt
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          grep "${component}:" images-raw.txt >> images.txt || true
+        done
+        grep -v -F -f images.txt images-raw.txt | sort >> images.txt || true
+
+        echo "" >> images.txt
+        echo "# Component versions" >> images.txt
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          rest="${entry#*:}"
+          rest="${rest#*:}"
+          submodule_path="${rest%%:*}"
+          version=$(git -C "${submodule_path}" describe --tags --abbrev=0 2>/dev/null || echo "unknown")
+          sha=$(git -C "${submodule_path}" rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
+          echo "# ${component}=${version} (${sha})" >> images.txt
+        done
+
+        OCI_BASE="${REGISTRY}/${{ github.repository_owner }}/charts"
+        echo "" >> images.txt
+        echo "# Chart versions (${VERSION})" >> images.txt
+        for entry in ${CRD_CHARTS}; do
+          chart_name="${entry%%:*}"
+          echo "# oci://${OCI_BASE}/${chart_name}:${VERSION}" >> images.txt
+        done
+        for entry in ${COMPONENTS}; do
+          component="${entry%%:*}"
+          echo "# oci://${OCI_BASE}/${component}:${VERSION}" >> images.txt
+        done
+        echo "# oci://${OCI_BASE}/osac:${VERSION}" >> images.txt
+
+        rm -f images-raw.txt
+
+        echo "--- images.txt ---"
+        cat images.txt
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      with:
+        name: nightly-${{ needs.prepare.outputs.version }}
+        path: |
+          osac-${{ needs.prepare.outputs.version }}.tgz
+          images.txt
+        retention-days: 14
+
+  # -------------------------------------------------------------------
+  # Job 4: Tag and send success notification
+  # -------------------------------------------------------------------
+  tag-and-notify:
+    name: Tag and notify
+    needs: [prepare, publish]
+    runs-on: osac-ci
+    if: success()
+    permissions:
+      # Create nightly git tags and delete temp branch
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TEMP_BRANCH: ${{ needs.prepare.outputs.temp-branch }}
+
+    steps:
+    - name: Checkout temporary branch
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      with:
+        ref: ${{ needs.prepare.outputs.temp-branch }}
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create nightly tag
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        TAG="v${VERSION}"
+        git tag "${TAG}" -m "Nightly build ${VERSION}"
+        git push origin "${TAG}"
+        echo "Tagged: ${TAG}"
+
+    - name: Delete temporary branch
+      run: git push origin --delete "${TEMP_BRANCH}" || true
+
+    - name: Read AppRole credentials
+      id: approle
+      run: |
+        APPROLE_DIR="${HOME}/.vault-server/.approle"
+        echo "role-id=$(cat "${APPROLE_DIR}/role-id")" >> "$GITHUB_OUTPUT"
+        echo "::add-mask::$(cat "${APPROLE_DIR}/secret-id")"
+        echo "secret-id=$(cat "${APPROLE_DIR}/secret-id")" >> "$GITHUB_OUTPUT"
+
+    - name: Retrieve Slack webhook from Vault
+      id: vault
+      uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc  # v4
+      with:
+        url: http://127.0.0.1:8200
+        method: approle
+        roleId: ${{ steps.approle.outputs.role-id }}
+        secretId: ${{ steps.approle.outputs.secret-id }}
+        exportEnv: false
+        secrets: |
+          secret/data/osac/e2e/slack-webhook-url url | SLACK_WEBHOOK_URL
+
+    - name: Notify Slack on success
+      env:
+        SLACK_WEBHOOK_URL: ${{ steps.vault.outputs.SLACK_WEBHOOK_URL }}
+        SERVER_URL: ${{ github.server_url }}
+        REPOSITORY: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+        REPO_OWNER: ${{ github.repository_owner }}
+      run: |
+        OCI_BASE="oci://ghcr.io/${REPO_OWNER}/charts"
+        curl -sf --max-time 15 -X POST "${SLACK_WEBHOOK_URL}" \
+          -H "Content-Type: application/json" \
+          -d @- <<PAYLOAD
+        {
+          "blocks": [
+            {
+              "type": "header",
+              "text": {"type": "plain_text", "text": ":white_check_mark: Nightly Build ${VERSION} - Published"}
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Charts published to GHCR:*\n\`\`\`\nosac-operator-crds            ${VERSION}  ${OCI_BASE}/osac-operator-crds\nosac-operator                 ${VERSION}  ${OCI_BASE}/osac-operator\nfulfillment-service           ${VERSION}  ${OCI_BASE}/fulfillment-service\nosac-aap                      ${VERSION}  ${OCI_BASE}/osac-aap\nbare-metal-fulfillment-operator-crds  ${VERSION}  ${OCI_BASE}/bare-metal-fulfillment-operator-crds\nbare-metal-fulfillment-operator       ${VERSION}  ${OCI_BASE}/bare-metal-fulfillment-operator\nosac-ui                       ${VERSION}  ${OCI_BASE}/osac-ui\nosac (umbrella)               ${VERSION}  ${OCI_BASE}/osac\n\`\`\`\n*Tag:* \`v${VERSION}\`\n*Run:* <${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}|View workflow>"
+              }
+            }
+          ]
+        }
+        PAYLOAD
+
+  # -------------------------------------------------------------------
+  # Job 5: Notify on failure (temp branch kept for debugging, see
+  # cleanup-nightly-branches.yaml for TTL-based removal)
+  # -------------------------------------------------------------------
+  notify-failure:
+    name: Notify failure
+    needs: [prepare, e2e-test, publish, tag-and-notify]
+    runs-on: osac-ci
+    if: failure()
+
+    steps:
+    # Note: the temp branch is intentionally NOT deleted here. On failure, no
+    # git tag exists to preserve the exact failing state, so the nightly/*
+    # branch is the only reference for debugging. It's cleaned up later by
+    # cleanup-nightly-branches.yaml (TTL-based, runs daily).
+    - name: Read AppRole credentials
+      id: approle
+      run: |
+        APPROLE_DIR="${HOME}/.vault-server/.approle"
+        echo "role-id=$(cat "${APPROLE_DIR}/role-id")" >> "$GITHUB_OUTPUT"
+        echo "::add-mask::$(cat "${APPROLE_DIR}/secret-id")"
+        echo "secret-id=$(cat "${APPROLE_DIR}/secret-id")" >> "$GITHUB_OUTPUT"
+
+    - name: Retrieve Slack webhook from Vault
+      id: vault
+      uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc  # v4
+      with:
+        url: http://127.0.0.1:8200
+        method: approle
+        roleId: ${{ steps.approle.outputs.role-id }}
+        secretId: ${{ steps.approle.outputs.secret-id }}
+        exportEnv: false
+        secrets: |
+          secret/data/osac/e2e/slack-webhook-url url | SLACK_WEBHOOK_URL
+
+    - name: Notify Slack on failure
+      env:
+        SLACK_WEBHOOK_URL: ${{ steps.vault.outputs.SLACK_WEBHOOK_URL }}
+        SERVER_URL: ${{ github.server_url }}
+        REPOSITORY: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+        REF_NAME: ${{ github.ref_name }}
+      run: |
+        curl -sf --max-time 15 -X POST "${SLACK_WEBHOOK_URL}" \
+          -H "Content-Type: application/json" \
+          -d @- <<PAYLOAD
+        {
+          "blocks": [
+            {
+              "type": "header",
+              "text": {"type": "plain_text", "text": ":x: Nightly Build Failed"}
+            },
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Run:* <${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}|View workflow>\n*Branch:* \`${REF_NAME}\`\nPlease investigate the failure."
+              }
+            }
+          ]
+        }
+        PAYLOAD

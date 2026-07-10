@@ -132,6 +132,7 @@ jobs:
         COMMIT_SHA: ${{ steps.push.outputs.sha }}
       run: |
         set -euo pipefail
+        source ./scripts/lib.sh
         DATE=$(date -u +%Y%m%d)
         SHORT_SHA="${COMMIT_SHA:0:7}"
         NIGHTLY_SUFFIX="nightly.${DATE}.${SHORT_SHA}.${GITHUB_RUN_NUMBER}"
@@ -139,22 +140,8 @@ jobs:
         # Use the umbrella chart's own latest real release tag (not the
         # Chart.yaml placeholder, which is never bumped) so the nightly
         # version reflects where this build actually sits relative to
-        # real releases. Fail loudly rather than silently guessing a
-        # version if no real tag is reachable. --match restricts to plain
-        # "vX.Y.Z"-shaped tags in case an unrelated tag namespace (e.g.
-        # "api/vX.Y.Z" in a component repo) is ever introduced here too.
-        # --match is still a glob, not a real anchor (its trailing '*' is
-        # needed to allow multi-digit version segments, but that same '*'
-        # would also accept a stray "-rc1"/".4" suffix) so re-validate the
-        # result with a real regex before trusting it.
-        if ! BASE_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude '*-nightly*' 2>/dev/null); then
-          echo "ERROR: no real (non-nightly) release tag reachable from HEAD — refusing to guess a version" >&2
-          exit 1
-        fi
-        if [[ ! "${BASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "ERROR: nearest release tag '${BASE_TAG}' is not a plain vX.Y.Z tag — refusing to guess a version" >&2
-          exit 1
-        fi
+        # real releases.
+        BASE_TAG=$(resolve_release_tag .)
         BASE_VERSION="${BASE_TAG#v}"
         VERSION="${BASE_VERSION}-${NIGHTLY_SUFFIX}"
 

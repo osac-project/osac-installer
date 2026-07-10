@@ -17,6 +17,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib.sh"
+
 : "${NIGHTLY_SUFFIX:?NIGHTLY_SUFFIX must be set}"
 : "${CRD_CHARTS:?CRD_CHARTS must be set}"
 : "${COMPONENTS:?COMPONENTS must be set}"
@@ -35,24 +38,7 @@ chart_info_for_path() {
   else
     git -C "${path}" fetch --tags --quiet 2>/dev/null || true
   fi
-  # Fail loudly rather than silently guessing a version: publishing a
-  # chart under a made-up placeholder tag would be worse than failing
-  # the build, since it could get pushed to the registry unnoticed.
-  # --match restricts to plain "vX.Y.Z"-shaped tags: some component repos
-  # (e.g. osac-operator) also carry a separate "api/vX.Y.Z" tag namespace
-  # (Go API module versioning) that `describe` would otherwise pick up if
-  # it happens to be nearer HEAD than the real chart-release tag. --match
-  # is still a glob, not a real anchor (its trailing '*' is needed to
-  # allow multi-digit version segments, but that same '*' would also
-  # accept a stray "-rc1"/".4" suffix) so re-validate with a real regex.
-  if ! tag=$(git -C "${path}" describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude '*-nightly*' 2>/dev/null); then
-    echo "ERROR: no real (non-nightly) release tag reachable from ${path} — refusing to guess a version" >&2
-    exit 1
-  fi
-  if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "ERROR: nearest release tag '${tag}' reachable from ${path} is not a plain vX.Y.Z tag — refusing to guess a version" >&2
-    exit 1
-  fi
+  tag=$(resolve_release_tag "${path}") || exit 1
   sha=$(git -C "${path}" rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
   echo "${tag}|${sha}"
 }

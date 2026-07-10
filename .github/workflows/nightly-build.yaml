@@ -135,7 +135,12 @@ jobs:
         source ./scripts/lib.sh
         DATE=$(date -u +%Y%m%d)
         SHORT_SHA="${COMMIT_SHA:0:7}"
-        NIGHTLY_SUFFIX="nightly.${DATE}.${SHORT_SHA}.${GITHUB_RUN_NUMBER}"
+        # GITHUB_RUN_NUMBER, like GITHUB_RUN_ID, stays constant across a
+        # "Re-run failed jobs" of the same run — only GITHUB_RUN_ATTEMPT
+        # increments there. Without it, re-running the same failed run
+        # would produce the identical chart version string, matching the
+        # temp-branch collision fixed above.
+        NIGHTLY_SUFFIX="nightly.${DATE}.${SHORT_SHA}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
 
         # Use the umbrella chart's own latest real release tag (not the
         # Chart.yaml placeholder, which is never bumped) so the nightly

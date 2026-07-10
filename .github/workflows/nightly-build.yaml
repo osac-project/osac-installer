@@ -437,6 +437,8 @@ jobs:
     permissions:
       # Create nightly git tags and delete temp branch
       contents: write
+      # Look up package version URLs for the Slack notification
+      packages: read
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       TEMP_BRANCH: ${{ needs.prepare.outputs.temp-branch }}
@@ -493,29 +495,56 @@ jobs:
         REPOSITORY: ${{ github.repository }}
         RUN_ID: ${{ github.run_id }}
         REPO_OWNER: ${{ github.repository_owner }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -euo pipefail
         get_version() { ./scripts/get-chart-version.sh "$1"; }
-        OCI_BASE="oci://${REGISTRY}/${REPO_OWNER}/charts"
 
-        # Every chart shares the same OCI_BASE prefix, so state it once in
-        # the header instead of repeating the full path in every row (each
-        # chart's own version differs by more than just a shared suffix —
-        # e.g. the source commit SHA embedded per component — so the full
-        # version string is kept per row).
-        declare -a NAMES VERSIONS
+        # Package version pages are keyed by numeric version id, not the
+        # tag -- look the id up via the Packages API. Versions are
+        # returned newest-first, so the one we just pushed is always near
+        # the top of the first page. Without ?tag=, GitHub's UI shows the
+        # page titled by digest instead of the human-readable tag (tag is
+        # URL-encoded since it ends up in a query string).
+        #
+        # Best-effort only: GITHUB_TOKEN's packages:read permission is
+        # scoped to this repo, and most of these charts are linked to
+        # sibling repos (osac-operator, fulfillment-service, etc.), so the
+        # lookup may 403. Never let a failed/empty lookup take down the
+        # whole notification -- degrade to a plain, unlinked version
+        # instead. `|| true` at each call site absorbs curl/jq failures
+        # under `set -e`.
+        chart_version_url() {
+          local chart_name=$1 version=$2
+          local encoded_version url
+          encoded_version=$(jq -rn --arg v "${version}" '$v|@uri')
+          url=$(curl -sf --max-time 15 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/orgs/${REPO_OWNER}/packages/container/charts%2F${chart_name}/versions?per_page=100" \
+          | jq -r --arg v "${version}" '.[] | select(.metadata.container.tags | index($v)) | .html_url' \
+          | head -1) || true
+          [ -n "${url}" ] && echo "${url}?tag=${encoded_version}"
+        }
+
+        declare -a NAMES VERSIONS URLS
         for entry in ${CRD_CHARTS}; do
           chart_name="${entry%%:*}"
+          version=$(get_version "${chart_name}")
           NAMES+=("${chart_name}")
-          VERSIONS+=("$(get_version "${chart_name}")")
+          VERSIONS+=("${version}")
+          URLS+=("$(chart_version_url "${chart_name}" "${version}" || true)")
         done
         for entry in ${COMPONENTS}; do
           component="${entry%%:*}"
+          version=$(get_version "${component}")
           NAMES+=("${component}")
-          VERSIONS+=("$(get_version "${component}")")
+          VERSIONS+=("${version}")
+          URLS+=("$(chart_version_url "${component}" "${version}" || true)")
         done
         NAMES+=("osac (umbrella)")
         VERSIONS+=("${VERSION}")
+        URLS+=("$(chart_version_url "osac" "${VERSION}" || true)")
 
         max_len() {
           local max=${#1}
@@ -529,37 +558,59 @@ jobs:
         VERSION_W=$(max_len "Version" "${VERSIONS[@]}")
 
         hline() { printf '─%.0s' $(seq 1 "$(($1 + 2))"); }
-        row() { printf '│ %-*s │ %-*s │' "${NAME_W}" "$1" "${VERSION_W}" "$2"; }
+        name_cell() { printf '%-*s' "${NAME_W}" "$1"; }
+        # Padding is based on the visible label length (the plain version
+        # string), not the raw <url|label> markup length -- the url, pipe,
+        # and angle brackets are invisible once Slack renders the link, so
+        # padding on the raw length would misalign the right border.
+        version_cell() {
+          local version=$1 url=$2
+          local pad=$(( VERSION_W - ${#version} ))
+          (( pad < 0 )) && pad=0
+          if [ -n "${url}" ]; then
+            printf '<%s|%s>%*s' "${url}" "${version}" "${pad}" ""
+          else
+            printf '%s%*s' "${version}" "${pad}" ""
+          fi
+        }
 
-        TABLE="┌$(hline "${NAME_W}")┬$(hline "${VERSION_W}")┐\n"
-        TABLE="${TABLE}$(row "Chart" "Version")\n"
-        TABLE="${TABLE}├$(hline "${NAME_W}")┼$(hline "${VERSION_W}")┤\n"
+        TABLE="┌$(hline "${NAME_W}")┬$(hline "${VERSION_W}")┐"
+        TABLE="${TABLE}"$'\n'"│ $(name_cell "Chart") │ $(version_cell "Version" "") │"
+        TABLE="${TABLE}"$'\n'"├$(hline "${NAME_W}")┼$(hline "${VERSION_W}")┤"
         for i in "${!NAMES[@]}"; do
-          TABLE="${TABLE}$(row "${NAMES[$i]}" "${VERSIONS[$i]}")\n"
+          TABLE="${TABLE}"$'\n'"│ $(name_cell "${NAMES[$i]}") │ $(version_cell "${VERSIONS[$i]}" "${URLS[$i]}") │"
         done
-        TABLE="${TABLE}└$(hline "${NAME_W}")┴$(hline "${VERSION_W}")┘"
+        TABLE="${TABLE}"$'\n'"└$(hline "${NAME_W}")┴$(hline "${VERSION_W}")┘"
 
-        SUMMARY_TEXT="*Charts published to* \`${OCI_BASE}/<chart>\`*:*\n\`\`\`\n${TABLE}\n\`\`\`\n*Tag:* \`v${VERSION}\`\n*Run:* <${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}|View workflow>"
+        SUMMARY_TEXT="*Charts published:*"$'\n'"\`\`\`"$'\n'"${TABLE}"$'\n'"\`\`\`"
+        WORKFLOW_URL="${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}"
+
+        jq -n \
+          --arg version "${VERSION}" \
+          --arg summary "${SUMMARY_TEXT}" \
+          --arg workflow_url "${WORKFLOW_URL}" \
+          '{
+            "blocks": [
+              {
+                "type": "header",
+                "text": {"type": "plain_text", "text": (":white_check_mark: Nightly Build " + $version + " - Published")}
+              },
+              {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": $summary}
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {"type": "button", "text": {"type": "plain_text", "text": "View Run"}, "url": $workflow_url}
+                ]
+              }
+            ]
+          }' > /tmp/slack-payload.json
 
         curl -sf --max-time 15 -X POST "${SLACK_WEBHOOK_URL}" \
           -H "Content-Type: application/json" \
-          -d @- <<PAYLOAD
-        {
-          "blocks": [
-            {
-              "type": "header",
-              "text": {"type": "plain_text", "text": ":white_check_mark: Nightly Build ${VERSION} - Published"}
-            },
-            {
-              "type": "section",
-              "text": {
-                "type": "mrkdwn",
-                "text": "${SUMMARY_TEXT}"
-              }
-            }
-          ]
-        }
-        PAYLOAD
+          -d @/tmp/slack-payload.json
 
   # -------------------------------------------------------------------
   # Job 5: Notify on failure (temp branch kept for debugging, see
@@ -604,22 +655,31 @@ jobs:
         RUN_ID: ${{ github.run_id }}
         REF_NAME: ${{ github.ref_name }}
       run: |
+        set -euo pipefail
+        WORKFLOW_URL="${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}"
+
+        jq -n \
+          --arg branch "${REF_NAME}" \
+          --arg workflow_url "${WORKFLOW_URL}" \
+          '{
+            "blocks": [
+              {
+                "type": "header",
+                "text": {"type": "plain_text", "text": ":x: Nightly Build Failed"}
+              },
+              {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": ("*Branch:* `" + $branch + "`\nPlease investigate the failure.")}
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {"type": "button", "text": {"type": "plain_text", "text": "View Run"}, "url": $workflow_url}
+                ]
+              }
+            ]
+          }' > /tmp/slack-payload.json
+
         curl -sf --max-time 15 -X POST "${SLACK_WEBHOOK_URL}" \
           -H "Content-Type: application/json" \
-          -d @- <<PAYLOAD
-        {
-          "blocks": [
-            {
-              "type": "header",
-              "text": {"type": "plain_text", "text": ":x: Nightly Build Failed"}
-            },
-            {
-              "type": "section",
-              "text": {
-                "type": "mrkdwn",
-                "text": "*Run:* <${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}|View workflow>\n*Branch:* \`${REF_NAME}\`\nPlease investigate the failure."
-              }
-            }
-          ]
-        }
-        PAYLOAD
+          -d @/tmp/slack-payload.json

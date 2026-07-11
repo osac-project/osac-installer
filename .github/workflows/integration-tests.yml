@@ -1,4 +1,4 @@
-name: Helm Integration Test
+name: Integration Tests
 
 on:
   schedule:

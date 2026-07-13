@@ -4,8 +4,8 @@ This repository contains Kubernetes/OpenShift deployment configurations for the 
 platform, providing a fulfillment service framework for clusters and virtual machines.
 
 > **Note:** Throughout this guide, `<project-name>` refers to your unique OSAC installation
-> name, which is used as both the namespace and resource prefix. Replace it with your chosen
-> project name (e.g., `user1`, `team-a`, etc.).
+> name, which is used as the namespace. Replace it with your chosen project name
+> (e.g., `user1`, `team-a`, etc.).
 
 ## Overview
 
@@ -23,8 +23,8 @@ The OSAC platform provides:
 - **Multi-hub support** allowing multiple infrastructure hubs to be managed by a single fulfillment service
 - **API access** via both gRPC and REST interfaces for integration with custom tools
 
-This installer uses Kustomize to manage deployments, making it easy to customize for
-different environments.
+This installer uses Helm to manage deployments via an umbrella chart (`charts/osac/`)
+with per-environment values files under `values/`.
 
 ## OSAC Components
 
@@ -70,228 +70,29 @@ The OSAC platform relies on four core components to deliver governed self-servic
 The `/prerequisites` directory contains additional manifests required to configure the
 target Hub cluster.
 
-> **⚠️ Important: Cluster-Wide Impact** If you are using a shared cluster or are not the
+> **Warning: Cluster-Wide Impact** If you are using a shared cluster or are not the
 > primary administrator, **do not apply these manifests without consultation.** These
 > files modify cluster-wide settings. Please coordinate with the appropriate cluster
 > administrators before proceeding.
 
 
-### 📋 Prerequisites Summary
+### Prerequisites Summary
 
 | **Category** | **Requirement** | **Notes / Details** |
 |---------------|-----------------|----------------------|
 | **Platform** | Red Hat OpenShift Container Platform (OCP) 4.17 or later | Must have cluster admin access to the hub cluster. |
 | **Operators** | Red Hat Advanced Cluster Management (RHACM) 2.18+<br>Red Hat OpenShift Virtualization (OCP-Virt) 4.17+<br>Red Hat Ansible Automation Platform (AAP) 2.5+ | These must be installed and running prior to OSAC installation. |
-| **CLI Tools** | `oc` (OpenShift CLI) v4.17+<br>`kubectl` (optional)<br>`kustomize` v5.x<br>`git` | Ensure all CLIs are available in your `PATH`. |
+| **CLI Tools** | `oc` (OpenShift CLI) v4.17+<br>`helm` v3.x<br>`git` | Ensure all CLIs are available in your `PATH`. |
 | **Container Registry Access** | `registry.redhat.io` and `quay.io` | Verify credentials and pull secrets are valid in the target cluster namespace. |
 | **Network / DNS** | Ingress route configured for OSAC services | Required for external access to fulfillment API and AAP UI. |
 | **Authentication / IDM** | Organization Identity Provider (e.g., Keycloak, LDAP, RH-SSO) | Used for tenant and user identity mapping. |
 | **Storage** | Dynamic storage class available (e.g., `ocs-storagecluster-cephfs`, `lvms-storage`) | Required for persistence of operator and AAP components. |
 | **Permissions** | Cluster-admin access to deploy operators and create CRDs | Limited access users can only deploy into namespaces configured by the admin. |
-| **License Files** | `license.zip` (AAP subscription) | Must be placed under `overlays/<your-overlay>/files/license.zip`. |
+| **License Files** | `license.zip` (AAP subscription) | Must be placed in your values directory (e.g., `values/<env>/license.zip`). |
 | **Internet Access** | Outbound access to GitHub (for fetching submodules, releases) | Required during installation and updates. |
 
 
-## Installation Strategy
-
-OSAC supports two installation methods:
-
-- **Helm** (recommended) — Uses an umbrella Helm chart (`charts/osac/`) that composes
-  all OSAC component charts into a single deployable unit. Configuration is managed via
-  values files in the `values/` directory.
-- **Kustomize** (legacy) — Uses Kustomize overlays in the `overlays/` directory.
-
-Both methods use Git submodules to import component manifests from each repository. The
-prerequisites (cert-manager, AAP operator, Keycloak, etc.) are the same regardless of which method
-you choose.
-
-### Customizing Your Installation
-
-Although the development overlay will work out of the box, we recommend customizing your
-overlay by creating a new project-specific configuration. This is especially important
-when deploying on shared clusters to avoid resource name collisions.
-
-Use Kustomize to manage your environment-specific configurations.
-
-1. **Choose a Project Name:**
-   Select a unique name for your OSAC installation (e.g., `user1`, `team-a`, `dev-env`).
-   This will be used as your namespace and resource prefix. In the examples below, we'll
-   use `<project-name>` as a placeholder.
-
-2. **Initialize the Overlay:**
-   Duplicate the development template with your project name:
-
-   ```bash
-   $ cp -r overlays/development overlays/<project-name>
-   ```
-
-3. **Populate Required Files:**
-   Ensure your new directory structure matches the following:
-
-   ```
-   overlays/<project-name>/
-   ├── kustomization.yaml      # Edit this to configure your deployment
-   ├── prefixTransformer.yaml  # Edit this to set resource name prefix
-   └── files/
-       └── license.zip         # REQUIRED: Your AAP license file
-   ```
-
-4. **Update Critical Configuration:**
-   You **must** update these configuration values to match your environment:
-
-   - In `kustomization.yaml`: Update the `namespace` field and other instances
-     of the default namespace throughout the overlay to `<project-name>`.
-   - In `prefixTransformer.yaml`: Update the `prefix` field to `<project-name>-`
-   - The `ca-bundle` Bundle is cluster-scoped and shared across overlays.
-     **If using `setup.sh`**, it handles the Bundle automatically (creates it on
-     first deploy, patches the namespace selector on subsequent deploys).
-     **If deploying manually**, patch the Bundle to include your namespace:
-     ```bash
-     oc patch bundle ca-bundle --type=json -p '[
-       {"op":"add","path":"/spec/target/namespaceSelector/matchExpressions/0/values/-","value":"<project-name>"}
-     ]'
-     ```
-     Alternatively, run `scripts/ensure-ca-bundle.sh <project-name>` which
-     handles both creation and patching.
-   - In `kustomization.yaml`: Replace `osac-devel` with your project name and
-     `<cluster-name>.<base-domain>` with your cluster's actual domain in the
-     `OSAC_AAP_URL`, token-issuer, CORS, and certificate patches.
-     You can find your cluster domain by running:
-     `oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'`.
-     **If using `setup.sh`**, these values are discovered from the cluster
-     and patched automatically.
-   - In `kustomization.yaml`: For bare metal fulfillment, copy each `.example` file in
-     `files/` to its real name, fill in the required values, and update the
-     corresponding `secretGenerator` entry to reference the real file.
-
-     **`files/clouds.yaml`** — OpenStack credentials for the bare metal provider:
-     ```yaml
-     clouds:
-       my-cloud:                        # cloud name — used as OS_CLOUD value below
-         auth:
-           auth_url: https://keystone.example.com:35357/
-           project_name: myproject
-           username: myuser
-           password: mypassword
-         region_name: RegionOne
-     ```
-
-     **`files/inventory.yaml`** — inventory source configuration:
-     ```yaml
-     name: my-inventory
-     type: openstack
-     options:
-       openstack:
-         cloud: my-cloud                # must match the cloud name in clouds.yaml
-     hostClass: openstack
-     networkClass: openstack
-     ```
-
-     **`files/management.yaml`** — management cloud configuration:
-     ```yaml
-     name: my-management
-     type: openstack
-     options:
-       openstack:
-         cloud: my-cloud                # must match the cloud name in clouds.yaml
-     ```
-
-     **`files/profile.yaml`** — one entry per bare metal host provisioning profile:
-     ```yaml
-     - name: agentProvisioning
-       hostSelector:
-         managedBy: baremetal
-         provisionState: available
-       labels:
-         profileName: agentProvisioning
-       persistentLabels:
-         managedBy: agent
-       hostTemplate: osac.templates.bm_host_agent_provisioning
-       expectedTemplateParameters:
-         - agentPrivateNetwork
-         - imageURL
-     ```
-
-     The cloud name key in `clouds.yaml` must also be set in the
-     `bare-metal-fulfillment-ig` secretGenerator literal so that the BMF operator and
-     the Ironic controller use the same OpenStack cloud:
-     ```yaml
-     - name: bare-metal-fulfillment-ig
-       literals:
-         - OS_CLOUD=my-cloud            # must match the cloud name in clouds.yaml
-     ```
-
-   These changes ensure your installation uses a unique namespace and prevents resource
-   name conflicts with other OSAC installations.
-
-5. **Apply Additional Customizations:**
-   Modify other settings in your overlay folder as needed (images, patches, etc.).
-
-
-> For more information on structuring overlays and patches, please consult the [official
-> Kustomize documentation.](https://kubectl.docs.kubernetes.io/references/kustomize/)
-
-
-### Using Custom Component Versions
-
-By default, the installer uses the latest commit from each submodule (via
-`git submodule update --init --recursive --remote`) and the latest container images
-defined in `base/kustomization.yaml`.
-
-To test a specific revision of a component, you need to:
-
-1. **Check out the desired code in the submodule:**
-
-   ```bash
-   cd base/<submodule>
-   git checkout <branch-or-commit>
-   cd ../..
-   ```
-
-2. **Build and push a custom container image:**
-
-   Build the image from the checked-out code and push it to a registry accessible by
-   your cluster.
-
-3. **Override the image in your overlay's `kustomization.yaml`:**
-
-   ```yaml
-   images:
-     - name: <component-image-name>
-       newName: <your-registry>/<your-image>
-       newTag: <your-tag>
-   ```
-
-   The component image names used in the base are:
-
-   | Component | Image name |
-   |-----------|-----------|
-   | Fulfillment Service | `fulfillment-service` |
-   | OSAC Operator | `osac-operator` |
-   | OSAC AAP | `osac-aap` |
-   | Bare Metal Fulfillment Operator | `bare-metal-fulfillment-operator` |
-
-#### OSAC AAP Customization
-
-For osac-aap, in addition to the image override, you must also update the AAP
-configuration secrets in your overlay's `kustomization.yaml`:
-
-```yaml
-secretGenerator:
-- name: config-as-code-ig
-  options:
-    disableNameSuffixHash: true
-  literals:
-    - AAP_EE_IMAGE=<your-registry>/osac-aap:<your-tag>
-    - AAP_PROJECT_GIT_URI=<your-git-repo-url>
-    - AAP_PROJECT_GIT_BRANCH=<your-branch>
-```
-
-- `AAP_EE_IMAGE`: The Execution Environment image used by AAP to run automation jobs.
-  This should match the container image override above.
-- `AAP_PROJECT_GIT_URI`: The Git repository URL for the AAP project (playbooks and
-  configuration).
-- `AAP_PROJECT_GIT_BRANCH`: The Git branch to use for the AAP project.
+## Installation
 
 ### Obtaining an AAP License (Subscription Manifest)
 
@@ -306,30 +107,24 @@ obtain it:
    and add your Ansible Automation Platform subscriptions.
 5. **Download:** Click **Export Manifest** to download the `.zip` file.
 
-Place the downloaded `license.zip` file in `overlays/<project-name>/files/`. You will
-also upload this manifest into the AAP controller UI after deployment.
+Place the downloaded `license.zip` file in your values directory (e.g., `values/development/license.zip`).
 
-## Pre-Installation Steps
+### Pre-Installation Steps
 
-Before deploying OSAC, complete the following steps to prepare your environment.
+#### 1. Initialize Submodules
 
-### 1. Initialize Submodules
-
-The OSAC installer relies on external components managed as Git submodules. Before
-running Kustomize, you must pull the manifest files into your local directory:
+The OSAC installer uses Git submodules for version tracking:
 
 ```bash
-$ git submodule update --init --recursive --remote
+$ git submodule update --init --recursive
 ```
 
-### 2. Populate Local Secrets
+#### 2. Populate Local Secrets
 
-Ensure your overlay contains the necessary secret files that are excluded from Git:
+Ensure your values directory contains the necessary secret files:
 
-- **AAP License:** Place `license.zip` in `overlays/<project-name>/files/`.
-- **Quay Pull Secret:** Place `quay-pull-secret.json` in `overlays/<project-name>/files/`.
-
-## Deploying OSAC Components
+- **AAP License:** Place `license.zip` in `values/<env>/`
+- **Pull Secret:** Place `pull-secret.json` in `values/<env>/`
 
 ### Option A: Automated Setup (Recommended)
 
@@ -338,21 +133,18 @@ The `scripts/setup.sh` script automates the entire installation process, includi
 - Installing prerequisite operators (cert-manager, trust-manager, Keycloak, AAP)
 - Optionally installing LVMS (storage service), MetalLB (ingress service), Multicluster Engine (MCE + infrastructure operator), and OpenShift Virtualization (CNV)
 - Setting up the CA issuer and network attachment definitions
-- Deploying OSAC components (via Helm or Kustomize)
+- Deploying OSAC components via Helm
 - Waiting for the AAP bootstrap job to complete
 - Creating the hub access kubeconfig and registering the hub with the fulfillment service
 
 To run the automated setup:
 
 ```bash
-# Helm mode (default) — uses values/development/values.yaml
+# Using defaults (namespace: osac, values: values/development/values.yaml)
 $ ./scripts/setup.sh
 
 # Or customize the namespace and values file
 $ INSTALLER_NAMESPACE=<project-name> VALUES_FILE=values/development/values.yaml ./scripts/setup.sh
-
-# Kustomize mode (legacy)
-$ DEPLOY_MODE=kustomize INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/setup.sh
 
 # Install with all optional services (storage, ingress, virtualization, MCE)
 $ EXTRA_SERVICES=true INSTALLER_NAMESPACE=<project-name> ./scripts/setup.sh
@@ -361,10 +153,8 @@ $ EXTRA_SERVICES=true INSTALLER_NAMESPACE=<project-name> ./scripts/setup.sh
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KUBECONFIG` | `~/.kube/config` | Path to the target cluster's kubeconfig file |
-| `DEPLOY_MODE` | `helm` | Deployment method: `helm` or `kustomize` |
-| `INSTALLER_NAMESPACE` | `osac` (helm) / from overlay (kustomize) | Target namespace for the OSAC deployment |
-| `VALUES_FILE` | `values/development/values.yaml` | Helm values file to use (helm mode only) |
-| `INSTALLER_KUSTOMIZE_OVERLAY` | `development` | Kustomize overlay directory (kustomize mode only) |
+| `INSTALLER_NAMESPACE` | `osac` | Target namespace for the OSAC deployment |
+| `VALUES_FILE` | `values/development/values.yaml` | Helm values file to use |
 | `EXTRA_SERVICES` | `false` | Enable all optional services (sets all below to `true`) |
 | `INGRESS_SERVICE` | `false` | Install MetalLB as the ingress/LoadBalancer service |
 | `STORAGE_SERVICE` | `false` | Install LVMS and create a default StorageClass (`lvms-vg1`) |
@@ -373,17 +163,8 @@ $ EXTRA_SERVICES=true INSTALLER_NAMESPACE=<project-name> ./scripts/setup.sh
 
 #### AAP Configuration
 
-The automation backend (AAP) is configured via two env files in your overlay's
-`files/` directory:
-
-- **`osac-aap-configuration.env`** — non-sensitive settings (network class, domains,
-  connection details). Tracked in git with ESI defaults; customize for your
-  environment.
-- **`osac-aap-secrets.env`** — sensitive credentials (passwords, SSH keys, AWS keys).
-  Gitignored, you create this file.
-
-Edit these files to match your environment, then run `setup.sh` — the script
-applies them automatically via `scripts/aap-configuration.sh`.
+The automation backend (AAP) is configured via environment variables passed to
+`scripts/aap-configuration.sh`. Set the relevant variables before running `setup.sh`.
 
 See [docs/aap-configuration.md](docs/aap-configuration.md) for the full variable
 reference.
@@ -391,8 +172,8 @@ reference.
 #### Network Backend Configuration (CaaS)
 
 By default the network backend is **ESI**. To switch to **Netris**, set
-`NETWORK_CLASS=netris` in your overlay's `osac-aap-configuration.env` and fill in
-the Netris-specific connection details and credentials.
+`NETWORK_CLASS=netris` and fill in the Netris-specific connection details and credentials
+as environment variables.
 
 See [docs/network-backend.md](docs/network-backend.md) for Netris-specific
 variables and the `NETRIS_RESOURCE_CLASS_MAP` format.
@@ -400,11 +181,7 @@ variables and the `NETRIS_RESOURCE_CLASS_MAP` format.
 #### DNS Backend Configuration (CaaS)
 
 DNS record management uses a pluggable backend. The default is **AWS Route 53**
-(`DNS_CLASS=dns.route53.dns`), which requires AWS credentials in
-`osac-aap-secrets.env`. No changes are needed for existing deployments.
-
-To use a different DNS provider, set `DNS_CLASS` to a custom backend driver
-role in your overlay's `osac-aap-configuration.env`.
+(`DNS_CLASS=dns.route53.dns`), which requires AWS credentials. No changes are needed for existing deployments.
 
 See [docs/dns-backend.md](docs/dns-backend.md) for backend details, the
 interface contract, and how to add a new provider.
@@ -418,8 +195,7 @@ Once it completes successfully, OSAC is fully operational.
 
 ### Option B: Manual Helm Installation
 
-If you prefer to install step-by-step, follow the process below. The prerequisites
-are the same as Option C (Kustomize) — only the final deploy step differs.
+If you prefer to install step-by-step:
 
 #### 1. Install Prerequisites
 
@@ -428,7 +204,7 @@ are located in the `prerequisites/` directory. Install them in order:
 
 ```bash
 # cert-manager
-oc apply -k prerequisites/cert-manager/
+oc apply -f prerequisites/cert-manager/cert-manager.yaml
 oc wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=300s
 oc wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=300s
 
@@ -440,7 +216,18 @@ oc wait --for=condition=Available deployment/trust-manager -n cert-manager --tim
 oc apply -f prerequisites/ca-issuer.yaml
 
 # Keycloak
-oc apply -k prerequisites/keycloak/
+oc apply -f prerequisites/keycloak/namespace.yaml
+oc create configmap keycloak-db-server-config \
+    --from-file=server.conf=prerequisites/keycloak/database/files/server.conf \
+    -n keycloak --dry-run=client -o yaml | oc apply -f -
+oc create configmap keycloak-db-access-config \
+    --from-file=access.conf=prerequisites/keycloak/database/files/access.conf \
+    -n keycloak --dry-run=client -o yaml | oc apply -f -
+oc create configmap keycloak-realm \
+    --from-file=realm.json=prerequisites/keycloak/service/files/realm.json \
+    -n keycloak --dry-run=client -o yaml | oc apply -f -
+oc apply -f prerequisites/keycloak/database/ -n keycloak
+oc apply -f prerequisites/keycloak/service/ -n keycloak
 oc wait --for=condition=Available deployment/keycloak-service -n keycloak --timeout=600s
 
 # AAP operator
@@ -468,8 +255,9 @@ helm dependency build charts/osac/
 Copy and customize a values file for your environment:
 
 ```bash
-cp values/development/values.yaml values/<project-name>.yaml
-# Edit values/<project-name>.yaml to set:
+mkdir -p values/<project-name>
+cp values/development/values.yaml values/<project-name>/values.yaml
+# Edit values/<project-name>/values.yaml to set:
 #   - operator.aap.url: your AAP controller URL
 #   - service.auth.issuerUrl: your Keycloak realm URL
 #   - service.idp.url: your Keycloak base URL
@@ -483,7 +271,7 @@ cp values/development/values.yaml values/<project-name>.yaml
 helm lint charts/osac/
 
 # Render templates without deploying
-helm template osac charts/osac/ --values values/<project-name>.yaml > /dev/null
+helm template osac charts/osac/ --values values/<project-name>/values.yaml > /dev/null
 ```
 
 #### 6. Deploy
@@ -492,7 +280,7 @@ helm template osac charts/osac/ --values values/<project-name>.yaml > /dev/null
 helm upgrade --install osac charts/osac/ \
   --namespace <project-name> \
   --create-namespace \
-  --values values/<project-name>.yaml \
+  --values values/<project-name>/values.yaml \
   --set service.externalHostname=${EXTERNAL_HOSTNAME} \
   --set service.internalHostname=${INTERNAL_HOSTNAME} \
   --timeout 40m \
@@ -527,7 +315,7 @@ INSTALLER_NAMESPACE=<project-name> ./scripts/prepare-tenant.sh
 ```bash
 helm upgrade osac charts/osac/ \
   --namespace <project-name> \
-  --values values/<project-name>.yaml \
+  --values values/<project-name>/values.yaml \
   --timeout 40m \
   --wait
 ```
@@ -554,69 +342,7 @@ make helm-validate   # Lint + template (full validation)
 make helm-deploy     # Deploy to current cluster
 make helm-undeploy   # Uninstall from current cluster
 make sync-charts     # Update submodules + rebuild dependencies
-make setup           # Run setup.sh with DEPLOY_MODE=helm
-```
-
-### Option C: Manual Kustomize Installation (Legacy)
-
-If you prefer to install step-by-step using Kustomize, or need to install individual
-prerequisites, follow the manual process below.
-
-#### Install Required Operators
-
-OSAC requires several operators to be present on the cluster. The prerequisite manifests
-are located in the `prerequisites/` directory. You can check if an operator is already
-installed by running `oc get crd <crd-name>`.
-
-```bash
-# Install cert-manager
-$ oc apply -k prerequisites/cert-manager
-
-# Install trust-manager
-$ oc apply -f prerequisites/trust-manager.yaml
-
-# Install CA issuer
-$ oc apply -f prerequisites/ca-issuer.yaml
-
-# Install Keycloak
-$ oc apply -k prerequisites/keycloak/
-
-# Install AAP operator
-$ oc apply -f prerequisites/aap-installation.yaml
-
-# Install MetalLB (optional - ingress/LoadBalancer service)
-$ oc apply -f prerequisites/metallb/metallb-operator.yaml
-# Wait for MetalLB operator to be ready, then apply config:
-$ oc apply -f prerequisites/metallb/metallb-config.yaml
-
-# Install LVMS (optional - storage service)
-$ oc apply -f prerequisites/lvms/lvms-operator.yaml
-# Wait for LVMS operator to be ready, then apply config:
-$ oc apply -f prerequisites/lvms/lvms-config.yaml
-# Set lvms-vg1 as default StorageClass:
-$ oc annotate sc lvms-vg1 storageclass.kubernetes.io/is-default-class=true --overwrite
-
-# Install Multicluster Engine (optional - MCE + infrastructure operator)
-$ oc apply -f prerequisites/mce/mce-operator.yaml
-# Wait for MCE operator to be ready, then create MultiClusterEngine and AgentServiceConfig:
-$ oc apply -f prerequisites/mce/mce-config.yaml
-
-# Install OpenShift Virtualization (optional - CNV/KubeVirt)
-$ oc apply -f prerequisites/cnv/cnv-operator.yaml
-# Wait for CNV operator to be ready, then apply HyperConverged config:
-$ oc apply -f prerequisites/cnv/cnv-config.yaml
-```
-
-> **Tip:** Wait for each operator deployment to become available before proceeding to
-> the next. For example: `oc wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=300s`
-
-#### Apply the Kustomize Overlay
-
-Once all prerequisites are ready, deploy OSAC:
-
-```bash
-# Deploy OSAC components
-$ oc apply -k overlays/<project-name>
+make setup           # Run setup.sh
 ```
 
 ### Monitor Progress
@@ -626,17 +352,7 @@ $ oc apply -k overlays/<project-name>
 $ watch oc get -n <project-name> pods
 ```
 
-Several pods restart during initialization. The OpenShift job named `aap-bootstrap`
-restarts several times before completing. This is expected behavior.
-
-Once the `aap-bootstrap` job completes, OSAC is ready for use.
-
-**Alternative: Install with Wait Option**
-
-```bash
-# Wait for all deployments to be ready (blocking command)
-$ oc wait --for=condition=Available deployment --all -n <project-name> --timeout=600s
-```
+Once the `osac-aap-bootstrap` job completes, OSAC is ready for use.
 
 ## OSAC CLI: Setup & Usage
 
@@ -689,8 +405,6 @@ $ osac create hub \
     --namespace <project-name>
 ```
 
-> **Note:** Refer to `base/fulfillment-service/hub-access/README.md` for more information
-
 ### 4. Use the CLI
 
 Once configured, you can use the OSAC CLI to manage clusters and virtual machines.
@@ -706,8 +420,6 @@ After deployment, you can access the AAP web interface to monitor jobs and manag
 ```bash
 $ oc get route -n <project-name> | grep osac-aap
 ```
-
-AAP routes will contain 'osac-aap' in the name.
 
 > **Note:** The main AAP URL will be something like: `https://osac-aap-<project-name>.apps.your-cluster.com`
 
@@ -736,62 +448,38 @@ For manual deployments, run it after the AAP bootstrap job completes:
 $ INSTALLER_NAMESPACE=<project-name> ./scripts/prepare-aap.sh
 ```
 
-This script will:
-- Retrieve the AAP admin password from the `osac-aap-admin-password` secret
-- Create an API token via the AAP gateway (`/api/gateway/v1/tokens/`)
-- Store the token in a `osac-aap-api-token` secret
-- Set the correct `OSAC_AAP_URL` on the operator deployment
-
-### Using AAP Interface
-
-From the AAP web interface, you can:
-- Monitor cluster provisioning jobs and their status
-- View automation execution logs and troubleshoot failures
-- Manage job templates and automation workflows
-- Configure additional automation tasks
-- View inventory and host information
-
 ## Tearing Down OSAC
 
 To completely remove an OSAC deployment and all its prerequisites, use the teardown script:
 
 ```bash
-# Using defaults (namespace: osac-devel, overlay: development)
+# Using defaults (namespace: osac)
 $ ./scripts/teardown.sh
 
-# Or specify your namespace and overlay
-$ INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/teardown.sh
+# Or specify your namespace
+$ INSTALLER_NAMESPACE=<project-name> ./scripts/teardown.sh
 
 # Include all optional services in teardown (must match what was used during setup)
-$ EXTRA_SERVICES=true \
-    INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/teardown.sh
-
-# Or selectively match what was used during setup
-$ INGRESS_SERVICE=true STORAGE_SERVICE=true \
-    INSTALLER_NAMESPACE=<project-name> INSTALLER_KUSTOMIZE_OVERLAY=<project-name> ./scripts/teardown.sh
+$ EXTRA_SERVICES=true INSTALLER_NAMESPACE=<project-name> ./scripts/teardown.sh
 ```
 
 The script removes resources in reverse order:
-1. StorageClass OSAC labels
-2. Kustomize overlay resources and project namespace
-3. Keycloak (before storage, since its PVCs depend on the storage class)
+1. OSAC CRs (while operator is running for finalizer processing)
+2. Helm release and project namespace
+3. Keycloak
 4. AAP operator
 5. Multicluster Engine and AgentServiceConfig (if `MCE_SERVICE=true`)
-6. LVMS storage service (if `STORAGE_SERVICE=true`)
-7. MetalLB ingress service (if `INGRESS_SERVICE=true`)
-8. OpenShift Virtualization (if `VIRT_SERVICE=true`)
+6. OpenShift Virtualization (if `VIRT_SERVICE=true`)
+7. LVMS storage service (if `STORAGE_SERVICE=true`)
+8. MetalLB ingress service (if `INGRESS_SERVICE=true`)
 9. CA issuer, trust-manager, and cert-manager
-10. Stale API services cleanup
-11. NetworkAttachmentDefinition
-12. Local `kubeconfig.hub-access` file
-
-The script waits for all namespaces to be fully deleted before completing.
+10. Stale API services and CRD cleanup
 
 > **Warning:** This removes **all** prerequisite operators and their namespaces. If other
 > workloads on the cluster depend on these operators (e.g., cert-manager, MetalLB), do not
-> run this script. Instead, manually delete only the OSAC-specific resources:
+> run this script. Instead, manually uninstall:
 > ```bash
-> $ oc delete -k overlays/<project-name>
+> $ helm uninstall osac -n <project-name>
 > $ oc delete namespace <project-name>
 > ```
 
@@ -801,7 +489,7 @@ The script waits for all namespaces to be fully deleted before completing.
 
 1. **cert-manager not ready**: Ensure cert-manager operator is installed and running
 2. **Certificate issues**: Check cert-manager logs and certificate status
-3. **ImagePullBackOff errors**: Verify registry credentials in `files/quay-pull-secret.json` and image string
+3. **ImagePullBackOff errors**: Verify registry credentials and image string
 
 ### Debug Commands
 
@@ -809,27 +497,18 @@ The script waits for all namespaces to be fully deleted before completing.
 # Check certificate status
 $ oc describe certificate -n <project-name>
 
-# Check certificate issuer status
-$ oc describe issuer -n <project-name>
-
 # Check pod events
 $ oc describe pod -n <project-name> <pod-name>
 
 # Check service endpoints
 $ oc get endpoints -n <project-name>
 
-# Check secrets
-$ oc get secrets -n <project-name>
-
 # View component logs
 $ oc logs -n <project-name> deployment/fulfillment-service -c server --tail=100
-$ oc logs -n <project-name> deployment/<project-name>-controller-manager --tail=100
 
 # Get all events in namespace
 $ oc get events -n <project-name> --sort-by=.metadata.creationTimestamp
 ```
-
-
 
 ## Support
 

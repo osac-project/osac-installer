@@ -6,9 +6,7 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib.sh"
 
-INSTALLER_KUSTOMIZE_OVERLAY=${INSTALLER_KUSTOMIZE_OVERLAY:-"development"}
-INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')}
-[[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: Could not determine namespace from overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" && exit 1
+INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-"osac"}
 EXTRA_SERVICES=${EXTRA_SERVICES:-"false"}
 INGRESS_SERVICE=${INGRESS_SERVICE:-${EXTRA_SERVICES}}
 STORAGE_SERVICE=${STORAGE_SERVICE:-${EXTRA_SERVICES}}
@@ -21,28 +19,7 @@ resource_type_exists() {
     ! echo "${output}" | grep -q "the server doesn't have a resource type"
 }
 
-delete_manifests() {
-    local tmpdir
-    tmpdir=$(mktemp -d)
-    awk -v d="${tmpdir}" '/^---$/{i++; next} {print >> d"/r-"sprintf("%04d",i)".yaml"}'
-    for f in "${tmpdir}"/r-*.yaml; do
-        [[ -f "$f" ]] || continue
-        if ! output=$(timeout 30 oc delete --ignore-not-found --wait=false -f "$f" 2>&1); then
-            if echo "${output}" | grep -q "resource mapping not found\|the server doesn't have a resource type"; then
-                echo "  Skipping $(awk '/^kind:/{print $2}' "$f"): CRD not installed"
-                continue
-            fi
-            rm -rf "${tmpdir}"
-            echo "${output}" >&2
-            return 1
-        fi
-        [[ -n "${output}" ]] && echo "${output}"
-    done
-    rm -rf "${tmpdir}"
-}
-
 echo "=== Tearing down OSAC deployment ==="
-echo "Overlay: ${INSTALLER_KUSTOMIZE_OVERLAY}"
 echo "Namespace: ${INSTALLER_NAMESPACE}"
 echo ""
 
@@ -120,8 +97,7 @@ for wh in $(timeout 10 oc get mutatingwebhookconfiguration --no-headers 2>/dev/n
 done
 # Phase 1: Delete OSAC CRs while the operator is still running
 #
-# The operator must be alive to process finalizers on its CRs. Deleting the
-# kustomize overlay kills the operator, so CRs must be cleaned up first.
+# The operator must be alive to process finalizers on its CRs.
 echo "Deleting OSAC CRs..."
 for resource in computeinstance virtualnetwork subnet securitygroup publicippool clusterorder tenant; do
     if resource_type_exists "${resource}"; then
@@ -130,15 +106,18 @@ for resource in computeinstance virtualnetwork subnet securitygroup publicippool
         done
     fi
 done
-# Phase 2: Delete application-level resources
-echo "Deleting kustomize overlay resources..."
-oc kustomize "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}" | delete_manifests
+# Phase 2: Delete application-level resources via Helm
+echo "Uninstalling OSAC Helm release..."
+if helm status osac -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
+    helm uninstall osac -n "${INSTALLER_NAMESPACE}" --wait --timeout 20m
+else
+    echo "  No Helm release found, skipping"
+fi
 
 echo "Deleting namespace ${INSTALLER_NAMESPACE}..."
 timeout 30 oc delete namespace "${INSTALLER_NAMESPACE}" --ignore-not-found --wait=false
 
 echo "Deleting Keycloak resources..."
-oc kustomize prerequisites/keycloak/ | delete_manifests
 timeout 30 oc delete namespace keycloak --ignore-not-found --wait=false
 # Phase 3: Delete operator CRs while operators are still running
 #
@@ -187,12 +166,12 @@ fi
 
 if [[ "${INGRESS_SERVICE}" == "true" ]]; then
     echo "Deleting MetalLB configuration..."
-    delete_manifests < prerequisites/metallb/metallb-config.yaml
+    oc delete -f prerequisites/metallb/metallb-config.yaml --ignore-not-found
 fi
 
 echo "Deleting CA issuer and trust-manager..."
-delete_manifests < prerequisites/ca-issuer.yaml
-delete_manifests < prerequisites/trust-manager.yaml
+oc delete -f prerequisites/ca-issuer.yaml --ignore-not-found
+oc delete -f prerequisites/trust-manager.yaml --ignore-not-found
 
 echo "Deleting CertManager CR..."
 delete_cr certmanager cluster

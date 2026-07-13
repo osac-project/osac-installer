@@ -7,23 +7,10 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib.sh"
 
-# Deploy mode: "helm" (default) or "kustomize" (legacy)
-DEPLOY_MODE=${DEPLOY_MODE:-"helm"}
-if [[ "${DEPLOY_MODE}" == "helm" ]]; then
-    # Ensure helm is installed
-    command -v helm &>/dev/null || { echo "Error: helm not found in PATH" >&2; exit 1; }
-fi
+command -v helm &>/dev/null || { echo "Error: helm not found in PATH" >&2; exit 1; }
 
-INSTALLER_KUSTOMIZE_OVERLAY=${INSTALLER_KUSTOMIZE_OVERLAY:-"development"}
 VALUES_FILE=${VALUES_FILE:-"values/development/values.yaml"}
-
-if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
-    INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')}
-    [[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: Could not determine namespace from overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" && exit 1
-else
-    INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-"osac"}
-fi
-
+INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-"osac"}
 INSTALLER_VM_TEMPLATE=${INSTALLER_VM_TEMPLATE:-}
 # EXTRA_SERVICES=true enables all optional services (storage, ingress, virtualization, MCE)
 EXTRA_SERVICES=${EXTRA_SERVICES:-"false"}
@@ -36,12 +23,7 @@ MCE_SERVICE=${MCE_SERVICE:-${EXTRA_SERVICES}}
 SETUP_PHASE=${SETUP_PHASE:-"all"}
 
 echo "=== Setting up OSAC deployment ==="
-echo "Deploy mode: ${DEPLOY_MODE}"
-if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
-    echo "Overlay: ${INSTALLER_KUSTOMIZE_OVERLAY}"
-else
-    echo "Values file: ${VALUES_FILE}"
-fi
+echo "Values file: ${VALUES_FILE}"
 echo "Namespace: ${INSTALLER_NAMESPACE}"
 echo "Setup phase: ${SETUP_PHASE}"
 echo ""
@@ -64,8 +46,8 @@ if [[ "${STORAGE_SERVICE}" == "true" ]]; then
         exit 1
     }
     LVMS_CSV=$(oc get csv --no-headers -n openshift-storage | awk '/lvms/ { print $1 }' | tail -1)
-    wait_for_resource clusterserviceversion/${LVMS_CSV} jsonpath='{.status.phase}'=Succeeded 300 openshift-storage
-    wait_for_resource deployment/lvms-operator condition=Available 300 openshift-storage
+    wait_for_resource clusterserviceversion/${LVMS_CSV} jsonpath='{.status.phase}'=Succeeded 600 openshift-storage
+    wait_for_resource deployment/lvms-operator condition=Available 900 openshift-storage
 
     # Apply LVMCluster configuration (requires operator CRDs to be installed)
     oc apply -f prerequisites/lvms/lvms-config.yaml
@@ -95,8 +77,6 @@ if [[ "${INGRESS_SERVICE}" == "true" ]]; then
     oc apply -f prerequisites/metallb/metallb-config.yaml
 
     # Patch IPAddressPool with address range matching this cluster's node subnet.
-    # The static config uses a placeholder range; derive the correct one from
-    # the first node's InternalIP (same logic as refresh-after-snapshot.py).
     NODE_IP=$(oc get nodes -o 'jsonpath={.items[0].status.addresses[?(@.type=="InternalIP")].address}')
     SUBNET_PREFIX="${NODE_IP%.*}"
     echo "Patching MetalLB address pool: ${SUBNET_PREFIX}.240-${SUBNET_PREFIX}.250"
@@ -201,7 +181,7 @@ if [[ -n "${CERT_MANAGER_NS}" ]]; then
     echo "cert-manager is already installed in ${CERT_MANAGER_NS}, skipping..."
 else
     CERT_MANAGER_NS="cert-manager"
-    retry_until 300 3 '[[ -n "$(oc get crd --ignore-not-found certmanagers.operator.openshift.io)" ]]' 'oc apply -k prerequisites/cert-manager || true' || {
+    retry_until 300 3 '[[ -n "$(oc get crd --ignore-not-found certmanagers.operator.openshift.io)" ]]' 'oc apply -f prerequisites/cert-manager/cert-manager.yaml || true' || {
         echo "Timed out waiting for cert-manager CRD to exist"
         exit 1
     }
@@ -241,7 +221,18 @@ if [[ -n "${KEYCLOAK_NS}" ]]; then
 else
     KEYCLOAK_NS="keycloak"
     wait_for_namespace_cleanup keycloak
-    oc apply -k prerequisites/keycloak/
+    oc apply -f prerequisites/keycloak/namespace.yaml
+    oc create configmap keycloak-db-server-config \
+        --from-file=server.conf=prerequisites/keycloak/database/files/server.conf \
+        -n keycloak --dry-run=client -o yaml | oc apply -f -
+    oc create configmap keycloak-db-access-config \
+        --from-file=access.conf=prerequisites/keycloak/database/files/access.conf \
+        -n keycloak --dry-run=client -o yaml | oc apply -f -
+    oc create configmap keycloak-realm \
+        --from-file=realm.json=prerequisites/keycloak/service/files/realm.json \
+        -n keycloak --dry-run=client -o yaml | oc apply -f -
+    oc apply -f prerequisites/keycloak/database/ -n keycloak
+    oc apply -f prerequisites/keycloak/service/ -n keycloak
 fi
 wait_for_resource deployment/keycloak-service condition=Available 600 ${KEYCLOAK_NS}
 
@@ -251,8 +242,6 @@ if oc get deployment automation-controller-operator-controller-manager -n aap &>
     AAP_NS="aap"
 elif oc get deployment automation-controller-operator-controller-manager -n ansible-aap &>/dev/null; then
     AAP_NS="ansible-aap"
-elif oc get deployment automation-controller-operator-controller-manager -n aap &>/dev/null; then
-    AAP_NS="aap"
 elif oc get deployment automation-controller-operator-controller-manager -n openshift-operators &>/dev/null; then
     AAP_NS="openshift-operators"
 fi
@@ -275,154 +264,107 @@ wait_for_resource deployment/automation-controller-operator-controller-manager c
 # Wait for OSAC namespace to finish terminating if needed
 wait_for_namespace_cleanup "${INSTALLER_NAMESPACE}"
 
-if [[ "${DEPLOY_MODE}" == "helm" ]]; then
-    # --- Helm deployment mode ---
-    #
-    # helm --wait blocks until all pods are Ready. Several resources that pods
-    # mount as required volumes must exist before the install starts.
+# Create the namespace early so pre-deploy resources can target it.
+oc create namespace "${INSTALLER_NAMESPACE}" --dry-run=client -o yaml | oc apply -f -
 
-    # Create the namespace early so pre-deploy resources can target it.
-    oc create namespace "${INSTALLER_NAMESPACE}" --dry-run=client -o yaml | oc apply -f -
+# Ensure the shared ca-bundle Bundle exists and the ConfigMap is populated.
+"${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
+echo "Waiting for ca-bundle ConfigMap..."
+retry_until 120 3 'oc get configmap ca-bundle -n '"${INSTALLER_NAMESPACE}"' -o jsonpath='"'"'{.data.bundle\.pem}'"'"' 2>/dev/null | grep -q "BEGIN CERTIFICATE"'
 
-    # Ensure the shared ca-bundle Bundle exists and the ConfigMap is populated.
-    "${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
-    echo "Waiting for ca-bundle ConfigMap..."
-    retry_until 120 3 'oc get configmap ca-bundle -n '"${INSTALLER_NAMESPACE}"' -o jsonpath='"'"'{.data.bundle\.pem}'"'"' 2>/dev/null | grep -q "BEGIN CERTIFICATE"'
+# Create controller OAuth credentials. The init container generates the secret
+# at first boot and persists it in keycloak-client-secrets (OSAC-2115).
+FC_CLIENT_SECRET=$(oc get secret keycloak-client-secrets -n "${KEYCLOAK_NS}" -o jsonpath='{.data.osac-controller}' | base64 -d)
+[[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller from keycloak-client-secrets" >&2; exit 1; }
+oc create secret generic fulfillment-controller-credentials \
+    --from-literal=client-id=osac-controller \
+    --from-literal=client-secret="${FC_CLIENT_SECRET}" \
+    -n "${INSTALLER_NAMESPACE}" \
+    --dry-run=client -o yaml | oc apply -f -
 
-    # Create controller OAuth credentials from the Keycloak realm config.
-    FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
-    [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
-    oc create secret generic fulfillment-controller-credentials \
-        --from-literal=client-id=osac-controller \
-        --from-literal=client-secret="${FC_CLIENT_SECRET}" \
+# In-cluster PostgreSQL must exist before Helm install (operator-managed per
+# INSTALL.md). Creates fulfillment-db and postgres-client-cert-service secrets
+# separately, or enable bundledPostgres in values for secret auto-generation.
+maybe_deploy_ci_postgres "${INSTALLER_NAMESPACE}" "${VALUES_FILE}"
+check_postgres_prerequisites "${INSTALLER_NAMESPACE}" "${VALUES_FILE}"
+
+# Create AAP license secret (required by the bootstrap job).
+VALUES_DIR="$(dirname "${VALUES_FILE}")"
+AAP_LICENSE_FILE=${AAP_LICENSE_FILE:-"${VALUES_DIR}/license.zip"}
+if [[ -f "${AAP_LICENSE_FILE}" ]]; then
+    echo "Creating config-as-code-manifest-ig secret from ${AAP_LICENSE_FILE}..."
+    # Server-side apply avoids last-applied-configuration (256KiB limit on large license.zip)
+    # while remaining idempotent when the license file changes.
+    oc create secret generic config-as-code-manifest-ig \
+        --from-file=license.zip="${AAP_LICENSE_FILE}" \
         -n "${INSTALLER_NAMESPACE}" \
-        --dry-run=client -o yaml | oc apply -f -
-
-    # In-cluster PostgreSQL must exist before Helm install (operator-managed per
-    # INSTALL.md). Creates fulfillment-db and postgres-client-cert-service secrets
-    # separately, or enable bundledPostgres in values for secret auto-generation.
-    # CI full-install (bundledPostgres) may deploy the integration-test chart first.
-    maybe_deploy_ci_postgres "${INSTALLER_NAMESPACE}" "${VALUES_FILE}"
-    check_postgres_prerequisites "${INSTALLER_NAMESPACE}" "${VALUES_FILE}"
-
-    # Create AAP license secret (required by the bootstrap job).
-    # In kustomize mode this is handled by secretGenerator; in Helm mode we
-    # must create it explicitly. The license.zip can be provided via:
-    #   1. AAP_LICENSE_FILE env var (absolute path)
-    #   2. overlays/<overlay>/files/license.zip (default convention)
-    AAP_LICENSE_FILE=${AAP_LICENSE_FILE:-"overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/files/license.zip"}
-    if [[ -f "${AAP_LICENSE_FILE}" ]]; then
-        echo "Creating config-as-code-manifest-ig secret from ${AAP_LICENSE_FILE}..."
-        oc create secret generic config-as-code-manifest-ig \
-            --from-file=license.zip="${AAP_LICENSE_FILE}" \
-            -n "${INSTALLER_NAMESPACE}" \
-            --dry-run=client -o yaml | oc apply -f -
-        oc label secret config-as-code-manifest-ig \
-            osac.openshift.io/project=osac-aap \
-            -n "${INSTALLER_NAMESPACE}" --overwrite
-    else
-        echo "WARNING: AAP license file not found at ${AAP_LICENSE_FILE}"
-        echo "The AAP bootstrap job will fail without it."
-        echo "Set AAP_LICENSE_FILE or place license.zip in overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/files/"
-    fi
-
-    # Create AAP config-as-code secret (EE image, git URI, git branch).
-    # Values can be overridden via environment variables.
-    AAP_EE_IMAGE=${AAP_EE_IMAGE:-"ghcr.io/osac-project/osac-aap:latest"}
-    AAP_PROJECT_GIT_URI=${AAP_PROJECT_GIT_URI:-"https://github.com/osac-project/osac-aap"}
-    AAP_PROJECT_GIT_BRANCH=${AAP_PROJECT_GIT_BRANCH:-"main"}
-    echo "Creating config-as-code-ig secret..."
-    oc create secret generic config-as-code-ig \
-        --from-literal=AAP_EE_IMAGE="${AAP_EE_IMAGE}" \
-        --from-literal=AAP_PROJECT_GIT_URI="${AAP_PROJECT_GIT_URI}" \
-        --from-literal=AAP_PROJECT_GIT_BRANCH="${AAP_PROJECT_GIT_BRANCH}" \
-        -n "${INSTALLER_NAMESPACE}" \
-        --dry-run=client -o yaml | oc apply -f -
-
-    # Label pre-created resources for Helm adoption.
-    # setup.sh creates secrets/configmaps before helm install, but the chart
-    # also declares them. Without Helm ownership labels, helm install fails
-    # with "invalid ownership metadata".
-    echo "Labeling pre-created resources for Helm adoption..."
-    for resource in \
-        secret/config-as-code-ig \
-        secret/config-as-code-manifest-ig \
-        secret/fulfillment-controller-credentials \
-        secret/fulfillment-db \
-        configmap/ca-bundle; do
-      if oc get "${resource}" -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
-        oc label "${resource}" -n "${INSTALLER_NAMESPACE}" \
-            app.kubernetes.io/managed-by=Helm --overwrite
-        oc annotate "${resource}" -n "${INSTALLER_NAMESPACE}" \
-            meta.helm.sh/release-name=osac \
-            meta.helm.sh/release-namespace="${INSTALLER_NAMESPACE}" --overwrite
-      fi
-    done
-
-    echo "Deploying OSAC using Helm..."
-    CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
-    EXTERNAL_HOSTNAME="fulfillment-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
-    INTERNAL_HOSTNAME="fulfillment-internal-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
-    # Chart.yaml has real published versions for the release workflow, but
-    # file:// deps require versions to match the submodule Chart.yaml (0.0.0).
-    yq -i '(.dependencies[].version) = "0.0.0"' charts/osac/Chart.yaml
-    helm dependency update charts/osac/
-    helm upgrade --install osac charts/osac/ \
-        --namespace "${INSTALLER_NAMESPACE}" \
-        --values "${VALUES_FILE}" \
-        --set "service.externalHostname=${EXTERNAL_HOSTNAME}" \
-        --set "service.internalHostname=${INTERNAL_HOSTNAME}" \
-        --timeout 40m \
-        --wait
+        --dry-run=client -o yaml | oc apply --server-side -f -
+    oc label secret config-as-code-manifest-ig \
+        osac.openshift.io/project=osac-aap \
+        -n "${INSTALLER_NAMESPACE}" --overwrite
 else
-    # --- Kustomize deployment mode (legacy) ---
-    echo "Deploying OSAC using Kustomize..."
-    oc apply -k "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}" --server-side --force-conflicts
-
-    # Ensure the shared ca-bundle Bundle exists and includes our namespace
-    "${SCRIPT_DIR}/ensure-ca-bundle.sh" "${INSTALLER_NAMESPACE}"
-
-    # Create controller OAuth credentials from the Keycloak realm config
-    FC_CLIENT_SECRET=$(jq -er '.clients[] | select(.clientId == "osac-controller") | .secret // empty' prerequisites/keycloak/service/files/realm.json)
-    [[ -n "${FC_CLIENT_SECRET}" ]] || { echo "ERROR: Could not resolve secret for osac-controller in realm.json" >&2; exit 1; }
-    oc create secret generic fulfillment-controller-credentials \
-        --from-literal=client-id=osac-controller \
-        --from-literal=client-secret="${FC_CLIENT_SECRET}" \
-        -n "${INSTALLER_NAMESPACE}" \
-        --dry-run=client -o yaml | oc apply -f -
+    echo "WARNING: AAP license file not found at ${AAP_LICENSE_FILE}"
+    echo "The AAP bootstrap job will fail without it."
+    echo "Set AAP_LICENSE_FILE or place license.zip in ${VALUES_DIR}/"
 fi
+
+# Create AAP config-as-code secret (EE image, git URI, git branch).
+# Values can be overridden via environment variables.
+AAP_EE_IMAGE=${AAP_EE_IMAGE:-"ghcr.io/osac-project/osac-aap:latest"}
+AAP_PROJECT_GIT_URI=${AAP_PROJECT_GIT_URI:-"https://github.com/osac-project/osac-aap"}
+AAP_PROJECT_GIT_BRANCH=${AAP_PROJECT_GIT_BRANCH:-"main"}
+echo "Creating config-as-code-ig secret..."
+oc create secret generic config-as-code-ig \
+    --from-literal=AAP_EE_IMAGE="${AAP_EE_IMAGE}" \
+    --from-literal=AAP_PROJECT_GIT_URI="${AAP_PROJECT_GIT_URI}" \
+    --from-literal=AAP_PROJECT_GIT_BRANCH="${AAP_PROJECT_GIT_BRANCH}" \
+    -n "${INSTALLER_NAMESPACE}" \
+    --dry-run=client -o yaml | oc apply -f -
+
+# Label pre-created resources for Helm adoption.
+echo "Labeling pre-created resources for Helm adoption..."
+for resource in \
+    secret/config-as-code-ig \
+    secret/config-as-code-manifest-ig \
+    secret/fulfillment-controller-credentials \
+    secret/fulfillment-db; do
+  if oc get "${resource}" -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
+    oc label "${resource}" -n "${INSTALLER_NAMESPACE}" \
+        app.kubernetes.io/managed-by=Helm --overwrite
+    oc annotate "${resource}" -n "${INSTALLER_NAMESPACE}" \
+        meta.helm.sh/release-name=osac \
+        meta.helm.sh/release-namespace="${INSTALLER_NAMESPACE}" --overwrite
+  fi
+done
+
+echo "Deploying OSAC using Helm..."
+CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
+EXTERNAL_HOSTNAME="fulfillment-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
+INTERNAL_HOSTNAME="fulfillment-internal-api-${INSTALLER_NAMESPACE}.${CLUSTER_DOMAIN}"
+# Chart.yaml has real published versions for the release workflow, but
+# file:// deps require versions to match the submodule Chart.yaml (0.0.0).
+yq -i '(.dependencies[].version) = "0.0.0"' charts/osac/Chart.yaml
+helm dependency update charts/osac/
+helm upgrade --install osac charts/osac/ \
+    --namespace "${INSTALLER_NAMESPACE}" \
+    --values "${VALUES_FILE}" \
+    --set "service.externalHostname=${EXTERNAL_HOSTNAME}" \
+    --set "service.internalHostname=${INTERNAL_HOSTNAME}" \
+    --timeout 40m \
+    --wait
 
 # Apply cluster-fulfillment-ig configmap/secret overrides from environment variables
 INSTALLER_NAMESPACE="${INSTALLER_NAMESPACE}" \
-INSTALLER_KUSTOMIZE_OVERLAY="${INSTALLER_KUSTOMIZE_OVERLAY}" \
     ./scripts/aap-configuration.sh
 
-# Detect console-proxy namespace and deployment name.
-# In kustomize mode, the shared-dev overlay pins the console-proxy to "osac".
-# In helm mode, everything deploys into INSTALLER_NAMESPACE.
-if [[ "${DEPLOY_MODE}" == "helm" ]]; then
-  CONSOLE_PROXY_NS="${INSTALLER_NAMESPACE}"
-  CONSOLE_PROXY_DEPLOY="fulfillment-console-proxy"
-elif grep -q 'console-proxy-shared-dev' \
-    "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" 2>/dev/null; then
-  CONSOLE_PROXY_NS="osac"
-  CONSOLE_PROXY_DEPLOY="osac-console-proxy"
-else
-  CONSOLE_PROXY_NS="${INSTALLER_NAMESPACE}"
-  CONSOLE_PROXY_DEPLOY="osac-console-proxy"
-fi
+CONSOLE_PROXY_NS="${INSTALLER_NAMESPACE}"
+CONSOLE_PROXY_DEPLOY="fulfillment-console-proxy"
 wait_for_resource deployment/${CONSOLE_PROXY_DEPLOY} condition=Available 300 "${CONSOLE_PROXY_NS}"
 
 # Wait for AAP bootstrap job to complete.
-# In kustomize mode, the job is named "aap-bootstrap".
-# In helm mode, the job is a post-install hook named "osac-aap-bootstrap".
 # helm --wait does not wait for hook jobs, so we must wait explicitly.
 echo "Waiting for AAP bootstrap job to complete (this may take up to 40 minutes)..."
-if [[ "${DEPLOY_MODE}" == "kustomize" ]]; then
-    wait_for_resource job/aap-bootstrap condition=complete 2400 "${INSTALLER_NAMESPACE}"
-else
-    wait_for_resource job/osac-aap-bootstrap condition=complete 2400 "${INSTALLER_NAMESPACE}"
-fi
+wait_for_resource job/osac-aap-bootstrap condition=complete 2400 "${INSTALLER_NAMESPACE}"
 
 # Wait for fulfillment stack to be ready before running prepare scripts
 wait_for_resource deployment/fulfillment-grpc-server condition=Available 300 ${INSTALLER_NAMESPACE}

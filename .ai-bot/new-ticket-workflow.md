@@ -1,16 +1,14 @@
 Execute the following workflow phases in order. This is an
 infrastructure/deployment repo -- there are no unit tests. Validation
-is structural (YAML lint, kustomize build, sync checks).
+is structural (YAML lint, Helm lint, sync checks).
 
 1. **Read and execute .ai-workflows/bugfix/skills/assess.md**
    The bug report is in `.ai-bot/issue.md`. Identify which files are
-   affected (overlays, base kustomization, scripts, prerequisites).
+   affected (Helm charts, values files, scripts, prerequisites).
    Do not ask clarifying questions -- make reasonable assumptions.
 
 2. **Read and execute .ai-workflows/bugfix/skills/diagnose.md**
    Write your root cause analysis to `.ai-bot/diagnosis.md`.
-   For Kustomize issues, capture the full `kustomize build` output of
-   affected overlays before and after to isolate the problem.
 
 3. **Read and execute .ai-workflows/bugfix/skills/fix.md**
    Implement the minimal fix. Key constraints:
@@ -25,24 +23,20 @@ is structural (YAML lint, kustomize build, sync checks).
    ```
    yamllint --strict .
    pre-commit run --all-files
-   bash scripts/kustomize-build-all.sh
+   helm lint charts/osac/
+   for f in values/*/values.yaml; do helm template osac charts/osac/ --values "$f" > /dev/null; done
    bash scripts/sync-image-tags.sh
    ```
-   Additionally, diff kustomize build output for affected overlays
-   against the baseline to confirm only intended changes appear.
 
 5. **Read and execute .ai-workflows/bugfix/skills/review.md**
    Self-review your changes. Pay special attention to:
-   - Namespace references embedded in YAML strings (APIService,
-     cert-manager annotations, Certificate dnsNames)
-   - Cluster-scoped resources that need prefixTransformer coverage
-   - Overlay consistency (if you changed one overlay, check whether
-     parallel overlays need the same change)
+   - Values file consistency (if you changed one values file, check
+     whether other values files need the same change)
+   - Helm schema updates (new values must have matching schema entries)
    If issues are found, correct them, revalidate, and re-review
    (up to 4 iterations).
 
 6. **Write PR description to `.ai-bot/pr.md`**
    Use the `## Title` heading format. Include:
    - A Root Cause section from `.ai-bot/diagnosis.md`
-   - Which overlays are affected
-   - The kustomize build diff (before/after) for affected overlays
+   - Which values files are affected

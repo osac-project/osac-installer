@@ -14,15 +14,9 @@ to understand the prior session's decisions and changes.
    belongs in the component repo. Suggest what the reviewer should do
    instead.
 
-2. **Overlay consistency**: If feedback applies to one overlay, check
-   whether parallel overlays (development, vmaas-ci, caas-ci,
-   osac-integration) need the same change. Call this out in your
-   response.
-
-3. **Namespace pitfalls**: If feedback involves namespace references,
-   verify that the change works with the kustomize namespace transformer.
-   Embedded namespace references (APIService, annotations, dnsNames)
-   need kustomize replacements, not direct edits.
+2. **Values consistency**: If feedback applies to one values file, check
+   whether other values files (development, vmaas-ci, caas-ci)
+   need the same change. Call this out in your response.
 
 ## Post-Change Validation
 
@@ -31,12 +25,10 @@ After addressing all review comments, run the full validation suite:
 ```
 yamllint --strict .
 pre-commit run --all-files
-bash scripts/kustomize-build-all.sh
+helm lint charts/osac/
+for f in values/*/values.yaml; do helm template osac charts/osac/ --values "$f" > /dev/null; done
 bash scripts/sync-image-tags.sh
 ```
-
-Diff the kustomize build output for affected overlays against the
-baseline to confirm only intended changes appear.
 
 ## Session Artifacts
 

@@ -8,11 +8,7 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib.sh"
 
-INSTALLER_KUSTOMIZE_OVERLAY=${INSTALLER_KUSTOMIZE_OVERLAY:-"development"}
-if [[ -z "${INSTALLER_NAMESPACE:-}" ]]; then
-    INSTALLER_NAMESPACE=$(grep "^namespace:" "overlays/${INSTALLER_KUSTOMIZE_OVERLAY}/kustomization.yaml" | awk '{print $2}')
-    [[ -z "${INSTALLER_NAMESPACE}" ]] && echo "ERROR: INSTALLER_NAMESPACE not set and could not determine from overlay" && exit 1
-fi
+INSTALLER_NAMESPACE=${INSTALLER_NAMESPACE:-"osac"}
 INSTALLER_VM_TEMPLATE=${INSTALLER_VM_TEMPLATE:-}
 
 # Label default StorageClass as the shared default so all tenants can use it

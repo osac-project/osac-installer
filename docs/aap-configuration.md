@@ -9,31 +9,21 @@ Currently only the **cluster-fulfillment-ig** instance group mounts these
 variables, as it is the only instance group that consumes them (for cluster provisioning workflows).
 This will be expanded to additional instance groups in the future as more automation workflows are added.
 
-## Configuration Files
+## How It Works
 
-Each overlay contains a tracked configuration file under `files/`; add a local
-secrets file only when credential overrides are needed:
+The `scripts/aap-configuration.sh` script patches the `cluster-fulfillment-ig`
+ConfigMap and Secret on the cluster using environment variables. The setup script
+(`setup.sh`) calls this automatically after the Helm deployment.
 
-| File | Tracked in git | Purpose |
-|------|---------------|---------|
-| `osac-aap-configuration.env` | Yes | Non-sensitive settings (network class, domains, hosted cluster defaults) |
-| `osac-aap-secrets.env` | No (gitignored, optional) | Sensitive credentials (passwords, SSH keys, AWS keys) |
-
-The `scripts/aap-configuration.sh` script reads `osac-aap-configuration.env`
-and, when present, `osac-aap-secrets.env`, then patches the
-`cluster-fulfillment-ig` ConfigMap and Secret on the cluster. The setup script
-(`setup.sh`) calls this automatically after applying the Kustomize overlay.
-
-For manual deployments, run the script standalone after `oc apply -k`:
+For manual deployments, run the script standalone after `helm upgrade --install`:
 
 ```bash
 INSTALLER_NAMESPACE=<project-name> ./scripts/aap-configuration.sh
 ```
 
-Shell environment variables override values from the env files, which is useful
-for CI pipelines.
+All configuration is passed via shell environment variables.
 
-## ConfigMap Variables (`osac-aap-configuration.env`)
+## ConfigMap Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -48,7 +38,7 @@ for CI pipelines.
 | `DNS_CLASS` | `dns.route53.dns` | DNS backend driver role (see [DNS Backend](dns-backend.md)) |
 | `DNS_ZONE` | `EXTERNAL_ACCESS_BASE_DOMAIN` | DNS zone for record management |
 
-## Secret Variables (`osac-aap-secrets.env`)
+## Secret Variables
 
 Values must be **plaintext** — the script base64-encodes them when patching the
 Kubernetes Secret. Do not pre-encode them.
@@ -61,10 +51,8 @@ Kubernetes Secret. Do not pre-encode them.
 Additional variables are added by specific network backends — see
 [Network Backend Configuration](network-backend.md).
 
-> **Note on SSH keys:** SSH private keys are read from files in the overlay's
-> `files/` directory (`server-ssh-key` and `server-ssh-bastion-key`), not from
-> the env file. Place the key files there and the script base64-encodes them
-> automatically.
+> **Note on SSH keys:** SSH private keys are not set via environment variables.
+> They must be added directly to the `cluster-fulfillment-ig` Kubernetes Secret.
 
 ## Reference
 

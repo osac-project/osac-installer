@@ -428,9 +428,26 @@ def pre_fix_cert_sans(config: RefreshConfig) -> None:
 
 
 def keycloak_sync(config: RefreshConfig) -> None:
-    """Re-apply Keycloak manifests and wait for the realm endpoint."""
-    print("  Re-applying Keycloak from scratch...")
-    oc("apply", "-k", "prerequisites/keycloak/")
+    """Update Keycloak realm configmap and wait for the realm endpoint."""
+    print("  Syncing Keycloak realm configmap...")
+    result = run(
+        ["oc", "create", "configmap", "keycloak-realm",
+         f"--from-file=realm.json={config.realm_json}",
+         "-n", config.keycloak_ns, "--dry-run=client", "-o", "yaml"],
+        capture=True,
+    )
+    apply_result = subprocess.run(
+        ["oc", "apply", "-f", "-"],
+        input=result.stdout, text=True, capture_output=True, cwd=str(REPO_ROOT),
+    )
+    if apply_result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            apply_result.returncode, ["oc", "apply", "-f", "-"],
+            output=apply_result.stdout, stderr=apply_result.stderr)
+    oc("set", "env", "deploy/keycloak-service",
+       "KC_SPI_IMPORT_REALM_FILE_STRATEGY=OVERWRITE",
+       "-n", config.keycloak_ns)
+    oc("rollout", "restart", "deploy/keycloak-service", "-n", config.keycloak_ns)
     oc("rollout", "status", "deploy/keycloak-service", "-n", config.keycloak_ns,
        "--timeout=300s")
 

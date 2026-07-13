@@ -295,11 +295,10 @@ oc get pods -n cert-manager
 # Navigate to installer directory
 cd osac-installer
 
-# Review the kustomization
-cat overlays/development/kustomization.yaml
+# Deploy via Helm
+helm upgrade --install osac charts/osac/ --namespace osac --values values/development/values.yaml --timeout 40m --wait
 
 # Apply the complete development overlay
-oc apply -k overlays/development
 
 # Monitor deployment progress
 oc get pods -n fulfillment-system -w

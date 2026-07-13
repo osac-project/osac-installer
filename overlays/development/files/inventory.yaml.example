@@ -1,7 +1,0 @@
-name: my-inventory
-type: openstack
-options:
-  openstack:
-    cloud: openstack
-hostClass: openstack
-networkClass: openstack

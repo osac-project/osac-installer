@@ -11,18 +11,34 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-
-resources:
-- cert-manager/
-- ca-issuer.yaml
-- trust-manager.yaml
-- keycloak
-- nfs-subdir-provisioner/overlays/lab
-- aap-installation.yaml
-- metallb/
-- lvms/
-- cnv/
-- mce/
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keycloak-service
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - keycloak-client-secrets
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keycloak-service
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keycloak-service
+subjects:
+- kind: ServiceAccount
+  name: keycloak-service

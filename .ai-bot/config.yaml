@@ -1,6 +1,6 @@
 # .ai-bot/config.yaml for osac-installer
 #
-# Infrastructure/deployment repo -- Kustomize overlays, shell scripts,
+# Infrastructure/deployment repo -- Helm charts, shell scripts,
 # YAML manifests. No Go code, no container builds, no unit tests.
 
 imports:
@@ -12,7 +12,8 @@ imports:
 validation_commands:
   - yamllint --strict .
   - pre-commit run --all-files
-  - bash scripts/kustomize-build-all.sh
+  - helm lint charts/osac/
+  - bash -c 'for f in values/*/values.yaml; do helm template osac charts/osac/ --values "$f" > /dev/null; done'
   - bash scripts/sync-image-tags.sh
 
 pr:

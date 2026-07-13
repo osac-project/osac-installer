@@ -186,6 +186,60 @@ rules:
   - apiGroups:
       - osac.openshift.io
     resources:
+      - externalippools
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - osac.openshift.io
+    resources:
+      - externalippools/status
+    verbs:
+      - get
+  - apiGroups:
+      - osac.openshift.io
+    resources:
+      - externalips
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - osac.openshift.io
+    resources:
+      - externalips/status
+    verbs:
+      - get
+  - apiGroups:
+      - osac.openshift.io
+    resources:
+      - externalipattachments
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - osac.openshift.io
+    resources:
+      - externalipattachments/status
+    verbs:
+      - get
+  - apiGroups:
+      - osac.openshift.io
+    resources:
       - baremetalinstances
     verbs:
       - create

@@ -12,7 +12,7 @@ metadata:
   annotations:
     environment: development
   labels:
-    app.kubernetes.io/managed-by: kustomize
+
     environment: development
   name: dev-ansible-automation-platform-operator
   namespace: ansible-aap
@@ -24,7 +24,7 @@ metadata:
   annotations:
     environment: development
   labels:
-    app.kubernetes.io/managed-by: kustomize
+
     environment: development
   name: dev-ansible-automation-platform
   namespace: ansible-aap

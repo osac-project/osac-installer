@@ -11,22 +11,7 @@
 # specific language governing permissions and limitations under the License.
 #
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-- sa.yaml
-- rbac.yaml
-- pvc.yaml
-- statefulset.yaml
-- server-cert.yaml
-- client-cert.yaml
-- service.yaml
-
-configMapGenerator:
-- name: keycloak-db-server-config
-  files:
-  - server.conf=files/server.conf
-- name: keycloak-db-access-config
-  files:
-  - access.conf=files/access.conf
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keycloak-service

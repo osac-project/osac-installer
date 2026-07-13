@@ -179,12 +179,12 @@
         },
         "hubAccess": {
           "type": "object",
-          "description": "Hub access RBAC for the operator subchart",
+          "description": "Hub access ClusterRole for the operator subchart",
           "properties": {
             "enabled": {
               "type": "boolean",
-              "description": "Create hub-access ServiceAccount, Secret, Role, RoleBinding, ClusterRole, and ClusterRoleBinding",
-              "default": true
+              "description": "Create hub-access ClusterRole (exported for fulfillment-service to bind)",
+              "default": false
             }
           }
         }
@@ -338,40 +338,6 @@
               "type": "boolean",
               "description": "Log request/response bodies",
               "default": false
-            }
-          }
-        },
-        "hubAccess": {
-          "type": "object",
-          "description": "Hub access RBAC for the fulfillment-service subchart",
-          "properties": {
-            "enabled": {
-              "type": "boolean",
-              "description": "Create hub-access ServiceAccount, Secret, Role, RoleBinding, ClusterRole, and ClusterRoleBinding",
-              "default": true
-            }
-          }
-        },
-        "bundledPostgres": {
-          "type": "object",
-          "description": "Auto-generate secrets for bundled PostgreSQL (dev/test only)",
-          "properties": {
-            "enabled": {
-              "type": "boolean",
-              "default": false
-            },
-            "database": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "default": "service"
-                },
-                "user": {
-                  "type": "string",
-                  "default": "service"
-                }
-              }
             }
           }
         }
@@ -1195,6 +1161,40 @@
           "type": "string",
           "description": "CIDR range for the MetalLB address pool",
           "default": "192.168.40.0/24"
+        }
+      }
+    },
+    "hubAccess": {
+      "type": "object",
+      "description": "Hub access SA, RBAC, and create-hub hook (CI/dev only)",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create hub-access resources and register local cluster as hub",
+          "default": false
+        }
+      }
+    },
+    "bundledPostgres": {
+      "type": "object",
+      "description": "Bundled PostgreSQL for CI/dev (ephemeral, not for production)",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "database": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "default": "service"
+            },
+            "user": {
+              "type": "string",
+              "default": "service"
+            }
+          }
         }
       }
     }

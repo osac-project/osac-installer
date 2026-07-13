@@ -1,8 +1,8 @@
-{{- if .Values.service.bundledPostgres.enabled }}
-{{- if not (regexMatch "^[a-zA-Z_][a-zA-Z0-9_]*$" .Values.service.bundledPostgres.database.user) }}
+{{- if .Values.bundledPostgres.enabled }}
+{{- if not (regexMatch "^[a-zA-Z_][a-zA-Z0-9_]*$" .Values.bundledPostgres.database.user) }}
 {{- fail "bundledPostgres.database.user must be a valid PostgreSQL identifier" }}
 {{- end }}
-{{- if not (regexMatch "^[a-zA-Z_][a-zA-Z0-9_]*$" .Values.service.bundledPostgres.database.name) }}
+{{- if not (regexMatch "^[a-zA-Z_][a-zA-Z0-9_]*$" .Values.bundledPostgres.database.name) }}
 {{- fail "bundledPostgres.database.name must be a valid PostgreSQL identifier" }}
 {{- end }}
 apiVersion: v1
@@ -14,7 +14,7 @@ metadata:
     {{- include "osac.labels" . | nindent 4 }}
 type: Opaque
 stringData:
-  url: "postgres://{{ .Values.service.bundledPostgres.database.user }}@postgres:5432/{{ .Values.service.bundledPostgres.database.name }}?sslmode=verify-full&sslrootcert=/etc/fulfillment-grpc-server/db/sslrootcert&sslcert=/etc/fulfillment-grpc-server/db/sslcert&sslkey=/etc/fulfillment-grpc-server/db/sslkey"
+  url: "postgres://{{ .Values.bundledPostgres.database.user }}@postgres:5432/{{ .Values.bundledPostgres.database.name }}?sslmode=verify-full&sslrootcert=/etc/fulfillment-grpc-server/db/sslrootcert&sslcert=/etc/fulfillment-grpc-server/db/sslcert&sslkey=/etc/fulfillment-grpc-server/db/sslkey"
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -27,7 +27,7 @@ spec:
   issuerRef:
     kind: {{ .Values.service.certs.issuerRef.kind }}
     name: {{ .Values.service.certs.issuerRef.name }}
-  commonName: {{ .Values.service.bundledPostgres.database.user | quote }}
+  commonName: {{ .Values.bundledPostgres.database.user | quote }}
   usages:
   - client auth
   secretName: postgres-client-cert-service
@@ -90,8 +90,8 @@ stringData:
   init.sh: |
     #!/bin/bash
     psql <<'.'
-    create user {{ .Values.service.bundledPostgres.database.user }};
-    create database {{ .Values.service.bundledPostgres.database.name }} owner {{ .Values.service.bundledPostgres.database.user }};
+    create user {{ .Values.bundledPostgres.database.user }};
+    create database {{ .Values.bundledPostgres.database.name }} owner {{ .Values.bundledPostgres.database.user }};
     .
 ---
 apiVersion: v1
@@ -141,7 +141,7 @@ spec:
     emptyDir: {}
   containers:
   - name: server
-    image: {{ .Values.service.bundledPostgres.image | default "quay.io/sclorg/postgresql-18-c10s@sha256:6be2c9d855f06fb665257a6b0911676a38d740be7022cc61acee1c99a832b1b2" }}
+    image: {{ .Values.bundledPostgres.image | default "quay.io/sclorg/postgresql-18-c10s@sha256:6be2c9d855f06fb665257a6b0911676a38d740be7022cc61acee1c99a832b1b2" }}
     imagePullPolicy: IfNotPresent
     securityContext:
       allowPrivilegeEscalation: false

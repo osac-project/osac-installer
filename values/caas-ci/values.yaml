@@ -54,8 +54,6 @@ service:
   variant: openshift
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
-  hubAccess:
-    enabled: true
   images:
     service: ghcr.io/osac-project/fulfillment-service:sha-2e1949e
     envoy: ghcr.io/osac-project/envoy:v1.33.0
@@ -109,10 +107,6 @@ service:
           param: sslrootcert
   log:
     level: debug
-  bundledPostgres:
-    enabled: true
-    database:
-      name: service
 
 # --- AAP ---
 aap:
@@ -152,3 +146,16 @@ bmf:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
     tag: sha-0a06955
     pullPolicy: Always
+
+# --- CI/dev only ---
+# Hub access: registers local cluster as a hub. Only for environments
+# where the fulfillment service and hub cluster are the same.
+hubAccess:
+  enabled: true
+
+# Bundled PostgreSQL: single-pod ephemeral database for testing.
+# Uses fsync=off — data is lost on restart. Not for production.
+bundledPostgres:
+  enabled: true
+  database:
+    name: service

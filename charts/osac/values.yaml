@@ -77,13 +77,6 @@ service:
     level: info
     headers: false
     bodies: false
-  hubAccess:
-    enabled: false
-  bundledPostgres:
-    enabled: false
-    database:
-      name: service
-      user: service
 
 # --- AAP ---
 aap:
@@ -247,3 +240,12 @@ validation:
 metallb:
   enabled: false
   addressCIDR: "192.168.40.0/24"
+
+hubAccess:
+  enabled: false
+
+bundledPostgres:
+  enabled: false
+  database:
+    name: service
+    user: service

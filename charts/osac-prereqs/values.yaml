@@ -1,0 +1,39 @@
+cliImage: quay.io/openshift/origin-cli:4.20.0
+osacNamespace: osac
+
+certManager:
+  enabled: true
+  channel: "stable-v1"
+
+trustManager:
+  enabled: true
+
+caIssuer:
+  enabled: true
+
+keycloak:
+  enabled: true
+  realmOverwrite: true
+  images:
+    keycloak: quay.io/keycloak/keycloak:26.6.4
+    postgres: quay.io/sclorg/postgresql-18-c10s@sha256:6be2c9d855f06fb665257a6b0911676a38d740be7022cc61acee1c99a832b1b2
+
+aapOperator:
+  enabled: true
+  channel: stable-2.5-cluster-scoped
+
+lvms:
+  enabled: false
+  channel: "stable-4.19"
+
+metallb:
+  enabled: false
+  channel: "stable"
+
+cnv:
+  enabled: false
+  channel: "stable"
+
+mce:
+  enabled: false
+  channel: "stable-2.8"

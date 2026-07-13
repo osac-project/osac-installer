@@ -19,6 +19,96 @@ retry_until() {
     done
 }
 
+# Returns 0 when every MCP with machines has Updated=True.
+# Fails closed on API errors so retry_until keeps polling during transient EOF.
+_machineconfigpools_updated() {
+    local mcp status machine_count mcp_list
+    mcp_list=$(oc get mcp --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null) || return 1
+    [[ -n "${mcp_list}" ]] || return 1
+    for mcp in ${mcp_list}; do
+        machine_count=$(oc get mcp "${mcp}" -o jsonpath='{.status.machineCount}' 2>/dev/null) || return 1
+        (( machine_count > 0 )) || continue
+        status=$(oc get mcp "${mcp}" -o jsonpath='{.status.conditions[?(@.type=="Updated")].status}' 2>/dev/null) || return 1
+        [[ "${status}" == "True" ]] || return 1
+    done
+}
+
+# Dump MCP state to aid CI triage when the stability gate times out.
+_dump_machineconfigpool_diagnostics() {
+    echo "=== MachineConfigPool diagnostics ==="
+    oc get mcp -o wide || true
+    for mcp in $(oc get mcp --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
+        oc describe mcp "${mcp}" || true
+    done
+}
+
+# Wait for MachineConfigPools to finish applying pending changes.
+# On HyperShift or custom control-plane topologies, mcp/master may be absent or
+# non-representative; wait for all present MCPs, or skip when none exist.
+# Usage: wait_for_machineconfigpools_stable [timeout_seconds]
+wait_for_machineconfigpools_stable() {
+    local timeout="${1:-600}"
+    local mcp_list
+
+    # Skip only when the MCP API is reachable but no pools exist (HyperShift/custom CP).
+    # Single oc get call avoids TOCTOU between reachability and emptiness checks.
+    # API failures fall through to retry_until so transient EOF does not bypass the gate.
+    if mcp_list=$(oc get mcp --no-headers 2>/dev/null) && [[ -z "${mcp_list}" ]]; then
+        echo "No MachineConfigPools found; skipping MCP stability check (typical for HyperShift or custom CP topologies)"
+        return 0
+    fi
+
+    echo "Waiting for MachineConfigPools to be Updated..."
+    retry_until "${timeout}" 10 '_machineconfigpools_updated' || {
+        echo "Timed out waiting for MachineConfigPools to reach Updated state"
+        _dump_machineconfigpool_diagnostics
+        return 1
+    }
+}
+
+# Wait for stable API server connectivity (healthz + namespace list).
+# Usage: wait_for_api_connectivity [timeout_seconds]
+wait_for_api_connectivity() {
+    local timeout="${1:-120}"
+
+    echo "Waiting for API server connectivity..."
+    retry_until "${timeout}" 5 'oc get --raw /healthz &>/dev/null && oc get ns default &>/dev/null' || {
+        echo "Timed out waiting for API server connectivity"
+        return 1
+    }
+}
+
+# Returns 0 when MCP stability wait should be skipped.
+# CI E2E runs "Prepare cluster prerequisites" (mcp/master wait + settle) before
+# SETUP_PHASE=prerequisites setup.sh. Manual installs (SETUP_PHASE=all, no CI) still
+# need the MCP gate when KubeletConfig or other MCO changes may be in flight.
+# Override with SKIP_MCP_STABILITY_CHECK=true if needed.
+_should_skip_mcp_stability_check() {
+    if [[ "${SKIP_MCP_STABILITY_CHECK:-}" == "true" ]]; then
+        return 0
+    fi
+    if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        [[ "${SETUP_PHASE:-all}" == "prerequisites" ]]
+        return $?
+    fi
+    return 1
+}
+
+# Combined gate before operator installs that need a responsive API after MCP rollouts.
+# Skips MCP wait only in CI prerequisites phase (workflow already gated MCP).
+# Usage: wait_for_cluster_stability [mcp_timeout_seconds] [api_timeout_seconds]
+wait_for_cluster_stability() {
+    local mcp_timeout="${1:-600}"
+    local api_timeout="${2:-120}"
+
+    if _should_skip_mcp_stability_check; then
+        echo "Skipping MCP stability check (CI prerequisites phase; workflow already gated MCP rollout)"
+    else
+        wait_for_machineconfigpools_stable "${mcp_timeout}" || return 1
+    fi
+    wait_for_api_connectivity "${api_timeout}" || return 1
+}
+
 # Wait for a namespace to finish terminating if it exists in Terminating state
 # Usage: wait_for_namespace_cleanup <namespace> [timeout_seconds]
 wait_for_namespace_cleanup() {

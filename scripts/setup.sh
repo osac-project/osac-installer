@@ -32,10 +32,27 @@ if [[ "${SETUP_PHASE}" == "all" || "${SETUP_PHASE}" == "prerequisites" ]]; then
 
 # Optionally install LVMS as storage service (must be before keycloak which needs a default storage class)
 if [[ "${STORAGE_SERVICE}" == "true" ]]; then
+    # OSAC-1964-csv-exist: defer LVMS until the API is stable (KubeletConfig in CI can
+    # leave the API returning EOF). CI prerequisites already wait for mcp/master Updated.
+    wait_for_cluster_stability || exit 1
+
     wait_for_namespace_cleanup openshift-storage
     echo "Installing LVMS storage service..."
-    retry_until 300 3 '[[ -n "$(oc get csv --no-headers -n openshift-storage | grep lvms)" ]]' 'oc apply -f prerequisites/lvms/lvms-operator.yaml || true' || {
+
+    # Apply manifest once with a dedicated retry budget so API EOF during apply does not
+    # consume the OLM CSV-existence wait (OLM typically needs 5-7+ minutes on VMaaS SNO).
+    retry_command 600 5 oc apply -f prerequisites/lvms/lvms-operator.yaml || {
+        echo "Failed to apply LVMS operator manifest"
+        exit 1
+    }
+
+    retry_until 900 3 '[[ -n "$(oc get csv --no-headers -n openshift-storage | grep lvms)" ]]' || {
         echo "Timed out waiting for LVMS CSV to exist"
+        echo "=== LVMS OLM diagnostics ==="
+        oc get subscription,installplan,csv -n openshift-storage || true
+        oc get packagemanifest lvms-operator -n openshift-marketplace || true
+        oc describe subscription lvms-operator -n openshift-storage || true
+        oc get events -n openshift-storage --sort-by='.lastTimestamp' || true
         exit 1
     }
     LVMS_CSV=$(oc get csv --no-headers -n openshift-storage | awk '/lvms/ { print $1 }' | tail -1)

@@ -180,6 +180,53 @@ publish_templates() {
     fi
 }
 
+patch_token_config() {
+    local api_route_host issuer_url
+    # The route ingress host may take a moment to populate after apply.
+    retry_until 60 5 \
+        '[[ -n "$(oc get route -n "${INSTALLER_NAMESPACE}" fulfillment-api -o jsonpath="{.status.ingress[0].host}" 2>/dev/null)" ]]' || {
+        echo "ERROR: fulfillment-api route has no ingress host after 60s"
+        exit 1
+    }
+    api_route_host=$(oc get route -n "${INSTALLER_NAMESPACE}" fulfillment-api -o jsonpath='{.status.ingress[0].host}')
+    issuer_url="https://${api_route_host}"
+
+    echo "Patching token-issuer and CORS to ${issuer_url}..."
+
+    patch_command_arg() {
+        local deploy="$1" prefix="$2" value="$3"
+        local idx
+        idx=$(oc get "deployment/${deploy}" -n "${INSTALLER_NAMESPACE}" -o json \
+            | jq --arg p "${prefix}" '[.spec.template.spec.containers[0].command | to_entries[] | select(.value | startswith($p)) | .key] | first')
+        [[ -z "${idx}" || "${idx}" == "null" ]] && { echo "ERROR: ${prefix} not found in ${deploy} command"; exit 1; }
+        oc patch "deployment/${deploy}" -n "${INSTALLER_NAMESPACE}" --type=json \
+            -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/command/${idx}\",\"value\":\"${value}\"}]"
+    }
+
+    # Add external FQDN to certificate SANs BEFORE patching deployments.
+    # Deployments patch triggers a rollout — the new pods fetch JWKS via the
+    # external URL and need the certificate to cover it.
+    if ! oc get certificate/fulfillment-api -n "${INSTALLER_NAMESPACE}" -o jsonpath='{.spec.dnsNames}' | grep -qF "${api_route_host}"; then
+        oc patch certificate/fulfillment-api -n "${INSTALLER_NAMESPACE}" --type=json \
+            -p "[{\"op\":\"add\",\"path\":\"/spec/dnsNames/-\",\"value\":\"${api_route_host}\"}]"
+        echo "Waiting for certificate reissue..."
+        oc wait certificate/fulfillment-api -n "${INSTALLER_NAMESPACE}" \
+            --for=condition=Ready --timeout=120s
+        # Envoy does not hot-reload TLS certs — restart so it serves the new cert
+        # before console-proxy tries to fetch JWKS via the external URL.
+        oc rollout restart deploy/fulfillment-ingress-proxy -n "${INSTALLER_NAMESPACE}"
+        oc rollout status deploy/fulfillment-ingress-proxy -n "${INSTALLER_NAMESPACE}" --timeout=120s
+    fi
+
+    patch_command_arg fulfillment-grpc-server "--token-issuer=" "--token-issuer=${issuer_url}"
+    patch_command_arg fulfillment-console-proxy "--token-issuer=" "--token-issuer=${issuer_url}"
+    patch_command_arg fulfillment-console-proxy "--console-cors-allowed-origins=" "--console-cors-allowed-origins=${issuer_url}"
+}
+
+if [[ "${SKIP_TOKEN_CONFIG_PATCH:-}" != "1" ]]; then
+    patch_token_config
+fi
+
 create_hub &
 pid_hub=$!
 sync_aap_project &

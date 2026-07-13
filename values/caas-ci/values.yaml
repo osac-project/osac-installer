@@ -1,16 +1,31 @@
+# --- Prerequisites ---
+certManager:
+  enabled: true
+trustManager:
+  enabled: true
+caIssuer:
+  enabled: true
+keycloak:
+  enabled: true
+aapOperator:
+  enabled: true
+lvms:
+  enabled: true
+metallb:
+  enabled: true
+cnv:
+  enabled: false
+mce:
+  enabled: true
+
 # OSAC CaaS (Cluster-as-a-Service) CI Environment Values
 # CaaS CI values
-
-bundledPostgres:
-  enabled: true
-  database:
-    name: service
 
 # --- Operator ---
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-d6398e8
+    tag: sha-597e258
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -28,14 +43,21 @@ operator:
     tenant: true
     networking: true
     storage: true
+  hubAccess:
+    enabled: true
+  tenants:
+  - name: shared
+  - name: osac-e2e-ci
 
 # --- Fulfillment Service ---
 service:
   variant: openshift
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
+  hubAccess:
+    enabled: true
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-da39c1d
+    service: ghcr.io/osac-project/fulfillment-service:sha-2e1949e
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -87,6 +109,10 @@ service:
           param: sslrootcert
   log:
     level: debug
+  bundledPostgres:
+    enabled: true
+    database:
+      name: service
 
 # --- AAP ---
 aap:
@@ -96,33 +122,27 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-85c079e
+    image: ghcr.io/osac-project/osac-aap:sha-ee288ea
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-85c079e"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-ee288ea"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "85c079e5d254d93f8fca0f7ddd912b0c15899ab9"
+    projectGitBranch: "ee288eac05f78cdffe247d43c538faffdaad26d9"
+  instanceGroups:
+    clusterFulfillment:
+      enabled: true
+      config:
+        NETWORK_STEPS_COLLECTION: "ci.steps"
+        HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "SingleReplica"
+        HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "SingleReplica"
+    networkFulfillment:
+      enabled: true
 
 # --- Validation ---
 validation:
-  enabled: true
-
-# --- Database migration ---
-dbMigrate:
-  enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-da39c1d
-
-clusterFulfillment:
-  enabled: true
-  config:
-    NETWORK_STEPS_COLLECTION: "ci.steps"
-    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "SingleReplica"
-    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "SingleReplica"
-
-networkFulfillment:
   enabled: true
 
 # --- Bare Metal Fulfillment Operator ---

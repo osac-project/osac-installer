@@ -176,6 +176,17 @@
               "default": true
             }
           }
+        },
+        "hubAccess": {
+          "type": "object",
+          "description": "Hub access RBAC for the operator subchart",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create hub-access ServiceAccount, Secret, Role, RoleBinding, ClusterRole, and ClusterRoleBinding",
+              "default": true
+            }
+          }
         }
       }
     },
@@ -327,6 +338,40 @@
               "type": "boolean",
               "description": "Log request/response bodies",
               "default": false
+            }
+          }
+        },
+        "hubAccess": {
+          "type": "object",
+          "description": "Hub access RBAC for the fulfillment-service subchart",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create hub-access ServiceAccount, Secret, Role, RoleBinding, ClusterRole, and ClusterRoleBinding",
+              "default": true
+            }
+          }
+        },
+        "bundledPostgres": {
+          "type": "object",
+          "description": "Auto-generate secrets for bundled PostgreSQL (dev/test only)",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            },
+            "database": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "default": "service"
+                },
+                "user": {
+                  "type": "string",
+                  "default": "service"
+                }
+              }
             }
           }
         }
@@ -524,7 +569,15 @@
               "description": "Server inventory for bare metal agent import. Each entry provisions a BareMetalHost CR.",
               "items": {
                 "type": "object",
-                "required": ["name", "bmc_url", "bmc_username", "bmc_password", "boot_mac", "netris_server_name", "resource_class"],
+                "required": [
+                  "name",
+                  "bmc_url",
+                  "bmc_username",
+                  "bmc_password",
+                  "boot_mac",
+                  "netris_server_name",
+                  "resource_class"
+                ],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -576,35 +629,328 @@
               "description": "PEM-encoded client private key for BCM mTLS authentication"
             }
           }
-        }
-      }
-    },
-    "instanceGroups": {
-      "type": "object",
-      "description": "Generic AAP instance group configuration",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Create instance group ConfigMaps",
-          "default": true
         },
-        "cluster": {
+        "instanceGroups": {
           "type": "object",
-          "description": "Cluster instance group extra config",
+          "description": "AAP instance group configuration",
           "properties": {
-            "config": {
+            "clusterFulfillment": {
               "type": "object",
-              "description": "Additional key-value pairs for the cluster instance group ConfigMap"
-            }
-          }
-        },
-        "network": {
-          "type": "object",
-          "description": "Network instance group extra config",
-          "properties": {
-            "config": {
+              "description": "ConfigMap and Secret for the AAP cluster-fulfillment instance group",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Create cluster-fulfillment ConfigMap and Secret",
+                  "default": false
+                },
+                "config": {
+                  "type": "object",
+                  "description": "Environment variables for the cluster-fulfillment instance group",
+                  "properties": {
+                    "NETWORK_CLASS": {
+                      "type": "string",
+                      "description": "Network implementation class",
+                      "enum": [
+                        "",
+                        "esi",
+                        "netris",
+                        "nico"
+                      ]
+                    },
+                    "NETWORK_STEPS_COLLECTION": {
+                      "type": "string",
+                      "description": "Ansible collection providing network-class-specific steps",
+                      "enum": [
+                        "",
+                        "osac.steps",
+                        "netris.steps",
+                        "ci.steps",
+                        "nico.steps"
+                      ]
+                    },
+                    "DNS_CLASS": {
+                      "type": "string",
+                      "description": "Fully-qualified Ansible role name of the DNS driver",
+                      "enum": [
+                        "",
+                        "dns.route53.dns"
+                      ]
+                    },
+                    "DNS_ZONE": {
+                      "type": "string",
+                      "description": "DNS zone to operate in (defaults to EXTERNAL_ACCESS_BASE_DOMAIN)"
+                    },
+                    "NETRIS_CONTROLLER_URL": {
+                      "type": "string",
+                      "description": "Netris controller API URL"
+                    },
+                    "NETRIS_USERNAME": {
+                      "type": "string",
+                      "description": "Netris controller username"
+                    },
+                    "NETRIS_SITE_ID": {
+                      "type": "string",
+                      "description": "Netris site ID"
+                    },
+                    "NETRIS_TENANT_ID": {
+                      "type": "string",
+                      "description": "Netris tenant ID"
+                    },
+                    "NETRIS_TENANT_NAME": {
+                      "type": "string",
+                      "description": "Netris tenant name"
+                    },
+                    "NETRIS_MGMT_VPC_ID": {
+                      "type": "string",
+                      "description": "Netris management VPC ID"
+                    },
+                    "NETRIS_MGMT_VPC_NAME": {
+                      "type": "string",
+                      "description": "Netris management VPC name"
+                    },
+                    "NETRIS_RESOURCE_CLASS_MAP": {
+                      "type": "string",
+                      "description": "JSON mapping of resource classes to Netris server labels"
+                    },
+                    "SERVER_SSH_BASTION_HOST": {
+                      "type": "string",
+                      "description": "SSH bastion host for server access"
+                    },
+                    "SERVER_SSH_BASTION_USER": {
+                      "type": "string",
+                      "description": "SSH bastion user"
+                    },
+                    "SERVER_SSH_USER": {
+                      "type": "string",
+                      "description": "SSH user for direct server access"
+                    },
+                    "SERVER_MGMT_ROUTE_DESTINATION": {
+                      "type": "string",
+                      "description": "Management network route destination CIDR"
+                    },
+                    "SERVER_MGMT_ROUTE_GATEWAY": {
+                      "type": "string",
+                      "description": "Management network route gateway"
+                    },
+                    "EXTERNAL_ACCESS_BASE_DOMAIN": {
+                      "type": "string",
+                      "description": "Base domain for external access DNS records"
+                    },
+                    "EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS": {
+                      "type": "string",
+                      "description": "Comma-separated list of supported base domains"
+                    },
+                    "EXTERNAL_ACCESS_API_INTERNAL_NETWORK": {
+                      "type": "string",
+                      "description": "Internal network CIDR for API access"
+                    },
+                    "HOSTED_CLUSTER_BASE_DOMAIN": {
+                      "type": "string",
+                      "description": "Base domain for hosted clusters"
+                    },
+                    "HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY": {
+                      "type": "string",
+                      "description": "Availability policy for hosted cluster control plane",
+                      "enum": [
+                        "",
+                        "HighlyAvailable",
+                        "SingleReplica"
+                      ]
+                    },
+                    "HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY": {
+                      "type": "string",
+                      "description": "Availability policy for hosted cluster infrastructure",
+                      "enum": [
+                        "",
+                        "HighlyAvailable",
+                        "SingleReplica"
+                      ]
+                    },
+                    "IMPORT_AGENTS_NAMESPACE": {
+                      "type": "string",
+                      "description": "Namespace for BareMetalHost, Agent, and InfraEnv CRs (effective default: hardware-inventory)"
+                    },
+                    "IMPORT_AGENTS_INFRAENV_NAME": {
+                      "type": "string",
+                      "description": "InfraEnv CR name for agent discovery (effective default: infraenv)"
+                    },
+                    "IMPORT_AGENTS_PULL_SECRET_NAME": {
+                      "type": "string",
+                      "description": "Pull secret name for InfraEnv discovery ISO (effective default: pull-secret)"
+                    },
+                    "IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION": {
+                      "type": "string",
+                      "description": "Default BMC TLS certificate verification skip (effective default: true)"
+                    },
+                    "BCM_API_URL": {
+                      "type": "string",
+                      "pattern": "^$|^https?://",
+                      "description": "BCM head node API endpoint (e.g., https://bcm-head:8081)"
+                    },
+                    "BCM_VALIDATE_CERTS": {
+                      "type": "string",
+                      "enum": [
+                        "",
+                        "true",
+                        "false"
+                      ],
+                      "description": "Verify BCM TLS certificates (effective default: true)"
+                    },
+                    "BCM_DISABLE_BMC_CERT_VERIFICATION": {
+                      "type": "string",
+                      "enum": [
+                        "",
+                        "true",
+                        "false"
+                      ],
+                      "description": "Skip BMC TLS certificate verification during BCM system discovery (effective default: false)"
+                    }
+                  }
+                },
+                "secret": {
+                  "type": "object",
+                  "description": "Secret values for the cluster-fulfillment instance group",
+                  "properties": {
+                    "NETRIS_PASSWORD": {
+                      "type": "string",
+                      "description": "Netris controller password"
+                    },
+                    "AWS_ACCESS_KEY_ID": {
+                      "type": "string",
+                      "description": "AWS access key for Route 53 DNS backend"
+                    },
+                    "AWS_SECRET_ACCESS_KEY": {
+                      "type": "string",
+                      "description": "AWS secret key for Route 53 DNS backend"
+                    },
+                    "SERVER_SSH_KEY": {
+                      "type": "string",
+                      "description": "SSH private key for server access"
+                    },
+                    "SERVER_SSH_BASTION_KEY": {
+                      "type": "string",
+                      "description": "SSH private key for bastion access"
+                    }
+                  }
+                }
+              }
+            },
+            "networkFulfillment": {
               "type": "object",
-              "description": "Additional key-value pairs for the network instance group ConfigMap"
+              "description": "ConfigMap and Secret for the AAP network-fulfillment instance group",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Create network-fulfillment ConfigMap and Secret",
+                  "default": false
+                },
+                "config": {
+                  "type": "object",
+                  "description": "Environment variables for the network-fulfillment instance group",
+                  "properties": {
+                    "NETRIS_CONTROLLER_URL": {
+                      "type": "string",
+                      "description": "Netris controller API URL"
+                    },
+                    "NETRIS_USERNAME": {
+                      "type": "string",
+                      "description": "Netris controller username"
+                    },
+                    "NETRIS_SITE_ID": {
+                      "type": "string",
+                      "description": "Netris site ID"
+                    },
+                    "NETRIS_TENANT_ID": {
+                      "type": "string",
+                      "description": "Netris tenant ID"
+                    },
+                    "NETRIS_TENANT_NAME": {
+                      "type": "string",
+                      "description": "Netris tenant name"
+                    }
+                  }
+                },
+                "secret": {
+                  "type": "object",
+                  "description": "Secret values for the network-fulfillment instance group",
+                  "properties": {
+                    "NETRIS_PASSWORD": {
+                      "type": "string",
+                      "description": "Netris controller password"
+                    }
+                  }
+                }
+              }
+            },
+            "storageFulfillment": {
+              "type": "object",
+              "description": "ConfigMap and Secret for the AAP storage-operations instance group",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Create storage-fulfillment ConfigMap and Secret",
+                  "default": false
+                },
+                "config": {
+                  "type": "object",
+                  "description": "Environment variables for the storage-operations instance group",
+                  "properties": {
+                    "STORAGE_TIERS": {
+                      "type": "string",
+                      "description": "Available storage tiers configuration"
+                    },
+                    "STORAGE_SNAPSHOTS_ENABLED": {
+                      "type": "string",
+                      "description": "Enable storage snapshots"
+                    }
+                  }
+                },
+                "secret": {
+                  "type": "object",
+                  "description": "Secret values for the storage-operations instance group",
+                  "properties": {
+                    "VAST_ENDPOINT": {
+                      "type": "string",
+                      "description": "VAST management endpoint URL"
+                    },
+                    "VAST_USERNAME": {
+                      "type": "string",
+                      "description": "VAST management username"
+                    },
+                    "VAST_PASSWORD": {
+                      "type": "string",
+                      "description": "VAST management password"
+                    }
+                  }
+                }
+              }
+            },
+            "publishTemplates": {
+              "type": "object",
+              "description": "Configuration for AAP template publishing instance group",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Create publish-templates-ig ConfigMap",
+                  "default": true
+                },
+                "config": {
+                  "type": "object",
+                  "description": "ConfigMap data for publish-templates-ig",
+                  "properties": {
+                    "OSAC_TEMPLATE_COLLECTIONS": {
+                      "type": "string",
+                      "description": "Comma-separated list of Ansible collections containing OSAC templates",
+                      "default": "osac.templates"
+                    },
+                    "OSAC_FULFILLMENT_SERVICE_URI": {
+                      "type": "string",
+                      "description": "Internal URI for the fulfillment service",
+                      "default": "https://fulfillment-internal-api:8001"
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -696,29 +1042,6 @@
               "type": "string",
               "description": "UI container image",
               "default": "ghcr.io/osac-project/osac-ui:latest"
-            }
-          }
-        }
-      }
-    },
-    "bundledPostgres": {
-      "type": "object",
-      "description": "Auto-generate secrets for bundled PostgreSQL (dev/test only)",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "default": false
-        },
-        "database": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "default": "service"
-            },
-            "user": {
-              "type": "string",
-              "default": "service"
             }
           }
         }
@@ -844,38 +1167,6 @@
         }
       }
     },
-    "hubAccess": {
-      "type": "object",
-      "description": "Hub access ServiceAccount and RBAC for remote cluster management",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Create hub-access ServiceAccount, Secret, Role, RoleBinding, ClusterRole, and ClusterRoleBinding",
-          "default": true
-        }
-      }
-    },
-    "publishTemplates": {
-      "type": "object",
-      "description": "Configuration for AAP template publishing",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Create publish-templates-ig ConfigMap",
-          "default": true
-        },
-        "templateCollections": {
-          "type": "string",
-          "description": "Comma-separated list of Ansible collections containing OSAC templates",
-          "default": "osac.templates"
-        },
-        "fulfillmentServiceUri": {
-          "type": "string",
-          "description": "Internal URI of the fulfillment service API for template registration",
-          "default": "https://fulfillment-internal-api:8001"
-        }
-      }
-    },
     "validation": {
       "type": "object",
       "description": "Pre-install validation hook",
@@ -888,200 +1179,6 @@
         "image": {
           "type": "string",
           "description": "Container image for the validation hook job"
-        }
-      }
-    },
-    "dbMigrate": {
-      "type": "object",
-      "description": "Database migration hook",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Run database migrations on upgrade",
-          "default": false
-        },
-        "image": {
-          "type": "string",
-          "description": "Container image for migration job (should match fulfillment service image)"
-        },
-        "dbUrl": {
-          "type": "string",
-          "description": "Database connection URL (optional, alternative to dbUrlFile)"
-        },
-        "dbUrlFile": {
-          "type": "string",
-          "description": "Path to file containing database connection URL (optional, alternative to dbUrl)"
-        }
-      }
-    },
-    "clusterFulfillment": {
-      "type": "object",
-      "description": "ConfigMap and Secret for the AAP cluster-fulfillment instance group",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Create cluster-fulfillment ConfigMap and Secret",
-          "default": false
-        },
-        "config": {
-          "type": "object",
-          "description": "Environment variables for the cluster-fulfillment instance group",
-          "properties": {
-            "NETWORK_CLASS": {
-              "type": "string",
-              "description": "Network implementation class",
-              "enum": ["", "esi", "netris", "nico"]
-            },
-            "NETWORK_STEPS_COLLECTION": {
-              "type": "string",
-              "description": "Ansible collection providing network-class-specific steps",
-              "enum": ["", "osac.steps", "netris.steps", "ci.steps", "nico.steps"]
-            },
-            "DNS_CLASS": {
-              "type": "string",
-              "description": "Fully-qualified Ansible role name of the DNS driver",
-              "enum": ["", "dns.route53.dns"]
-            },
-            "DNS_ZONE": {
-              "type": "string",
-              "description": "DNS zone to operate in (defaults to EXTERNAL_ACCESS_BASE_DOMAIN)"
-            },
-            "NETRIS_CONTROLLER_URL": {
-              "type": "string",
-              "description": "Netris controller API URL"
-            },
-            "NETRIS_USERNAME": {
-              "type": "string",
-              "description": "Netris controller username"
-            },
-            "NETRIS_SITE_ID": {
-              "type": "string",
-              "description": "Netris site ID"
-            },
-            "NETRIS_TENANT_ID": {
-              "type": "string",
-              "description": "Netris tenant ID"
-            },
-            "NETRIS_TENANT_NAME": {
-              "type": "string",
-              "description": "Netris tenant name"
-            },
-            "NETRIS_MGMT_VPC_ID": {
-              "type": "string",
-              "description": "Netris management VPC ID"
-            },
-            "NETRIS_MGMT_VPC_NAME": {
-              "type": "string",
-              "description": "Netris management VPC name"
-            },
-            "NETRIS_RESOURCE_CLASS_MAP": {
-              "type": "string",
-              "description": "JSON mapping of resource classes to Netris server labels"
-            },
-            "SERVER_SSH_BASTION_HOST": {
-              "type": "string",
-              "description": "SSH bastion host for server access"
-            },
-            "SERVER_SSH_BASTION_USER": {
-              "type": "string",
-              "description": "SSH bastion user"
-            },
-            "SERVER_SSH_USER": {
-              "type": "string",
-              "description": "SSH user for direct server access"
-            },
-            "SERVER_MGMT_ROUTE_DESTINATION": {
-              "type": "string",
-              "description": "Management network route destination CIDR"
-            },
-            "SERVER_MGMT_ROUTE_GATEWAY": {
-              "type": "string",
-              "description": "Management network route gateway"
-            },
-            "EXTERNAL_ACCESS_BASE_DOMAIN": {
-              "type": "string",
-              "description": "Base domain for external access DNS records"
-            },
-            "EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS": {
-              "type": "string",
-              "description": "Comma-separated list of supported base domains"
-            },
-            "EXTERNAL_ACCESS_API_INTERNAL_NETWORK": {
-              "type": "string",
-              "description": "Internal network CIDR for API access"
-            },
-            "HOSTED_CLUSTER_BASE_DOMAIN": {
-              "type": "string",
-              "description": "Base domain for hosted clusters"
-            },
-            "HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY": {
-              "type": "string",
-              "description": "Availability policy for hosted cluster control plane",
-              "enum": ["", "HighlyAvailable", "SingleReplica"]
-            },
-            "HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY": {
-              "type": "string",
-              "description": "Availability policy for hosted cluster infrastructure",
-              "enum": ["", "HighlyAvailable", "SingleReplica"]
-            },
-            "IMPORT_AGENTS_NAMESPACE": {
-              "type": "string",
-              "description": "Namespace for BareMetalHost, Agent, and InfraEnv CRs (effective default: hardware-inventory)"
-            },
-            "IMPORT_AGENTS_INFRAENV_NAME": {
-              "type": "string",
-              "description": "InfraEnv CR name for agent discovery (effective default: infraenv)"
-            },
-            "IMPORT_AGENTS_PULL_SECRET_NAME": {
-              "type": "string",
-              "description": "Pull secret name for InfraEnv discovery ISO (effective default: pull-secret)"
-            },
-            "IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION": {
-              "type": "string",
-              "description": "Default BMC TLS certificate verification skip (effective default: true)"
-            },
-            "BCM_API_URL": {
-              "type": "string",
-              "pattern": "^$|^https?://",
-              "description": "BCM head node API endpoint (e.g., https://bcm-head:8081)"
-            },
-            "BCM_VALIDATE_CERTS": {
-              "type": "string",
-              "enum": ["", "true", "false"],
-              "description": "Verify BCM TLS certificates (effective default: true)"
-            },
-            "BCM_DISABLE_BMC_CERT_VERIFICATION": {
-              "type": "string",
-              "enum": ["", "true", "false"],
-              "description": "Skip BMC TLS certificate verification during BCM system discovery (effective default: false)"
-            }
-          }
-        },
-        "secret": {
-          "type": "object",
-          "description": "Secret values for the cluster-fulfillment instance group",
-          "properties": {
-            "NETRIS_PASSWORD": {
-              "type": "string",
-              "description": "Netris controller password"
-            },
-            "AWS_ACCESS_KEY_ID": {
-              "type": "string",
-              "description": "AWS access key for Route 53 DNS backend"
-            },
-            "AWS_SECRET_ACCESS_KEY": {
-              "type": "string",
-              "description": "AWS secret key for Route 53 DNS backend"
-            },
-            "SERVER_SSH_KEY": {
-              "type": "string",
-              "description": "SSH private key for server access"
-            },
-            "SERVER_SSH_BASTION_KEY": {
-              "type": "string",
-              "description": "SSH private key for bastion access"
-            }
-          }
         }
       }
     },
@@ -1098,69 +1195,6 @@
           "type": "string",
           "description": "CIDR range for the MetalLB address pool",
           "default": "192.168.40.0/24"
-        }
-      }
-    },
-    "capiProvider": {
-      "type": "object",
-      "description": "CAPI Provider RBAC for Agent platform access",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Create the agent namespace and CAPI provider Role",
-          "default": true
-        },
-        "agentNamespace": {
-          "type": "string",
-          "description": "Namespace where infrastructure provider agents run",
-          "default": "hardware-inventory"
-        }
-      }
-    },
-    "networkFulfillment": {
-      "type": "object",
-      "description": "ConfigMap and Secret for the AAP network-fulfillment instance group",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Create network-fulfillment ConfigMap and Secret",
-          "default": false
-        },
-        "config": {
-          "type": "object",
-          "description": "Environment variables for the network-fulfillment instance group",
-          "properties": {
-            "NETRIS_CONTROLLER_URL": {
-              "type": "string",
-              "description": "Netris controller API URL"
-            },
-            "NETRIS_USERNAME": {
-              "type": "string",
-              "description": "Netris controller username"
-            },
-            "NETRIS_SITE_ID": {
-              "type": "string",
-              "description": "Netris site ID"
-            },
-            "NETRIS_TENANT_ID": {
-              "type": "string",
-              "description": "Netris tenant ID"
-            },
-            "NETRIS_TENANT_NAME": {
-              "type": "string",
-              "description": "Netris tenant name"
-            }
-          }
-        },
-        "secret": {
-          "type": "object",
-          "description": "Secret values for the network-fulfillment instance group",
-          "properties": {
-            "NETRIS_PASSWORD": {
-              "type": "string",
-              "description": "Netris controller password"
-            }
-          }
         }
       }
     }

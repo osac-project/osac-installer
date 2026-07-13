@@ -17,7 +17,7 @@ namespace=$(
   oc config view --minify --output jsonpath="{.contexts[*].context.namespace}"
 )
 
-token=$(oc -n "$namespace" extract secret/hub-access --keys token --to -)
+token=$(oc -n "$namespace" extract secret/hub-access --keys token --to - 2>/dev/null)
 
 echo "generating a kubeconfig for hub-access serviceaccount in $namespace namespace on $server_url"
 

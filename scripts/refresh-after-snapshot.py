@@ -394,6 +394,36 @@ def wait_keycloak_cert(config: RefreshConfig) -> None:
     print("  Keycloak TLS ready")
 
 
+def pre_fix_cert_sans(config: RefreshConfig) -> None:
+    """Patch fulfillment-api Certificate dnsNames before pods start.
+
+    Prevents the race where helm upgrade starts pods before cert-manager
+    reissues the cert with new SANs. Without this, console-proxy crashes
+    on TLS verification (cert has old snapshot domain).
+    """
+    if not oc_exists("certificate.cert-manager.io/fulfillment-api", config.namespace):
+        return
+
+    cert = oc_json("get", "certificate.cert-manager.io/fulfillment-api", "-n", config.namespace)
+    dns_names: list[str] = cert["spec"]["dnsNames"]
+
+    if config.external_host in dns_names and config.internal_host in dns_names:
+        print("  Cert SANs already correct")
+        return
+
+    new_dns_names = [n for n in dns_names if ".apps." not in n]
+    new_dns_names.extend([config.external_host, config.internal_host])
+    print(f"  Patching fulfillment-api cert SANs: +{config.external_host}, +{config.internal_host}")
+
+    oc("patch", "certificate.cert-manager.io/fulfillment-api", "-n", config.namespace,
+       "--type=json", "-p", json.dumps([
+           {"op": "replace", "path": "/spec/dnsNames", "value": new_dns_names}
+       ]))
+    oc("wait", "--for=condition=Ready", "certificate.cert-manager.io/fulfillment-api",
+       "-n", config.namespace, "--timeout=120s")
+    print("  Cert reissued with new SANs")
+
+
 # ─── Phase 2: Prepare environment ───────────────────────────────────────────
 
 
@@ -471,6 +501,7 @@ def create_secrets(config: RefreshConfig) -> None:
 
 def ensure_ca_bundle(config: RefreshConfig) -> None:
     """Ensure the cluster CA bundle ConfigMap exists in the install namespace."""
+    run([str(SCRIPT_DIR / "ensure-ca-bundle.sh"), config.namespace])
 
 
 def wait_tls_certs(config: RefreshConfig) -> None:
@@ -520,22 +551,17 @@ def find_csv(*, namespace: str, deploy_name: str) -> str:
 # changing URL parsing or endpoint checks.
 
 def _bundled_postgres_enabled(values_file: str) -> bool:
-    """Return True when service.bundledPostgres.enabled is true in the Helm values file."""
+    """Return True when bundledPostgres.enabled is true in the Helm values file."""
     in_section = False
-    section_indent = 0
     path = REPO_ROOT / values_file
     for line in path.read_text().splitlines():
-        stripped = line.lstrip()
-        indent = len(line) - len(stripped)
-        if stripped.startswith("bundledPostgres:"):
+        if line.startswith("bundledPostgres:"):
             in_section = True
-            section_indent = indent
             continue
-        if in_section:
-            if stripped and not stripped.startswith("#") and indent <= section_indent:
-                in_section = False
-            elif re.match(r"enabled:\s*true\s*$", stripped.split("#", 1)[0].strip()):
-                return True
+        if in_section and line and not line[0].isspace() and not line.lstrip().startswith("#"):
+            in_section = False
+        if in_section and re.match(r"^\s+enabled:\s*true\s*$", line.split("#", 1)[0]):
+            return True
     return False
 
 
@@ -652,6 +678,22 @@ def upgrade_osac(config: RefreshConfig) -> None:
     (REPO_ROOT / "charts/osac/Chart.lock").unlink(missing_ok=True)
     run(["helm", "dependency", "build", "charts/osac/"])
     adopt_resources_for_helm(config)
+    # Delete stale config-as-code-ig so helm recreates it from chart values.
+    # The AAP subchart manages this secret; deleting forces a fresh render.
+    oc("delete", "secret", "config-as-code-ig", "-n", config.namespace,
+       "--ignore-not-found")
+    # Remove OSAC_AAP_URL and OSAC_AAP_TOKEN env vars that prepare-aap.sh
+    # injected via "oc set env" on the snapshot.  The chart now manages
+    # OSAC_AAP_TOKEN via valueFrom/secretKeyRef; leaving the old plain
+    # "value:" field causes a strategic-merge-patch conflict during upgrade.
+    for pattern in ("osac-operator", "bmf-operator"):
+        deploys = oc("get", "deploy", "-n", config.namespace, "-o", "name",
+                     capture=True, check=False).stdout.strip().splitlines()
+        for d in deploys:
+            if pattern in d:
+                oc("set", "env", d, "-n", config.namespace,
+                   "OSAC_AAP_URL-", "OSAC_AAP_TOKEN-")
+                break
     base_domain = "hosted." + config.cluster_domain.removeprefix("apps.")
     run(["helm", "upgrade", "osac", "charts/osac/",
          "--namespace", config.namespace,
@@ -659,7 +701,7 @@ def upgrade_osac(config: RefreshConfig) -> None:
          "--set", f"service.externalHostname={config.external_host}",
          "--set", f"service.internalHostname={config.internal_host}",
          "--set", "aap.bootstrap.enabled=false",
-         "--set", f"aap.instanceGroups.clusterFulfillment.config.HOSTED_CLUSTER_BASE_DOMAIN={base_domain}",
+         "--set", f"clusterFulfillment.config.HOSTED_CLUSTER_BASE_DOMAIN={base_domain}",
          "--timeout", "15m"])
 
 
@@ -754,11 +796,17 @@ def post_flight(config: RefreshConfig) -> None:
     oc("config", "set-context", "--current", f"--namespace={config.namespace}")
 
     os.environ["INSTALLER_NAMESPACE"] = config.namespace
+    os.environ["SKIP_TOKEN_CONFIG_PATCH"] = "1"
     if config.vm_template:
         os.environ["INSTALLER_VM_TEMPLATE"] = config.vm_template
     if config.cluster_template:
         os.environ["INSTALLER_CLUSTER_TEMPLATE"] = config.cluster_template
 
+    print("  Running prepare-aap.sh...")
+    run([str(SCRIPT_DIR / "prepare-aap.sh")])
+
+    # publish-templates must run because the fulfillment database is recreated
+    # on every refresh (bare Pod with emptyDir — data lost on scale-to-zero).
     print("  Running prepare-fulfillment-service.sh...")
     run([str(SCRIPT_DIR / "prepare-fulfillment-service.sh")])
 
@@ -769,7 +817,10 @@ def post_flight(config: RefreshConfig) -> None:
         name: str = d["metadata"]["name"]
         wait_rollout_healthy(name, config.namespace, timeout=300)
 
-    for key in ["INSTALLER_NAMESPACE",
+    print("  Running prepare-tenant.sh...")
+    run([str(SCRIPT_DIR / "prepare-tenant.sh")])
+
+    for key in ["INSTALLER_NAMESPACE", "SKIP_TOKEN_CONFIG_PATCH",
                 "INSTALLER_VM_TEMPLATE", "INSTALLER_CLUSTER_TEMPLATE"]:
         os.environ.pop(key, None)
 
@@ -809,6 +860,7 @@ def main() -> None:
     run_parallel([
         ("scale AAP operator", lambda: scale_aap_operator(config)),
         ("patch routes", lambda: patch_stale_routes(config)),
+        ("pre-fix cert SANs", lambda: pre_fix_cert_sans(config)),
         ("refresh CDI certs", refresh_cdi_certificates),
         ("refresh MetalLB", refresh_metallb_and_subnet),
         ("wait Keycloak cert", lambda: wait_keycloak_cert(config)),

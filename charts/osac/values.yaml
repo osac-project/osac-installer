@@ -38,6 +38,8 @@ operator:
   configSecret:
     name: "osac-config"
     optional: true
+  hubAccess:
+    enabled: false
 
 # --- Fulfillment Service ---
 service:
@@ -75,6 +77,13 @@ service:
     level: info
     headers: false
     bodies: false
+  hubAccess:
+    enabled: false
+  bundledPostgres:
+    enabled: false
+    database:
+      name: service
+      user: service
 
 # --- AAP ---
 aap:
@@ -116,29 +125,70 @@ aap:
   importBcmAgents:
     cert: ""
     key: ""
-
-# --- Instance Groups ---
-instanceGroups:
-  enabled: true
-  cluster:
-    config: {}
-  network:
-    config: {}
-  storage:
-    config: {}
-
-# --- Bundled PostgreSQL ---
-# When enabled, auto-creates the fulfillment-db secret and client certificate.
-# Deploy in-cluster PostgreSQL via an operator per
-# base/osac-fulfillment-service/docs/INSTALL.md before enabling. With
-# bundledPostgres, the chart assumes a postgres Service at postgres:5432 in
-# the install namespace (dev convenience; still in-cluster).
-# For production, leave disabled and create secrets manually per the deployment guide.
-bundledPostgres:
-  enabled: false
-  database:
-    name: service
-    user: service
+  instanceGroups:
+    clusterFulfillment:
+      enabled: false
+      config:
+        NETWORK_CLASS: ""
+        NETWORK_STEPS_COLLECTION: ""
+        DNS_CLASS: ""
+        DNS_ZONE: ""
+        NETRIS_CONTROLLER_URL: ""
+        NETRIS_USERNAME: ""
+        NETRIS_SITE_ID: ""
+        NETRIS_TENANT_ID: ""
+        NETRIS_TENANT_NAME: ""
+        NETRIS_MGMT_VPC_ID: ""
+        NETRIS_MGMT_VPC_NAME: ""
+        NETRIS_RESOURCE_CLASS_MAP: ""
+        SERVER_SSH_BASTION_HOST: ""
+        SERVER_SSH_BASTION_USER: ""
+        SERVER_SSH_USER: ""
+        SERVER_MGMT_ROUTE_DESTINATION: ""
+        SERVER_MGMT_ROUTE_GATEWAY: ""
+        EXTERNAL_ACCESS_BASE_DOMAIN: ""
+        EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: ""
+        EXTERNAL_ACCESS_API_INTERNAL_NETWORK: ""
+        HOSTED_CLUSTER_BASE_DOMAIN: ""
+        HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: ""
+        HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: ""
+        IMPORT_AGENTS_NAMESPACE: ""
+        IMPORT_AGENTS_INFRAENV_NAME: ""
+        IMPORT_AGENTS_PULL_SECRET_NAME: ""
+        IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION: ""
+        BCM_API_URL: ""
+        BCM_VALIDATE_CERTS: "true"
+        BCM_DISABLE_BMC_CERT_VERIFICATION: "false"
+      secret:
+        NETRIS_PASSWORD: ""
+        AWS_ACCESS_KEY_ID: ""
+        AWS_SECRET_ACCESS_KEY: ""
+        SERVER_SSH_KEY: ""
+        SERVER_SSH_BASTION_KEY: ""
+    networkFulfillment:
+      enabled: false
+      config:
+        NETRIS_CONTROLLER_URL: ""
+        NETRIS_USERNAME: ""
+        NETRIS_SITE_ID: ""
+        NETRIS_TENANT_ID: ""
+        NETRIS_TENANT_NAME: ""
+      secret:
+        NETRIS_PASSWORD: ""
+    storageFulfillment:
+      enabled: false
+      config:
+        STORAGE_TIERS: ""
+        STORAGE_SNAPSHOTS_ENABLED: ""
+      secret:
+        VAST_ENDPOINT: ""
+        VAST_USERNAME: ""
+        VAST_PASSWORD: ""
+    publishTemplates:
+      enabled: true
+      config:
+        OSAC_TEMPLATE_COLLECTIONS: "osac.templates"
+        OSAC_FULFILLMENT_SERVICE_URI: "https://fulfillment-internal-api:8001"
 
 # --- UI ---
 ui:
@@ -188,107 +238,12 @@ bmf:
   configMaps:
     profiles: "osac-profiles"
 
-# --- Hub Access ---
-hubAccess:
-  enabled: true
-
-# --- Publish Templates ---
-publishTemplates:
-  enabled: true
-  templateCollections: "osac.templates"
-  fulfillmentServiceUri: "https://fulfillment-internal-api:8001"
-
 # --- Validation hooks ---
 validation:
   enabled: true
   image: quay.io/openshift/origin-cli:4.20.0
 
-# --- Database migration hook ---
-# NOTE: Disabled until the 'migrate' subcommand is released in the
-# fulfillment-service image. Re-enable once available.
-dbMigrate:
-  enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:latest
-  dbUrl: ""
-  dbUrlFile: ""
-
-# --- Cluster Fulfillment Instance Group ---
-# ConfigMap and Secret for the AAP cluster-fulfillment instance group.
-# Carries network backend selection, Netris credentials, SSH config,
-# external-access domains, hosted-cluster defaults, and DNS backend config.
-clusterFulfillment:
-  enabled: false
-  config:
-    NETWORK_CLASS: ""
-    NETWORK_STEPS_COLLECTION: ""
-    DNS_CLASS: ""
-    DNS_ZONE: ""
-    NETRIS_CONTROLLER_URL: ""
-    NETRIS_USERNAME: ""
-    NETRIS_SITE_ID: ""
-    NETRIS_TENANT_ID: ""
-    NETRIS_TENANT_NAME: ""
-    NETRIS_MGMT_VPC_ID: ""
-    NETRIS_MGMT_VPC_NAME: ""
-    NETRIS_RESOURCE_CLASS_MAP: ""
-    SERVER_SSH_BASTION_HOST: ""
-    SERVER_SSH_BASTION_USER: ""
-    SERVER_SSH_USER: ""
-    SERVER_MGMT_ROUTE_DESTINATION: ""
-    SERVER_MGMT_ROUTE_GATEWAY: ""
-    EXTERNAL_ACCESS_BASE_DOMAIN: ""
-    EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: ""
-    EXTERNAL_ACCESS_API_INTERNAL_NETWORK: ""
-    HOSTED_CLUSTER_BASE_DOMAIN: ""
-    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: ""
-    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: ""
-    IMPORT_AGENTS_NAMESPACE: ""
-    IMPORT_AGENTS_INFRAENV_NAME: ""
-    IMPORT_AGENTS_PULL_SECRET_NAME: ""
-    IMPORT_AGENTS_DISABLE_BMC_CERT_VERIFICATION: ""
-    BCM_API_URL: ""
-    BCM_VALIDATE_CERTS: "true"
-    BCM_DISABLE_BMC_CERT_VERIFICATION: "false"
-  secret:
-    NETRIS_PASSWORD: ""
-    AWS_ACCESS_KEY_ID: ""
-    AWS_SECRET_ACCESS_KEY: ""
-    SERVER_SSH_KEY: ""
-    SERVER_SSH_BASTION_KEY: ""
-
-# --- Network Fulfillment Instance Group ---
-# ConfigMap and Secret for the AAP networking-operations instance group.
-# Carries Netris controller credentials for network resource lifecycle.
-networkFulfillment:
-  enabled: false
-  config:
-    NETRIS_CONTROLLER_URL: ""
-    NETRIS_USERNAME: ""
-    NETRIS_SITE_ID: ""
-    NETRIS_TENANT_ID: ""
-    NETRIS_TENANT_NAME: ""
-  secret:
-    NETRIS_PASSWORD: ""
-
-# --- Storage Fulfillment Instance Group ---
-# ConfigMap and Secret for the AAP storage-operations instance group.
-# Carries VAST management credentials for tenant storage provisioning.
-storageFulfillment:
-  enabled: false
-  config:
-    STORAGE_TIERS: ""
-    STORAGE_SNAPSHOTS_ENABLED: ""
-  secret:
-    VAST_ENDPOINT: ""
-    VAST_USERNAME: ""
-    VAST_PASSWORD: ""
-
 # --- MetalLB Address Pool ---
 metallb:
   enabled: false
   addressCIDR: "192.168.40.0/24"
-
-# --- CAPI Provider RBAC ---
-capiProvider:
-  enabled: true
-  agentNamespace: hardware-inventory

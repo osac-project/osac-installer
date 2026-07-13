@@ -25,7 +25,7 @@ mce:
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-597e258
+    tag: sha-a09d53b
     pullPolicy: Always
   provisioning:
     provider: "aap"

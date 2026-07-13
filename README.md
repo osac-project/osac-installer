@@ -126,188 +126,72 @@ Ensure your values directory contains the necessary secret files:
 - **AAP License:** Place `license.zip` in `values/<env>/`
 - **Pull Secret:** Place `pull-secret.json` in `values/<env>/`
 
-### Option A: Automated Setup (Recommended)
+### Installation
 
-The `scripts/setup.sh` script automates the entire installation process, including:
-
-- Installing prerequisite operators (cert-manager, trust-manager, Keycloak, AAP)
-- Optionally installing LVMS (storage service), MetalLB (ingress service), Multicluster Engine (MCE + infrastructure operator), and OpenShift Virtualization (CNV)
-- Setting up the CA issuer and network attachment definitions
-- Deploying OSAC components via Helm
-- Waiting for the AAP bootstrap job to complete
-- Creating the hub access kubeconfig and registering the hub with the fulfillment service
-
-To run the automated setup:
+OSAC installs in three phases via `make install`. Each phase's outputs are
+the next phase's inputs — this is required because Helm validates all templates
+before applying any, and later phases depend on CRDs and secrets that earlier
+phases create. See [docs/helm-deployment-guide.md](docs/helm-deployment-guide.md)
+for a detailed explanation.
 
 ```bash
-# Using defaults (namespace: osac, values: values/development/values.yaml)
-$ ./scripts/setup.sh
+# Full install (all 3 phases)
+make install VALUES_FILE=values/<env>/values.yaml
 
-# Or customize the namespace and values file
-$ INSTALLER_NAMESPACE=<project-name> VALUES_FILE=values/development/values.yaml ./scripts/setup.sh
-
-# Install with all optional services (storage, ingress, virtualization, MCE)
-$ EXTRA_SERVICES=true INSTALLER_NAMESPACE=<project-name> ./scripts/setup.sh
+# Or run phases individually:
+make install-operators VALUES_FILE=values/<env>/values.yaml   # Phase 1: OLM operators
+make install-prereqs VALUES_FILE=values/<env>/values.yaml     # Phase 2: CRD instances, Keycloak, certs
+make install-osac VALUES_FILE=values/<env>/values.yaml        # Phase 3: OSAC application
 ```
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KUBECONFIG` | `~/.kube/config` | Path to the target cluster's kubeconfig file |
 | `INSTALLER_NAMESPACE` | `osac` | Target namespace for the OSAC deployment |
 | `VALUES_FILE` | `values/development/values.yaml` | Helm values file to use |
-| `EXTRA_SERVICES` | `false` | Enable all optional services (sets all below to `true`) |
-| `INGRESS_SERVICE` | `false` | Install MetalLB as the ingress/LoadBalancer service |
-| `STORAGE_SERVICE` | `false` | Install LVMS and create a default StorageClass (`lvms-vg1`) |
-| `VIRT_SERVICE` | `false` | Install OpenShift Virtualization |
-| `MCE_SERVICE` | `false` | Install Multicluster Engine and infrastructure operator |
 
-#### AAP Configuration
-
-The automation backend (AAP) is configured via environment variables passed to
-`scripts/aap-configuration.sh`. Set the relevant variables before running `setup.sh`.
-
-See [docs/aap-configuration.md](docs/aap-configuration.md) for the full variable
-reference.
-
-#### Network Backend Configuration (CaaS)
-
-By default the network backend is **ESI**. To switch to **Netris**, set
-`NETWORK_CLASS=netris` and fill in the Netris-specific connection details and credentials
-as environment variables.
-
-See [docs/network-backend.md](docs/network-backend.md) for Netris-specific
-variables and the `NETRIS_RESOURCE_CLASS_MAP` format.
-
-#### DNS Backend Configuration (CaaS)
-
-DNS record management uses a pluggable backend. The default is **AWS Route 53**
-(`DNS_CLASS=dns.route53.dns`), which requires AWS credentials. No changes are needed for existing deployments.
-
-See [docs/dns-backend.md](docs/dns-backend.md) for backend details, the
-interface contract, and how to add a new provider.
-
-> **Note:** The script requires `osac` to be installed and available in your
-> `PATH` (see [OSAC CLI: Setup & Usage](#osac-cli-setup--usage) below for
-> installation instructions).
-
-The script will wait for all components to be ready before proceeding to the next step.
-Once it completes successfully, OSAC is fully operational.
-
-### Option B: Manual Helm Installation
-
-If you prefer to install step-by-step:
-
-#### 1. Install Prerequisites
-
-OSAC requires several operators to be present on the cluster. The prerequisite manifests
-are located in the `prerequisites/` directory. Install them in order:
-
-```bash
-# cert-manager
-oc apply -f prerequisites/cert-manager/cert-manager.yaml
-oc wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=300s
-oc wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=300s
-
-# trust-manager
-oc apply -f prerequisites/trust-manager.yaml
-oc wait --for=condition=Available deployment/trust-manager -n cert-manager --timeout=300s
-
-# CA issuer
-oc apply -f prerequisites/ca-issuer.yaml
-
-# Keycloak
-oc apply -f prerequisites/keycloak/namespace.yaml
-oc create configmap keycloak-db-server-config \
-    --from-file=server.conf=prerequisites/keycloak/database/files/server.conf \
-    -n keycloak --dry-run=client -o yaml | oc apply -f -
-oc create configmap keycloak-db-access-config \
-    --from-file=access.conf=prerequisites/keycloak/database/files/access.conf \
-    -n keycloak --dry-run=client -o yaml | oc apply -f -
-oc create configmap keycloak-realm \
-    --from-file=realm.json=prerequisites/keycloak/service/files/realm.json \
-    -n keycloak --dry-run=client -o yaml | oc apply -f -
-oc apply -f prerequisites/keycloak/database/ -n keycloak
-oc apply -f prerequisites/keycloak/service/ -n keycloak
-oc wait --for=condition=Available deployment/keycloak-service -n keycloak --timeout=600s
-
-# AAP operator
-oc apply -f prerequisites/aap-installation.yaml
-```
-
-Wait for each operator to be ready before proceeding. See
-[prerequisites/README.md](prerequisites/README.md) for details on optional
-components (LVMS, MetalLB, MCE, OpenShift Virtualization).
-
-#### 2. Initialize Submodules
-
-```bash
-git submodule update --init --recursive --remote
-```
-
-#### 3. Build Chart Dependencies
-
-```bash
-helm dependency build charts/osac/
-```
-
-#### 4. Configure Values
+#### Configure Values
 
 Copy and customize a values file for your environment:
 
 ```bash
 mkdir -p values/<project-name>
 cp values/development/values.yaml values/<project-name>/values.yaml
-# Edit values/<project-name>/values.yaml to set:
-#   - operator.aap.url: your AAP controller URL
-#   - service.auth.issuerUrl: your Keycloak realm URL
-#   - service.idp.url: your Keycloak base URL
-#   - service.database.connection: your PostgreSQL connection details
+# Edit to match your cluster (see values file comments for guidance)
 ```
 
-#### 5. Validate (Dry-Run)
+Prerequisites (cert-manager, AAP, LVMS, MetalLB, CNV, MCE) are installed
+automatically by Phase 1. Each is gated by a values toggle (e.g.,
+`certManager.enabled: true`). See [prerequisites/README.md](prerequisites/README.md)
+for details on what each prerequisite provides.
+
+#### AAP Configuration
+
+AAP instance groups carry backend credentials for provisioning jobs.
+Configure via Helm values under `aap.instanceGroups.*` in your values file.
+
+See [docs/aap-configuration.md](docs/aap-configuration.md) for details.
+
+#### Network Backend Configuration (CaaS)
+
+By default the network backend is **ESI**. To switch to **Netris**, set
+the Netris-specific values in your values file under `aap.instanceGroups.clusterFulfillment`.
+
+See [docs/network-backend.md](docs/network-backend.md) for Netris-specific
+variables and the `NETRIS_RESOURCE_CLASS_MAP` format.
+
+#### DNS Backend Configuration (CaaS)
+
+DNS record management uses a pluggable backend. The default is **AWS Route 53**.
+
+See [docs/dns-backend.md](docs/dns-backend.md) for backend details, the
+interface contract, and how to add a new provider.
+
+#### Verify
 
 ```bash
-# Lint the chart
-helm lint charts/osac/
-
-# Render templates without deploying
-helm template osac charts/osac/ --values values/<project-name>/values.yaml > /dev/null
-```
-
-#### 6. Deploy
-
-```bash
-helm upgrade --install osac charts/osac/ \
-  --namespace <project-name> \
-  --create-namespace \
-  --values values/<project-name>/values.yaml \
-  --set service.externalHostname=${EXTERNAL_HOSTNAME} \
-  --set service.internalHostname=${INTERNAL_HOSTNAME} \
-  --timeout 40m \
-  --wait
-```
-
-#### 7. Verify
-
-```bash
-# Check deployment status
 helm status osac -n <project-name>
-
-# Check running pods
-kubectl get pods -n <project-name>
-
-# Monitor the AAP bootstrap job (runs as a post-install hook)
-kubectl logs -f job/osac-aap-bootstrap -n <project-name>
-```
-
-#### 8. Post-Install
-
-After the AAP bootstrap job completes, run the post-install scripts:
-
-```bash
-INSTALLER_NAMESPACE=<project-name> ./scripts/prepare-aap.sh
-INSTALLER_NAMESPACE=<project-name> ./scripts/prepare-fulfillment-service.sh
-INSTALLER_NAMESPACE=<project-name> ./scripts/prepare-tenant.sh
+oc get pods -n <project-name>
+oc logs -f job/osac-aap-bootstrap -n <project-name>
 ```
 
 #### Upgrading
@@ -323,7 +207,7 @@ helm upgrade osac charts/osac/ \
 #### Uninstalling
 
 ```bash
-helm uninstall osac -n <project-name>
+make uninstall
 ```
 
 > **Note:** CRDs are preserved after uninstall (they have the
@@ -332,17 +216,17 @@ helm uninstall osac -n <project-name>
 
 #### Makefile Targets
 
-For convenience, the `Makefile` provides developer targets:
-
 ```bash
-make helm-deps       # Build chart dependencies
-make helm-lint       # Lint the umbrella chart
-make helm-template   # Dry-run render all templates
-make helm-validate   # Lint + template (full validation)
-make helm-deploy     # Deploy to current cluster
-make helm-undeploy   # Uninstall from current cluster
-make sync-charts     # Update submodules + rebuild dependencies
-make setup           # Run setup.sh
+make install             # Full install (all 3 phases)
+make install-operators   # Phase 1: OLM operators
+make install-prereqs     # Phase 2: Prerequisites
+make install-osac        # Phase 3: OSAC application
+make uninstall           # Full uninstall (reverse order)
+make helm-deps           # Build chart dependencies
+make helm-lint           # Lint all charts
+make helm-template       # Dry-run render all templates
+make helm-validate       # Lint + template (full validation)
+make sync-charts         # Update submodules + rebuild dependencies
 ```
 
 ### Monitor Progress
@@ -436,17 +320,11 @@ $ oc extract secret/osac-aap-admin-password -n <project-name> --to -
 - Username: `admin`
 - Password: (from the previous step)
 
-### Create an AAP API Token for the OSAC Operator
+### AAP API Token
 
-The OSAC operator requires an API token to communicate with AAP. The `scripts/prepare-aap.sh`
-script automates this by authenticating with the AAP gateway using the admin password and
-creating a write-scoped token. The automated setup script (`setup.sh`) calls this automatically.
-
-For manual deployments, run it after the AAP bootstrap job completes:
-
-```bash
-$ INSTALLER_NAMESPACE=<project-name> ./scripts/prepare-aap.sh
-```
+The OSAC operator requires an API token to communicate with AAP. The
+`create-api-token` Helm hook creates this automatically during `make install-osac`.
+The token is stored in the `osac-aap-api-token` Secret.
 
 ## Tearing Down OSAC
 

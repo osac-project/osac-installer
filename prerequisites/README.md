@@ -113,9 +113,10 @@ oc get csv -n ansible-aap | grep ansible-automation-platform
 
 ### Step 6: Optional Components
 
-See `scripts/setup.sh` for automated installation of LVMS, MetalLB, MCE, and
-OpenShift Virtualization. Each optional component has an operator manifest and a
-config manifest that requires the operator CRDs to exist first.
+LVMS, MetalLB, MCE, and OpenShift Virtualization are installed automatically
+by `make install-operators` (Phase 1) when enabled in values. Each is gated
+by a toggle (e.g., `lvms.enabled: true`). The manifests below are reference
+files for manual installation if needed.
 
 ## Verification
 

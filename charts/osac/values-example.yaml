@@ -50,13 +50,13 @@ operator:
   # resources (clusters, VMs, networks) via job templates.
   aap:
     # [REQUIRED for provisioning] Full URL to the AAP controller API.
-    # Typically set post-install by scripts/prepare-aap.sh after the AAP
+    # Typically set post-install by create-api-token Helm hook after the AAP
     # instance is ready and its route is available.
     # Example: https://osac-aap.osac.apps.mycluster.example.com/api/controller
     url: ""
 
     # [REQUIRED for provisioning] AAP API token for authentication.
-    # Created by scripts/prepare-aap.sh from the AAP admin credentials.
+    # Created by create-api-token Helm hook from the AAP admin credentials.
     token: ""
 
     # Skip TLS verification for AAP connection. Set to "false" in production
@@ -89,7 +89,7 @@ operator:
     networking: true
 
   # Secret containing operator configuration overrides. Mounted as
-  # environment variables. Created by scripts/prepare-aap.sh.
+  # environment variables. Created by create-api-token Helm hook.
   configSecret:
     name: "osac-config"
     # When true, the operator starts even if the secret doesn't exist yet.
@@ -254,7 +254,7 @@ aap:
 
   configAsCode:
     # Secret names for AAP config-as-code. These must exist before the
-    # bootstrap job runs. scripts/setup.sh creates them automatically in
+    # bootstrap job runs. make install creates them automatically in
     # Helm mode; see docs/helm-deployment-guide.md for manual creation.
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
@@ -320,7 +320,7 @@ bundledPostgres:
 # ---------------------
 hubAccess:
   # Create hub-access ServiceAccount, Secret, Role, RoleBinding, ClusterRole,
-  # and ClusterRoleBinding. Required by prepare-fulfillment-service.sh to
+  # and ClusterRoleBinding. Required by create-hub Helm hook to
   # generate a kubeconfig for remote cluster management.
   enabled: true
 

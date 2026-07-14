@@ -34,7 +34,7 @@ install-operators: wait-for-api ## Phase 1: Install OLM operators (cert-manager,
 		--timeout 30m --wait
 
 .PHONY: install-prereqs
-install-prereqs: ## Phase 2: Configure prerequisites (certificates, keycloak, operator CRs)
+install-prereqs: wait-for-api ## Phase 2: Configure prerequisites (certificates, keycloak, operator CRs)
 	helm upgrade --install osac-prereqs charts/osac-prereqs/ \
 		--namespace osac-prereqs --create-namespace \
 		--values $(VALUES_FILE) \
@@ -52,7 +52,7 @@ install-secrets: ## Create pre-install secrets (AAP license)
 		-n $(INSTALLER_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
 
 .PHONY: install-osac
-install-osac: helm-deps install-secrets ## Phase 3: Install OSAC
+install-osac: wait-for-api helm-deps install-secrets ## Phase 3: Install OSAC
 	$(eval DOMAIN := $(shell oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'))
 	@[[ -n "$(DOMAIN)" ]] || { echo "ERROR: Could not determine cluster domain. Is oc logged in?"; exit 1; }
 	helm upgrade --install osac charts/osac/ \

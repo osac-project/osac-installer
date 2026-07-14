@@ -10,8 +10,24 @@ help: ## Display this help
 .PHONY: install
 install: install-operators install-prereqs install-osac ## Full install (operators + prereqs + OSAC)
 
+.PHONY: wait-for-api
+wait-for-api: ## Wait for the Kubernetes API server to be consistently reachable
+	@echo "Waiting for API server to be reachable..."
+	@for i in $$(seq 1 30); do \
+		if oc get --raw /version >/dev/null 2>&1; then \
+			echo "API server is reachable."; \
+			exit 0; \
+		fi; \
+		if [ "$$i" -eq 30 ]; then \
+			echo "ERROR: API server still unreachable after 5 minutes." >&2; \
+			exit 1; \
+		fi; \
+		echo "  Not yet reachable (attempt $$i/30), retrying in 10s..."; \
+		sleep 10; \
+	done
+
 .PHONY: install-operators
-install-operators: ## Phase 1: Install OLM operators (cert-manager, AAP, LVMS, etc.)
+install-operators: wait-for-api ## Phase 1: Install OLM operators (cert-manager, AAP, LVMS, etc.)
 	helm upgrade --install osac-operators charts/osac-operators/ \
 		--namespace osac-operators --create-namespace \
 		--values $(VALUES_FILE) \

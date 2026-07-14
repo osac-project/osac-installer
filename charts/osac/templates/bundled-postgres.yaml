@@ -109,8 +109,8 @@ spec:
     port: 5432
     targetPort: postgres
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: postgres
   namespace: {{ .Release.Namespace }}
@@ -118,73 +118,88 @@ metadata:
     app: postgres
     {{- include "osac.labels" . | nindent 4 }}
 spec:
-  automountServiceAccountToken: false
-  securityContext:
-    runAsNonRoot: true
-  volumes:
-  - name: server-cert
-    secret:
-      secretName: postgres-server-cert
-      defaultMode: 0440
-  - name: config
-    configMap:
-      name: postgres-config
-  {{- if .Values.service.certs.caBundle.configMap }}
-  - name: ca-bundle
-    configMap:
-      name: {{ .Values.service.certs.caBundle.configMap }}
-  {{- end }}
-  - name: init
-    secret:
-      secretName: postgres-init
-  - name: data
-    emptyDir: {}
-  containers:
-  - name: server
-    image: {{ .Values.bundledPostgres.image | default "quay.io/sclorg/postgresql-18-c10s@sha256:6be2c9d855f06fb665257a6b0911676a38d740be7022cc61acee1c99a832b1b2" }}
-    imagePullPolicy: IfNotPresent
-    securityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-        - ALL
-    env:
-    - name: POSTGRESQL_USER
-      value: "default"
-    - name: POSTGRESQL_PASSWORD
-      value: ""
-    - name: POSTGRESQL_DATABASE
-      value: "default"
-    volumeMounts:
-    - name: data
-      mountPath: /var/lib/pgsql/data
-    - name: server-cert
-      mountPath: /secrets/cert
-    {{- if .Values.service.certs.caBundle.configMap }}
-    - name: ca-bundle
-      mountPath: /config/ca
-    {{- end }}
-    - name: config
-      mountPath: /opt/app-root/src/postgresql-cfg/server.conf
-      subPath: server.conf
-    - name: config
-      mountPath: /config/access/access.conf
-      subPath: access.conf
-    - name: init
-      mountPath: /opt/app-root/src/postgresql-init/init.sh
-      subPath: init.sh
-    ports:
-    - name: postgres
-      protocol: TCP
-      containerPort: 5432
-    livenessProbe:
-      tcpSocket:
-        port: postgres
-      initialDelaySeconds: 10
-      periodSeconds: 10
-    readinessProbe:
-      tcpSocket:
-        port: postgres
-      initialDelaySeconds: 5
-      periodSeconds: 5
+  replicas: 1
+  # emptyDir-backed data, and only one replica is ever wanted -- Recreate
+  # avoids two postgres pods briefly coexisting (and racing on the same
+  # Service) during a rollout, which RollingUpdate would otherwise allow.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        {{- include "osac.labels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+      volumes:
+      - name: server-cert
+        secret:
+          secretName: postgres-server-cert
+          defaultMode: 0440
+      - name: config
+        configMap:
+          name: postgres-config
+      {{- if .Values.service.certs.caBundle.configMap }}
+      - name: ca-bundle
+        configMap:
+          name: {{ .Values.service.certs.caBundle.configMap }}
+      {{- end }}
+      - name: init
+        secret:
+          secretName: postgres-init
+      - name: data
+        emptyDir: {}
+      containers:
+      - name: server
+        image: {{ .Values.bundledPostgres.image | default "quay.io/sclorg/postgresql-18-c10s@sha256:6be2c9d855f06fb665257a6b0911676a38d740be7022cc61acee1c99a832b1b2" }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        env:
+        - name: POSTGRESQL_USER
+          value: "default"
+        - name: POSTGRESQL_PASSWORD
+          value: ""
+        - name: POSTGRESQL_DATABASE
+          value: "default"
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/pgsql/data
+        - name: server-cert
+          mountPath: /secrets/cert
+        {{- if .Values.service.certs.caBundle.configMap }}
+        - name: ca-bundle
+          mountPath: /config/ca
+        {{- end }}
+        - name: config
+          mountPath: /opt/app-root/src/postgresql-cfg/server.conf
+          subPath: server.conf
+        - name: config
+          mountPath: /config/access/access.conf
+          subPath: access.conf
+        - name: init
+          mountPath: /opt/app-root/src/postgresql-init/init.sh
+          subPath: init.sh
+        ports:
+        - name: postgres
+          protocol: TCP
+          containerPort: 5432
+        livenessProbe:
+          tcpSocket:
+            port: postgres
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
 {{- end }}

@@ -158,6 +158,27 @@ spec:
         emptyDir: {}
       - name: run
         emptyDir: {}
+      # The run emptyDir starts out completely empty -- nothing creates the
+      # postgresql/ subdirectory the server needs for its lock file and
+      # socket before it starts. Confirmed live: without this, postgres
+      # fails outright with 'could not create lock file
+      # "/var/run/postgresql/.s.PGSQL.5432.lock": No such file or directory'.
+      initContainers:
+      - name: init-run-dir
+        image: {{ .Values.bundledPostgres.image | default "quay.io/sclorg/postgresql-18-c10s@sha256:6be2c9d855f06fb665257a6b0911676a38d740be7022cc61acee1c99a832b1b2" }}
+        imagePullPolicy: IfNotPresent
+        command:
+        - sh
+        - -c
+        - mkdir -p /run/postgresql
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: run
+          mountPath: /run
       containers:
       - name: server
         image: {{ .Values.bundledPostgres.image | default "quay.io/sclorg/postgresql-18-c10s@sha256:6be2c9d855f06fb665257a6b0911676a38d740be7022cc61acee1c99a832b1b2" }}

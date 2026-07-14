@@ -74,6 +74,10 @@ data:
     hba_file = '/config/access/access.conf'
     fsync = off
     full_page_writes = off
+    # Pin the socket dir explicitly rather than relying on the image's
+    # default -- needed now that the container filesystem is read-only
+    # except for the volumes mounted below, /tmp being one of them.
+    unix_socket_directories = '/tmp'
   access.conf: |
     local all all peer
     hostssl all all 0.0.0.0/0 cert
@@ -154,15 +158,22 @@ spec:
           secretName: postgres-init
       - name: data
         emptyDir: {}
+      - name: tmp
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
       containers:
       - name: server
         image: {{ .Values.bundledPostgres.image | default "quay.io/sclorg/postgresql-18-c10s@sha256:6be2c9d855f06fb665257a6b0911676a38d740be7022cc61acee1c99a832b1b2" }}
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
             - ALL
+        resources:
+          {{- toYaml .Values.bundledPostgres.resources | nindent 10 }}
         env:
         - name: POSTGRESQL_USER
           value: "default"
@@ -173,6 +184,10 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /var/lib/pgsql/data
+        - name: tmp
+          mountPath: /tmp
+        - name: run
+          mountPath: /run
         - name: server-cert
           mountPath: /secrets/cert
         {{- if .Values.service.certs.caBundle.configMap }}

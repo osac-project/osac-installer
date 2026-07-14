@@ -281,9 +281,13 @@ check_postgres_prerequisites() {
     if [[ ${bundled_status} -eq 2 ]]; then
         _postgres_prereq_error "Values file ${values_file} not found or unreadable."
     elif [[ ${bundled_status} -eq 0 ]]; then
-        echo "Checking in-cluster PostgreSQL prerequisites (bundledPostgres)..."
-        service="postgres"
-        target_namespace="${namespace}"
+        # bundledPostgres's Deployment/Service are templated inside charts/osac
+        # itself and created by the very `helm upgrade --install osac --wait`
+        # this check runs ahead of -- nothing to verify yet, and checking now
+        # would always fail (the Service doesn't exist until that install
+        # creates it). The chart's own --wait covers Postgres readiness.
+        echo "bundledPostgres enabled -- readiness will be verified by the chart's own install --wait."
+        return 0
     else
         echo "Checking in-cluster PostgreSQL prerequisites..."
         oc get secret fulfillment-db -n "${namespace}" &>/dev/null || \

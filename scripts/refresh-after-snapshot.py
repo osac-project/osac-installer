@@ -500,8 +500,59 @@ def create_secrets(config: RefreshConfig) -> None:
 
 
 def ensure_ca_bundle(config: RefreshConfig) -> None:
-    """Ensure the cluster CA bundle ConfigMap exists in the install namespace."""
-    run([str(SCRIPT_DIR / "ensure-ca-bundle.sh"), config.namespace])
+    """Ensure the cluster CA bundle Bundle exists and covers the install namespace.
+
+    The Bundle is cluster-scoped and shared across deployments, but
+    osac-prereqs' own ca-issuer.yaml template only ever sets a single static
+    namespace (.Values.osacNamespace) at chart-install time -- it doesn't
+    additively cover a snapshot refresh into a differently-named namespace.
+    Reimplements the old scripts/ensure-ca-bundle.sh (deleted by PR #404,
+    which left this function's only caller pointed at a nonexistent file).
+    """
+    namespace = config.namespace
+    if oc_exists("bundle/ca-bundle"):
+        bundle = oc_json("get", "bundle", "ca-bundle")
+        values = bundle["spec"]["target"]["namespaceSelector"]["matchExpressions"][0]["values"]
+        if namespace not in values:
+            print(f"  Adding {namespace} to ca-bundle namespace selector...")
+            patch = [{
+                "op": "add",
+                "path": "/spec/target/namespaceSelector/matchExpressions/0/values/-",
+                "value": namespace,
+            }]
+            oc("patch", "bundle", "ca-bundle", "--type=json", "-p", json.dumps(patch))
+    else:
+        print(f"  Creating ca-bundle Bundle targeting {namespace}...")
+        manifest = f"""apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: ca-bundle
+spec:
+  sources:
+  - secret:
+      name: "default-ca"
+      key: "ca.crt"
+  target:
+    configMap:
+      key: bundle.pem
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        - {namespace}
+"""
+        result = subprocess.run(
+            ["oc", "apply", "-f", "-"],
+            input=manifest, text=True, capture_output=True, cwd=str(REPO_ROOT),
+        )
+        if result.returncode != 0:
+            print("ERROR: oc apply bundle/ca-bundle failed", file=sys.stderr)
+            if result.stderr:
+                print(f"  stderr: {result.stderr.rstrip()}", file=sys.stderr)
+            raise subprocess.CalledProcessError(
+                result.returncode, ["oc", "apply", "-f", "-"],
+                output=result.stdout, stderr=result.stderr)
 
 
 def wait_tls_certs(config: RefreshConfig) -> None:

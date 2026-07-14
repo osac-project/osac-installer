@@ -26,15 +26,26 @@ wait-for-api: ## Wait for the Kubernetes API server to be consistently reachable
 		sleep 10; \
 	done
 
+.PHONY: wait-for-operators-namespaces
+wait-for-operators-namespaces: ## Wait for operator namespaces left Terminating by a prior uninstall
+	@bash -c 'source scripts/lib.sh && \
+		for ns in ansible-aap cert-manager-operator cert-manager openshift-storage metallb-system multicluster-engine openshift-cnv; do \
+			wait_for_namespace_cleanup "$$ns"; \
+		done'
+
 .PHONY: install-operators
-install-operators: wait-for-api ## Phase 1: Install OLM operators (cert-manager, AAP, LVMS, etc.)
+install-operators: wait-for-api wait-for-operators-namespaces ## Phase 1: Install OLM operators (cert-manager, AAP, LVMS, etc.)
 	helm upgrade --install osac-operators charts/osac-operators/ \
 		--namespace osac-operators --create-namespace \
 		--values $(VALUES_FILE) \
 		--timeout 30m --wait
 
+.PHONY: wait-for-prereqs-namespaces
+wait-for-prereqs-namespaces: ## Wait for the keycloak namespace left Terminating by a prior uninstall
+	@bash -c 'source scripts/lib.sh && wait_for_namespace_cleanup keycloak'
+
 .PHONY: install-prereqs
-install-prereqs: ## Phase 2: Configure prerequisites (certificates, keycloak, operator CRs)
+install-prereqs: wait-for-prereqs-namespaces ## Phase 2: Configure prerequisites (certificates, keycloak, operator CRs)
 	helm upgrade --install osac-prereqs charts/osac-prereqs/ \
 		--namespace osac-prereqs --create-namespace \
 		--values $(VALUES_FILE) \
@@ -46,13 +57,23 @@ AAP_LICENSE_FILE ?= $(dir $(VALUES_FILE))license.zip
 .PHONY: install-secrets
 install-secrets: ## Create pre-install secrets (AAP license)
 	@[[ -f "$(AAP_LICENSE_FILE)" ]] || { echo "ERROR: AAP license not found at $(AAP_LICENSE_FILE)"; exit 1; }
+	@bash -c 'source scripts/lib.sh && wait_for_namespace_cleanup "$(INSTALLER_NAMESPACE)"'
 	oc create namespace $(INSTALLER_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
+	# Server-side apply avoids last-applied-configuration (256KiB limit on large
+	# license.zip) while remaining idempotent when the license file changes.
 	oc create secret generic config-as-code-manifest-ig \
 		--from-file=license.zip="$(AAP_LICENSE_FILE)" \
-		-n $(INSTALLER_NAMESPACE) --dry-run=client -o yaml | oc apply -f -
+		-n $(INSTALLER_NAMESPACE) --dry-run=client -o yaml | oc apply --server-side -f -
+	oc label secret config-as-code-manifest-ig \
+		osac.openshift.io/project=osac-aap \
+		-n $(INSTALLER_NAMESPACE) --overwrite
+
+.PHONY: check-postgres
+check-postgres: ## Verify in-cluster PostgreSQL is reachable before installing OSAC
+	@bash -c 'source scripts/lib.sh && check_postgres_prerequisites "$(INSTALLER_NAMESPACE)" "$(VALUES_FILE)"'
 
 .PHONY: install-osac
-install-osac: helm-deps install-secrets ## Phase 3: Install OSAC
+install-osac: helm-deps install-secrets check-postgres ## Phase 3: Install OSAC
 	$(eval DOMAIN := $(shell oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'))
 	@[[ -n "$(DOMAIN)" ]] || { echo "ERROR: Could not determine cluster domain. Is oc logged in?"; exit 1; }
 	helm upgrade --install osac charts/osac/ \

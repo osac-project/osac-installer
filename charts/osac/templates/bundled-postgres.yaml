@@ -183,7 +183,14 @@ spec:
           value: "default"
         volumeMounts:
         - name: data
-          mountPath: /var/lib/pgsql/data
+          # Mounted at the whole home dir, not just .../data -- the sclorg
+          # entrypoint (common.sh) also writes an nss_wrapper passwd file
+          # directly under /var/lib/pgsql (for the container's arbitrary
+          # OpenShift-assigned UID) before ever touching the data subdir.
+          # Confirmed live: with the mount scoped to .../data only, the
+          # container CrashLoopBackOff'd on
+          # "/var/lib/pgsql/passwd: Read-only file system".
+          mountPath: /var/lib/pgsql
         - name: tmp
           mountPath: /tmp
         - name: run

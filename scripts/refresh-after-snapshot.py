@@ -499,11 +499,6 @@ def create_secrets(config: RefreshConfig) -> None:
     print("  Secrets created")
 
 
-def ensure_ca_bundle(config: RefreshConfig) -> None:
-    """Ensure the cluster CA bundle ConfigMap exists in the install namespace."""
-    run([str(SCRIPT_DIR / "ensure-ca-bundle.sh"), config.namespace])
-
-
 def wait_tls_certs(config: RefreshConfig) -> None:
     """Wait for all cert-manager Certificates in the namespace to become Ready."""
     print("  Waiting for TLS certificates...")
@@ -873,7 +868,6 @@ def main() -> None:
     run_parallel([
         ("Keycloak sync", lambda: keycloak_sync(config)),
         ("create secrets", lambda: create_secrets(config)),
-        ("ensure CA bundle", lambda: ensure_ca_bundle(config)),
         ("wait TLS certs", lambda: wait_tls_certs(config)),
         ("upgrade fulfillment-db", lambda: maybe_upgrade_fulfillment_db(config)),
     ])

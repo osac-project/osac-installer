@@ -144,7 +144,7 @@ bmf:
   enabled: false
   image:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
-    tag: sha-0a06955
+    tag: sha-d28b3ca
     pullPolicy: Always
 
 # --- CI/dev only ---

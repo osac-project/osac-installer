@@ -74,10 +74,6 @@ data:
     hba_file = '/config/access/access.conf'
     fsync = off
     full_page_writes = off
-    # Pin the socket dir explicitly rather than relying on the image's
-    # default -- needed now that the container filesystem is read-only
-    # except for the volumes mounted below, /tmp being one of them.
-    unix_socket_directories = '/tmp'
   access.conf: |
     local all all peer
     hostssl all all 0.0.0.0/0 cert

@@ -50,7 +50,7 @@ class RefreshConfig:
     namespace: str
     cluster_domain: str
     keycloak_ns: str = "keycloak"
-    realm_json: str = "prerequisites/keycloak/service/files/realm.json"
+    realm_json: str = "charts/osac-prereqs/files/realm.json"
     aap_stale_ts: str = field(default="", init=False)
 
     @property
@@ -428,28 +428,54 @@ def pre_fix_cert_sans(config: RefreshConfig) -> None:
 
 
 def keycloak_sync(config: RefreshConfig) -> None:
-    """Update Keycloak realm configmap and wait for the realm endpoint."""
-    print("  Syncing Keycloak realm configmap...")
-    result = run(
-        ["oc", "create", "configmap", "keycloak-realm",
-         f"--from-file=realm.json={config.realm_json}",
-         "-n", config.keycloak_ns, "--dry-run=client", "-o", "yaml"],
-        capture=True,
-    )
+    """Re-apply the KeycloakRealmImport CR and wait for the realm endpoint."""
+    print("  Syncing Keycloak realm via KeycloakRealmImport...")
+
+    secret_data = oc_json(
+        "get", "secret", "keycloak-client-secrets", "-n", config.keycloak_ns)
+    controller_secret = base64.b64decode(
+        secret_data["data"]["osac-controller"]).decode()
+    admin_secret = base64.b64decode(
+        secret_data["data"]["osac-admin"]).decode()
+
+    realm_text = (REPO_ROOT / config.realm_json).read_text()
+    realm_text = realm_text.replace(
+        "__OSAC_CONTROLLER_CLIENT_SECRET__", controller_secret)
+    realm_text = realm_text.replace(
+        "__OSAC_ADMIN_CLIENT_SECRET__", admin_secret)
+    realm = json.loads(realm_text)
+
+    cr = {
+        "apiVersion": "k8s.keycloak.org/v2alpha1",
+        "kind": "KeycloakRealmImport",
+        "metadata": {
+            "name": "osac-realm-import",
+            "namespace": config.keycloak_ns,
+        },
+        "spec": {
+            "keycloakCRName": "osac-keycloak",
+            "realm": realm,
+        },
+    }
     apply_result = subprocess.run(
         ["oc", "apply", "-f", "-"],
-        input=result.stdout, text=True, capture_output=True, cwd=str(REPO_ROOT),
+        input=json.dumps(cr), text=True, capture_output=True, cwd=str(REPO_ROOT),
     )
     if apply_result.returncode != 0:
         raise subprocess.CalledProcessError(
             apply_result.returncode, ["oc", "apply", "-f", "-"],
             output=apply_result.stdout, stderr=apply_result.stderr)
-    oc("set", "env", "deploy/keycloak-service",
-       "KC_SPI_IMPORT_REALM_FILE_STRATEGY=OVERWRITE",
-       "-n", config.keycloak_ns)
-    oc("rollout", "restart", "deploy/keycloak-service", "-n", config.keycloak_ns)
-    oc("rollout", "status", "deploy/keycloak-service", "-n", config.keycloak_ns,
-       "--timeout=300s")
+
+    print("  Waiting for Keycloak CR to be ready...")
+    retry_until(
+        description="Keycloak CR ready",
+        timeout=600, interval=5,
+        condition=lambda: oc(
+            "get", "keycloak", "osac-keycloak", "-n", config.keycloak_ns,
+            "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}",
+            capture=True, check=False,
+        ).stdout.strip() == "True",
+    )
 
     kc_host = oc("get", "route", "keycloak", "-n", config.keycloak_ns,
                  "-o", "jsonpath={.spec.host}", capture=True).stdout.strip()
@@ -475,9 +501,6 @@ def create_secrets(config: RefreshConfig) -> None:
         raise RuntimeError("No client with serviceAccountsEnabled in realm.json")
     fc_id: str = fc_client["clientId"]
 
-    # realm.json ships with an __OSAC_CONTROLLER_CLIENT_SECRET__-style placeholder;
-    # the real value lives in keycloak-client-secrets (see resolve-realm-secrets.sh,
-    # which substitutes this same secret into the realm Keycloak actually imports).
     secret_result = oc("get", "secret", "keycloak-client-secrets", "-n", config.keycloak_ns,
                        "-o", f"jsonpath={{.data.{fc_id}}}", capture=True)
     fc_secret = base64.b64decode(secret_result.stdout.strip()).decode()
@@ -485,7 +508,7 @@ def create_secrets(config: RefreshConfig) -> None:
         raise RuntimeError(f"No key '{fc_id}' in keycloak-client-secrets -n {config.keycloak_ns}")
 
     oc_apply_secret("fulfillment-controller-credentials", config.namespace,
-                    f"--from-literal=client-id={fc_id}",
+                    "--from-literal=client-id=osac-controller",
                     f"--from-literal=client-secret={fc_secret}")
 
     license_path = Path(config.values_dir) / "license.zip"

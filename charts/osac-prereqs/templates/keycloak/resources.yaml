@@ -269,12 +269,26 @@ spec:
     passwordSecret:
       name: keycloak-db-credentials
       key: password
+    url: jdbc:postgresql://keycloak-database:5432/keycloak?sslmode=verify-full&sslcert=/db-certs/tls.crt&sslkey=/db-certs/tls.key&sslrootcert=/db-certs/ca.crt
   http:
     tlsSecret: keycloak-tls-cert
   hostname:
     hostname: keycloak.keycloak.svc.cluster.local
   proxy:
     headers: xforwarded
+  unsupported:
+    podTemplate:
+      spec:
+        containers:
+        - volumeMounts:
+          - name: db-client-cert
+            mountPath: /db-certs
+            readOnly: true
+        volumes:
+        - name: db-client-cert
+          secret:
+            secretName: keycloak-database-client-cert
+            defaultMode: 0440
 ---
 # Proxy Service mapping port 443 to the operator's non-standard port 8443.
 # JWT issuer URL (https://keycloak.keycloak.svc.cluster.local/realms/osac)

@@ -703,14 +703,43 @@ def maybe_upgrade_fulfillment_db(config: RefreshConfig) -> None:
 
 
 def adopt_resources_for_helm(config: RefreshConfig) -> None:
-    """Annotate existing namespace resources so Helm can manage them."""
+    """Label and annotate existing namespace resources so Helm can manage them."""
     print("  Adopting existing resources for Helm...")
+    # "all" doesn't cover "route" (an OpenShift-specific resource), so it's
+    # listed explicitly alongside it.
     result = oc("get", "all,configmap,secret,route", "-n", config.namespace,
                 "-o", "name", capture=True, check=False)
     resources = [r for r in result.stdout.strip().splitlines() if r]
 
+    # Queried separately, not folded into the call above: cert-manager's
+    # Certificate CRD isn't part of "all" either, but unlike the core types
+    # above it isn't guaranteed to exist in every cluster this script runs
+    # against. An isolated call means a missing/unavailable CRD here can't
+    # affect the core resource types' own results. Confirmed live: a
+    # pre-existing "postgres-server" Certificate (created by a different
+    # Helm release earlier in this same refresh) was previously skipped by
+    # this sweep entirely and broke the osac release's own helm upgrade with
+    # "invalid ownership metadata" once it tried to manage that same-named
+    # Certificate.
+    cert_result = oc("get", "certificate.cert-manager.io", "-n", config.namespace,
+                      "-o", "name", capture=True, check=False)
+    if cert_result.returncode == 0:
+        resources += [r for r in cert_result.stdout.strip().splitlines() if r]
+    else:
+        print(f"  WARN: could not list certificate.cert-manager.io resources: "
+              f"{cert_result.stderr or cert_result.stdout}", file=sys.stderr)
+
     def _adopt(resource: str) -> None:
-        """Add Helm release metadata annotations to a single resource."""
+        """Add Helm release ownership label + metadata annotations to a single resource."""
+        # Helm's adoption check requires BOTH this label AND the two
+        # meta.helm.sh/* annotations below -- annotations alone (the
+        # previous behavior here) still fail with "missing key
+        # app.kubernetes.io/managed-by: must be set to Helm", confirmed live.
+        r = oc("label", resource, "-n", config.namespace,
+               "app.kubernetes.io/managed-by=Helm",
+               "--overwrite", check=False, capture=True)
+        if r.returncode != 0:
+            print(f"  WARN: failed to label {resource}: {r.stderr or r.stdout}", file=sys.stderr)
         r = oc("annotate", resource, "-n", config.namespace,
                "meta.helm.sh/release-name=osac",
                f"meta.helm.sh/release-namespace={config.namespace}",

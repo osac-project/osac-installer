@@ -1,0 +1,34 @@
+{{- if .Values.keycloakOperator.enabled }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: keycloak
+  labels:
+    {{- include "osac-operators.labels" . | nindent 4 }}
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: keycloak-operator
+  namespace: keycloak
+  labels:
+    {{- include "osac-operators.labels" . | nindent 4 }}
+spec:
+  targetNamespaces:
+    - keycloak
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: keycloak-operator
+  namespace: keycloak
+  labels:
+    {{- include "osac-operators.labels" . | nindent 4 }}
+spec:
+  name: keycloak-operator
+  source: community-operators
+  sourceNamespace: openshift-marketplace
+  channel: {{ .Values.keycloakOperator.channel }}
+  installPlanApproval: Manual
+  startingCSV: {{ .Values.keycloakOperator.startingCSV }}
+{{- end }}

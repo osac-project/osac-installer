@@ -5,6 +5,8 @@ trustManager:
   enabled: true
 caIssuer:
   enabled: true
+keycloakOperator:
+  enabled: true
 keycloak:
   enabled: true
 aapOperator:

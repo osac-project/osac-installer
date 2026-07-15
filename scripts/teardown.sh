@@ -128,7 +128,13 @@ fi
 echo "Deleting namespace ${INSTALLER_NAMESPACE}..."
 timeout 30 oc delete namespace "${INSTALLER_NAMESPACE}" --ignore-not-found --wait=false
 
-echo "Deleting Keycloak resources..."
+echo "Deleting Keycloak CRs..."
+if resource_type_exists keycloakrealmimport; then
+    timeout 30 oc delete keycloakrealmimport --all -n keycloak --ignore-not-found --wait=false
+fi
+if resource_type_exists keycloak; then
+    delete_cr keycloak osac-keycloak keycloak
+fi
 timeout 30 oc delete namespace keycloak --ignore-not-found --wait=false
 # Phase 3: Delete operator CRs while operators are still running
 #
@@ -207,6 +213,9 @@ done
 # All CRs are gone (or had finalizers removed), so operators can be safely removed.
 echo ""
 echo "Uninstalling operators..."
+
+echo "  Keycloak operator..."
+uninstall_operator keycloak keycloak-operator
 
 echo "  AAP operator..."
 uninstall_operator ansible-aap dev-ansible-automation-platform
@@ -304,7 +313,7 @@ if [[ "${STORAGE_SERVICE}" == "true" ]]; then
     timeout 30 oc delete csidriver topolvm.io --ignore-not-found
 fi
 
-CRD_PATTERN='cert-manager\.io|certmanagers\.operator|authorino|ansible\.com'
+CRD_PATTERN='cert-manager\.io|certmanagers\.operator|authorino|ansible\.com|keycloak\.org'
 if [[ "${VIRT_SERVICE}" == "true" ]]; then
     CRD_PATTERN="${CRD_PATTERN}|kubevirt\.io|networkaddonsoperator|hostpathprovisioner"
 fi

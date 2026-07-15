@@ -6,6 +6,8 @@ on:
 
 jobs:
   remove-label:
+    permissions:
+      pull-requests: write
     if: contains(github.event.pull_request.labels.*.name, 'ok-to-test')
     uses: osac-project/osac-test-infra/.github/workflows/ok-to-test-label-cleanup.yml@main
     secrets: inherit

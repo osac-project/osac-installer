@@ -24,7 +24,7 @@ aapOperator:
 
 lvms:
   enabled: false
-  channel: "stable-4.19"
+  channel: "stable-4.22"
 
 metallb:
   enabled: false
@@ -36,4 +36,4 @@ cnv:
 
 mce:
   enabled: false
-  channel: "stable-2.8"
+  channel: "stable-2.17"

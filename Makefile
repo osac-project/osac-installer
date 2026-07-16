@@ -35,9 +35,11 @@ wait-for-operators-namespaces: ## Wait for operator namespaces left Terminating 
 
 .PHONY: install-operators
 install-operators: wait-for-api wait-for-operators-namespaces ## Phase 1: Install OLM operators (cert-manager, AAP, LVMS, etc.)
+	$(eval OCP_VERSION := $(shell oc get clusterversion version -o jsonpath='{.status.desired.version}' | cut -d. -f1,2))
 	helm upgrade --install osac-operators charts/osac-operators/ \
 		--namespace osac-operators --create-namespace \
 		--values $(VALUES_FILE) \
+		--set lvms.channel=stable-$(OCP_VERSION) \
 		--timeout 30m --wait
 
 .PHONY: wait-for-prereqs-namespaces
@@ -46,10 +48,12 @@ wait-for-prereqs-namespaces: ## Wait for the keycloak namespace left Terminating
 
 .PHONY: install-prereqs
 install-prereqs: wait-for-prereqs-namespaces ## Phase 2: Configure prerequisites (certificates, keycloak, operator CRs)
+	$(eval OCP_VERSION := $(shell oc get clusterversion version -o jsonpath='{.status.desired.version}' | cut -d. -f1,2))
 	helm upgrade --install osac-prereqs charts/osac-prereqs/ \
 		--namespace osac-prereqs --create-namespace \
 		--values $(VALUES_FILE) \
 		--set osacNamespace=$(INSTALLER_NAMESPACE) \
+		--set lvms.channel=stable-$(OCP_VERSION) \
 		--timeout 30m --wait-for-jobs
 
 AAP_LICENSE_FILE ?= $(dir $(VALUES_FILE))license.zip

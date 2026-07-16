@@ -232,43 +232,6 @@ _verify_postgres_endpoints() {
         -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .
 }
 
-readonly POSTGRES_IT_CHART="base/osac-fulfillment-service/it/charts/postgres/"
-
-# CI-only: deploy the integration-test postgres chart when bundledPostgres is enabled
-# but the postgres Service has no ready endpoints (e.g. e2e-full-install from a bare
-# OpenShift flavor). Mirrors maybe_upgrade_fulfillment_db() in refresh-after-snapshot.py.
-# Production installs with bundledPostgres disabled use operator-managed Postgres per
-# INSTALL.md; snapshot refresh uses the Python helper instead of this function.
-maybe_deploy_ci_postgres() {
-    local namespace="$1"
-    local values_file="$2"
-    local repo_root bundled_status
-
-    repo_root="$(cd "${_LIB_DIR}/.." && pwd)"
-    _bundled_postgres_enabled "${values_file}"
-    bundled_status=$?
-    if [[ ${bundled_status} -eq 2 ]]; then
-        _postgres_prereq_error "Values file ${values_file} not found or unreadable."
-    elif [[ ${bundled_status} -ne 0 ]]; then
-        return 0
-    fi
-
-    if _verify_postgres_endpoints "postgres" "${namespace}"; then
-        echo "PostgreSQL already available, skipping CI postgres deploy"
-        return 0
-    fi
-
-    echo "Deploying CI PostgreSQL (${POSTGRES_IT_CHART}) for bundledPostgres..."
-    helm upgrade --install fulfillment-db "${repo_root}/${POSTGRES_IT_CHART}" \
-        --namespace "${namespace}" \
-        --set certs.issuerRef.name=default-ca \
-        --set certs.caBundle.configMap=ca-bundle \
-        --set "databases[0].name=service" \
-        --set "databases[0].user=service" \
-        --timeout 5m \
-        --wait
-}
-
 # Verify in-cluster PostgreSQL is deployed before Helm install.
 # Usage: check_postgres_prerequisites <namespace> <values_file>
 check_postgres_prerequisites() {

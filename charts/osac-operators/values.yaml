@@ -9,7 +9,7 @@ trustManager:
 
 aapOperator:
   enabled: true
-  channel: stable-2.5-cluster-scoped
+  channel: stable-2.6-cluster-scoped
 
 lvms:
   enabled: false

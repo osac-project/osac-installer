@@ -29,7 +29,7 @@ metadata:
   name: dev-ansible-automation-platform
   namespace: ansible-aap
 spec:
-  channel: stable-2.5-cluster-scoped
+  channel: stable-2.6-cluster-scoped
   installPlanApproval: Automatic
   name: ansible-automation-platform-operator
   source: redhat-operators

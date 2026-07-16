@@ -5,6 +5,9 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "osac-prereqs.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
 data:
   {{- range $path, $_ := .Files.Glob "files/hooks/*.sh" }}
   {{ $path | base }}: |

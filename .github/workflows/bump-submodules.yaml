@@ -1,0 +1,134 @@
+name: Bump submodules
+
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          submodules: true
+          fetch-depth: 0
+          token: ${{ secrets.OSAC_BOT_PAT }}
+
+      - name: Check latest commits have published images
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.OSAC_BOT_PAT }}
+        run: |
+          set -euo pipefail
+
+          check_image() {
+            local repo=$1
+            local image=$2
+            local sha
+            sha=$(gh api "repos/osac-project/${repo}/commits?sha=main&per_page=1" --jq '.[0].sha')
+            local tag="sha-${sha:0:7}"
+            local token
+            token=$(curl -sf "https://ghcr.io/token?scope=repository:osac-project/${image}:pull" | jq -r .token)
+            local code
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer ${token}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
+              "https://ghcr.io/v2/osac-project/${image}/manifests/${tag}")
+            if [[ "${code}" != "200" ]]; then
+              echo "ERROR: ${repo} latest main commit ${sha:0:7} has no published image (tag ${tag})" >&2
+              return 1
+            fi
+            echo "${sha}"
+          }
+
+          OPERATOR=$(check_image osac-operator osac-operator)
+          FULFILLMENT=$(check_image fulfillment-service fulfillment-service)
+          AAP=$(check_image osac-aap osac-aap)
+          UI=$(check_image osac-ui osac-ui)
+
+          echo "operator=${OPERATOR}" >> "$GITHUB_OUTPUT"
+          echo "fulfillment=${FULFILLMENT}" >> "$GITHUB_OUTPUT"
+          echo "aap=${AAP}" >> "$GITHUB_OUTPUT"
+          echo "ui=${UI}" >> "$GITHUB_OUTPUT"
+
+      - name: Update submodules
+        id: update
+        run: |
+          changed=false
+          summary=""
+
+          update_submodule() {
+            local path=$1
+            local name=$2
+            local target=$3
+            local current
+            current=$(git -C "${path}" rev-parse HEAD)
+            if [[ "${current}" == "${target}" ]]; then
+              echo "${name}: already at ${target:0:7}"
+              return
+            fi
+            git -C "${path}" fetch origin
+            git -C "${path}" checkout "${target}"
+            changed=true
+            local count
+            count=$(git -C "${path}" rev-list --count "${current}..${target}" 2>/dev/null || echo "?")
+            summary="${summary}- **${name}**: ${current:0:7} → ${target:0:7} (${count} commits)\n"
+            echo "${name}: ${current:0:7} -> ${target:0:7}"
+          }
+
+          update_submodule base/osac-operator osac-operator "${{ steps.find.outputs.operator }}"
+          update_submodule base/osac-fulfillment-service fulfillment-service "${{ steps.find.outputs.fulfillment }}"
+          update_submodule base/osac-aap osac-aap "${{ steps.find.outputs.aap }}"
+          update_submodule base/osac-ui osac-ui "${{ steps.find.outputs.ui }}"
+
+          echo "changed=${changed}" >> "$GITHUB_OUTPUT"
+          echo -e "${summary}" > /tmp/bump-summary.txt
+
+      - name: Sync image tags
+        if: steps.update.outputs.changed == 'true'
+        run: ./scripts/sync-image-tags.sh --fix
+
+      - name: Create or update PR
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.OSAC_BOT_PAT }}
+        run: |
+          BRANCH="auto/bump-submodules"
+          git config user.name "osac-dev-bot"
+          git config user.email "osac-dev-bot@users.noreply.github.com"
+          git add -A
+
+          # Skip if bump branch already has identical content
+          git fetch origin "${BRANCH}" || true
+          EXISTING_TREE=$(git rev-parse "refs/remotes/origin/${BRANCH}^{tree}" || echo "")
+          NEW_TREE=$(git write-tree)
+          if [[ -n "${EXISTING_TREE}" && "${NEW_TREE}" == "${EXISTING_TREE}" ]]; then
+            echo "Bump branch already up to date, skipping"
+            exit 0
+          fi
+
+          git commit -m "bump submodules to latest with published images"
+          git push origin "HEAD:${BRANCH}" --force
+
+          BODY=$(cat <<BODY_EOF
+          ## Automated submodule bump
+
+          $(cat /tmp/bump-summary.txt)
+
+          Only bumps to commits that have a published container image in GHCR.
+          Runs every 3 hours via [bump-submodules workflow](../actions/workflows/bump-submodules.yaml).
+          BODY_EOF
+          )
+
+          EXISTING=$(gh pr list --head "${BRANCH}" --json number --jq '.[0].number // empty')
+          if [[ -n "${EXISTING}" ]]; then
+            gh pr edit "${EXISTING}" --body "${BODY}"
+            echo "Updated existing PR #${EXISTING}"
+          else
+            gh pr create \
+              --title "bump submodules" \
+              --body "${BODY}" \
+              --base main \
+              --head "${BRANCH}"
+          fi

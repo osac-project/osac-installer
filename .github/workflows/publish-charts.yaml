@@ -1,0 +1,240 @@
+name: Publish Helm Charts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Chart version (without v prefix, e.g. 0.0.1). Defaults to git tag.'
+        required: false
+      operator_crds_version:
+        description: 'osac-operator-crds chart version (e.g. 0.0.1)'
+        required: true
+      operator_version:
+        description: 'osac-operator chart version (e.g. 0.0.1)'
+        required: true
+      service_version:
+        description: 'fulfillment-service chart version (e.g. 0.0.64)'
+        required: true
+      aap_version:
+        description: 'osac-aap chart version (e.g. 0.0.3)'
+        required: true
+      bmf_crds_version:
+        description: 'bare-metal-fulfillment-operator-crds chart version (e.g. 0.0.1)'
+        required: true
+      bmf_version:
+        description: 'bare-metal-fulfillment-operator chart version (e.g. 0.0.1)'
+        required: true
+      ui_version:
+        description: 'osac-ui chart version (e.g. 0.0.1)'
+        required: true
+
+concurrency:
+  group: publish-charts-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  CHARTS_REPO: ${{ github.repository_owner }}/charts
+
+jobs:
+  publish-osac-chart:
+    name: Publish osac umbrella chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
+      with:
+        persist-credentials: false
+
+    - name: Set up Helm
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
+      with:
+        version: v3.17.0
+
+    - name: Log in to GHCR
+      run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+    - name: Resolve versions
+      id: versions
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_CRDS_VERSION: ${{ inputs.operator_crds_version }}
+        INPUT_OPERATOR_VERSION: ${{ inputs.operator_version }}
+        INPUT_SERVICE_VERSION: ${{ inputs.service_version }}
+        INPUT_AAP_VERSION: ${{ inputs.aap_version }}
+        INPUT_BMF_CRDS_VERSION: ${{ inputs.bmf_crds_version }}
+        INPUT_BMF_VERSION: ${{ inputs.bmf_version }}
+        INPUT_UI_VERSION: ${{ inputs.ui_version }}
+      run: |
+        SEMVER_RE='^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$'
+
+        # Umbrella chart version: from input, or from git tag
+        if [ -n "${INPUT_VERSION}" ]; then
+          version="${INPUT_VERSION}"
+        else
+          version="${GITHUB_REF_NAME#v}"
+        fi
+
+        if ! [[ "${version}" =~ ${SEMVER_RE} ]]; then
+          echo "::error::Invalid semver for umbrella version: ${version}"
+          exit 1
+        fi
+
+        # Component versions: always from workflow_dispatch inputs (all required)
+        crds_ver="${INPUT_CRDS_VERSION}"
+        operator_ver="${INPUT_OPERATOR_VERSION}"
+        service_ver="${INPUT_SERVICE_VERSION}"
+        aap_ver="${INPUT_AAP_VERSION}"
+        bmf_crds_ver="${INPUT_BMF_CRDS_VERSION}"
+        bmf_ver="${INPUT_BMF_VERSION}"
+        ui_ver="${INPUT_UI_VERSION}"
+
+        # Validate all component versions
+        for pair in "osac-operator-crds:${crds_ver}" "osac-operator:${operator_ver}" "fulfillment-service:${service_ver}" "osac-aap:${aap_ver}" "bare-metal-fulfillment-operator-crds:${bmf_crds_ver}" "bare-metal-fulfillment-operator:${bmf_ver}" "osac-ui:${ui_ver}"; do
+          name="${pair%%:*}"
+          ver="${pair#*:}"
+          if ! [[ "${ver}" =~ ${SEMVER_RE} ]]; then
+            echo "::error::Invalid semver for ${name}: ${ver}"
+            exit 1
+          fi
+        done
+
+        echo "version=${version}" >> "$GITHUB_OUTPUT"
+        echo "crds_ver=${crds_ver}" >> "$GITHUB_OUTPUT"
+        echo "operator_ver=${operator_ver}" >> "$GITHUB_OUTPUT"
+        echo "service_ver=${service_ver}" >> "$GITHUB_OUTPUT"
+        echo "aap_ver=${aap_ver}" >> "$GITHUB_OUTPUT"
+        echo "bmf_crds_ver=${bmf_crds_ver}" >> "$GITHUB_OUTPUT"
+        echo "bmf_ver=${bmf_ver}" >> "$GITHUB_OUTPUT"
+        echo "ui_ver=${ui_ver}" >> "$GITHUB_OUTPUT"
+
+        echo "--- Resolved versions ---"
+        echo "Umbrella:           ${version}"
+        echo "osac-operator-crds: ${crds_ver}"
+        echo "osac-operator:      ${operator_ver}"
+        echo "fulfillment-service: ${service_ver}"
+        echo "osac-aap:           ${aap_ver}"
+        echo "bmf-operator-crds:  ${bmf_crds_ver}"
+        echo "bmf-operator:       ${bmf_ver}"
+        echo "osac-ui:            ${ui_ver}"
+
+    - name: Rewrite dependencies to OCI references
+      env:
+        CRDS_VER: ${{ steps.versions.outputs.crds_ver }}
+        OPERATOR_VER: ${{ steps.versions.outputs.operator_ver }}
+        SERVICE_VER: ${{ steps.versions.outputs.service_ver }}
+        AAP_VER: ${{ steps.versions.outputs.aap_ver }}
+        BMF_CRDS_VER: ${{ steps.versions.outputs.bmf_crds_ver }}
+        BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
+        UI_VER: ${{ steps.versions.outputs.ui_ver }}
+      run: |
+        cd charts/osac
+        OCI_REPO="oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}"
+
+        yq -i "
+          (.dependencies[] | select(.name == \"osac-operator-crds\")) .repository = \"${OCI_REPO}\" |
+          (.dependencies[] | select(.name == \"osac-operator-crds\")) .version = \"${CRDS_VER}\" |
+          (.dependencies[] | select(.name == \"osac-operator\")) .repository = \"${OCI_REPO}\" |
+          (.dependencies[] | select(.name == \"osac-operator\")) .version = \"${OPERATOR_VER}\" |
+          (.dependencies[] | select(.name == \"fulfillment-service\")) .repository = \"${OCI_REPO}\" |
+          (.dependencies[] | select(.name == \"fulfillment-service\")) .version = \"${SERVICE_VER}\" |
+          (.dependencies[] | select(.name == \"osac-aap\")) .repository = \"${OCI_REPO}\" |
+          (.dependencies[] | select(.name == \"osac-aap\")) .version = \"${AAP_VER}\" |
+          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator-crds\")) .repository = \"${OCI_REPO}\" |
+          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator-crds\")) .version = \"${BMF_CRDS_VER}\" |
+          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator\")) .repository = \"${OCI_REPO}\" |
+          (.dependencies[] | select(.name == \"bare-metal-fulfillment-operator\")) .version = \"${BMF_VER}\" |
+          (.dependencies[] | select(.name == \"osac-ui\")) .repository = \"${OCI_REPO}\" |
+          (.dependencies[] | select(.name == \"osac-ui\")) .version = \"${UI_VER}\"
+        " Chart.yaml
+
+        # Remove stale Chart.lock so helm pulls fresh from OCI
+        rm -f Chart.lock
+
+        echo "--- Updated Chart.yaml ---"
+        cat Chart.yaml
+
+    - name: Build dependencies from OCI
+      run: helm dependency build charts/osac/
+
+    - name: Update image tags in values.yaml
+      env:
+        OPERATOR_VER: ${{ steps.versions.outputs.operator_ver }}
+        SERVICE_VER: ${{ steps.versions.outputs.service_ver }}
+        AAP_VER: ${{ steps.versions.outputs.aap_ver }}
+        BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
+        UI_VER: ${{ steps.versions.outputs.ui_ver }}
+      run: |
+        yq -i "
+          .operator.image.tag = \"v${OPERATOR_VER}\" |
+          .bmf.image.tag = \"v${BMF_VER}\" |
+          .service.images.service = \"ghcr.io/osac-project/fulfillment-service:v${SERVICE_VER}\" |
+          .aap.bootstrap.image = \"ghcr.io/osac-project/osac-aap:v${AAP_VER}\" |
+          .ui.images.ui = \"ghcr.io/osac-project/osac-ui:v${UI_VER}\" |
+          .dbMigrate.image = \"ghcr.io/osac-project/fulfillment-service:v${SERVICE_VER}\"
+        " charts/osac/values.yaml
+
+        echo "--- Updated values.yaml image references ---"
+        grep -E "tag:|image:" charts/osac/values.yaml
+
+    - name: Package chart
+      env:
+        VERSION: ${{ steps.versions.outputs.version }}
+      run: |
+        helm package charts/osac/ \
+          --version "${VERSION}" \
+          --app-version "${VERSION}"
+
+    - name: Push chart to GHCR
+      env:
+        VERSION: ${{ steps.versions.outputs.version }}
+      run: |
+        helm push "osac-${VERSION}.tgz" \
+          oci://${{ env.REGISTRY }}/${{ env.CHARTS_REPO }}
+
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: ${{ steps.versions.outputs.version }}
+        OPERATOR_VER: ${{ steps.versions.outputs.operator_ver }}
+        CRDS_VER: ${{ steps.versions.outputs.crds_ver }}
+        SERVICE_VER: ${{ steps.versions.outputs.service_ver }}
+        AAP_VER: ${{ steps.versions.outputs.aap_ver }}
+        BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
+        BMF_CRDS_VER: ${{ steps.versions.outputs.bmf_crds_ver }}
+        UI_VER: ${{ steps.versions.outputs.ui_ver }}
+      run: |
+        BODY=$(mktemp)
+        cat > "$BODY" <<EOF
+        ## Component versions
+
+        | Component | Version | Chart | Release |
+        |-----------|---------|-------|---------|
+        | fulfillment-service | ${SERVICE_VER} | oci://ghcr.io/osac-project/charts/fulfillment-service | [v${SERVICE_VER}](https://github.com/osac-project/fulfillment-service/releases/tag/v${SERVICE_VER}) |
+        | osac-operator | ${OPERATOR_VER} | oci://ghcr.io/osac-project/charts/osac-operator | [v${OPERATOR_VER}](https://github.com/osac-project/osac-operator/releases/tag/v${OPERATOR_VER}) |
+        | osac-operator-crds | ${CRDS_VER} | oci://ghcr.io/osac-project/charts/osac-operator-crds | [v${CRDS_VER}](https://github.com/osac-project/osac-operator/releases/tag/v${CRDS_VER}) |
+        | osac-aap | ${AAP_VER} | oci://ghcr.io/osac-project/charts/osac-aap | [v${AAP_VER}](https://github.com/osac-project/osac-aap/releases/tag/v${AAP_VER}) |
+        | bare-metal-fulfillment-operator | ${BMF_VER} | oci://ghcr.io/osac-project/charts/bare-metal-fulfillment-operator | [v${BMF_VER}](https://github.com/osac-project/bare-metal-fulfillment-operator/releases/tag/v${BMF_VER}) |
+        | bare-metal-fulfillment-operator-crds | ${BMF_CRDS_VER} | oci://ghcr.io/osac-project/charts/bare-metal-fulfillment-operator-crds | [v${BMF_CRDS_VER}](https://github.com/osac-project/bare-metal-fulfillment-operator/releases/tag/v${BMF_CRDS_VER}) |
+        | osac-ui | ${UI_VER} | oci://ghcr.io/osac-project/charts/osac-ui | [v${UI_VER}](https://github.com/osac-project/osac-ui/releases/tag/v${UI_VER}) |
+
+        ## Install
+
+        \`\`\`bash
+        helm install osac oci://ghcr.io/osac-project/charts/osac --version ${VERSION}
+        \`\`\`
+        EOF
+        # Strip leading whitespace from heredoc (indented for YAML readability)
+        sed -i 's/^        //' "$BODY"
+
+        gh release create "v${VERSION}" \
+          --repo "${{ github.repository }}" \
+          --title "OSAC v${VERSION}" \
+          --notes-file "$BODY" \
+        || gh release edit "v${VERSION}" \
+          --repo "${{ github.repository }}" \
+          --notes-file "$BODY"
+        rm -f "$BODY"

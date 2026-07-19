@@ -110,7 +110,7 @@ done
 #
 # The operator must be alive to process finalizers on its CRs.
 echo "Deleting OSAC CRs..."
-for resource in computeinstance virtualnetwork subnet securitygroup publicippool clusterorder tenant; do
+for resource in computeinstance virtualnetwork subnet securitygroup externalippool clusterorder tenant; do
     if resource_type_exists "${resource}"; then
         for name in $(timeout 10 oc get "${resource}" -n "${INSTALLER_NAMESPACE}" --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null); do
             delete_cr "${resource}" "${name}" "${INSTALLER_NAMESPACE}"

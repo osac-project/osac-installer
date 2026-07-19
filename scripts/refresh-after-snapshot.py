@@ -798,15 +798,28 @@ def main() -> None:
     # Phase 3: Deploy + health check
     phase_start = time.time()
     print("[Phase 3] Deploying + waiting...")
+    # wait_aap_ready() must run BEFORE upgrade_osac(): the osac chart's
+    # publish-templates post-upgrade hook (charts/osac/templates/hooks/
+    # publish-templates.yaml) launches an AAP job template as part of
+    # `helm upgrade` itself (Helm blocks on hook completion) -- calling
+    # wait_aap_ready() only *after* upgrade_osac() returns is too late to
+    # help that hook, since by then it has already run (and can already
+    # have failed). Confirmed via a real dispatch on a fresh EC2 instance:
+    # AAP's operators (scaled up in Phase 1, but still needing a full,
+    # from-scratch image pull + CSV install on a box that's never run them
+    # before -- unlike a long-lived, pre-warmed debug box) were still mid-
+    # install (automation-controller-operator not yet available) when the
+    # hook tried to launch a job against it, so the job errored instantly
+    # (empty stdout) on every one of its 3 attempts until the hook's own
+    # backoffLimit was exhausted, failing `helm upgrade` outright.
+    wait_aap_ready(config)
     upgrade_osac(config)
-    run_parallel([
-        ("wait fulfillment", lambda: wait_fulfillment(config)),
-        ("wait AAP", lambda: wait_aap_ready(config)),
-    ])
+    wait_fulfillment(config)
     # Console-proxy hard-exits if its initial JWKS fetch returns non-200.
     # It CrashLoopBackOff's until grpc-server is serving. Normally recovers
-    # within ~70s (before the AAP wait above completes), so this adds ~0s.
-    # The 360s timeout covers worst-case backoff (300s cap) if timing is bad.
+    # within ~70s (before the fulfillment wait above completes), so this
+    # adds ~0s. The 360s timeout covers worst-case backoff (300s cap) if
+    # timing is bad.
     if oc_exists("deploy/fulfillment-console-proxy", config.namespace):
         print("  Waiting for console-proxy (depends on grpc-server)...")
         oc("rollout", "status", "deploy/fulfillment-console-proxy",

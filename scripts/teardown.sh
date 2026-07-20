@@ -93,8 +93,8 @@ if [[ "${VIRT_SERVICE}" == "true" ]]; then
     MWH_PATTERN="${MWH_PATTERN}|virt|hco"
 fi
 if [[ "${MCE_SERVICE}" == "true" ]]; then
-    VWH_PATTERN="${VWH_PATTERN}|multicluster|open-cluster-management|managedcluster"
-    MWH_PATTERN="${MWH_PATTERN}|multicluster|open-cluster-management|managedcluster"
+    VWH_PATTERN="${VWH_PATTERN}|multicluster|open-cluster-management|managedcluster|cluster-manager|hive|discovery|agent"
+    MWH_PATTERN="${MWH_PATTERN}|multicluster|open-cluster-management|managedcluster|cluster-manager|agent"
 fi
 
 echo "Removing webhooks..."
@@ -118,15 +118,26 @@ for resource in computeinstance virtualnetwork subnet securitygroup publicippool
     fi
 done
 # Phase 2: Delete application-level resources via Helm
-echo "Uninstalling OSAC Helm release..."
-if helm status osac -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
-    helm uninstall osac -n "${INSTALLER_NAMESPACE}" --wait --timeout 20m
-else
-    echo "  No Helm release found, skipping"
-fi
+echo "Uninstalling Helm releases..."
+for release_info in "osac:${INSTALLER_NAMESPACE}" "osac-prereqs:osac-prereqs" "osac-operators:osac-operators"; do
+    IFS=: read -r name ns <<< "${release_info}"
+    if helm status "${name}" -n "${ns}" &>/dev/null; then
+        echo "  Uninstalling ${name}..."
+        helm uninstall "${name}" -n "${ns}" --no-hooks --wait --timeout 20m
+    else
+        echo "  No Helm release ${name} found, skipping"
+    fi
+done
 
 echo "Deleting namespace ${INSTALLER_NAMESPACE}..."
 timeout 30 oc delete namespace "${INSTALLER_NAMESPACE}" --ignore-not-found --wait=false
+
+echo "Deleting PVCs in OSAC namespaces..."
+for ns in "${INSTALLER_NAMESPACE}" keycloak osac-prereqs; do
+    if timeout 10 oc get namespace "${ns}" &>/dev/null; then
+        timeout 30 oc delete pvc --all -n "${ns}" --ignore-not-found --wait=false
+    fi
+done
 
 echo "Deleting Keycloak CRs..."
 if resource_type_exists keycloakrealmimport; then
@@ -158,6 +169,11 @@ if [[ "${MCE_SERVICE}" == "true" ]]; then
                 timeout 30 oc patch "${name}" --type=merge -p '{"metadata":{"finalizers":null}}'
             done
         fi
+    fi
+    echo "Deleting ClusterManager CR..."
+    if resource_type_exists clustermanager; then
+        timeout 30 oc patch clustermanager cluster-manager --type=merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+        timeout 30 oc delete clustermanager cluster-manager --ignore-not-found --wait=false
     fi
 fi
 
@@ -274,15 +290,15 @@ for api in $(timeout 10 oc get apiservice --no-headers 2>/dev/null | awk "/False
 done
 
 if [[ "${MCE_SERVICE}" == "true" ]]; then
-    echo "Cleaning up MCE-managed namespaces..."
-    for ns in hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory; do
+    echo "Cleaning up MCE-managed and OSAC helm namespaces..."
+    for ns in osac-prereqs osac-operators hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory; do
         if timeout 10 oc get namespace "${ns}" &>/dev/null; then
             timeout 30 oc delete namespace "${ns}" --ignore-not-found --wait=false
         fi
     done
 fi
 
-NS_WAIT_LIST=("${INSTALLER_NAMESPACE}" keycloak ansible-aap cert-manager cert-manager-operator)
+NS_WAIT_LIST=("${INSTALLER_NAMESPACE}" keycloak ansible-aap cert-manager cert-manager-operator osac-prereqs osac-operators)
 if [[ "${MCE_SERVICE}" == "true" ]]; then
     NS_WAIT_LIST+=(multicluster-engine hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory)
 fi
@@ -324,7 +340,7 @@ if [[ "${INGRESS_SERVICE}" == "true" ]]; then
     CRD_PATTERN="${CRD_PATTERN}|metallb\.io"
 fi
 if [[ "${MCE_SERVICE}" == "true" ]]; then
-    CRD_PATTERN="${CRD_PATTERN}|agentserviceconfig|multicluster|open-cluster-management|hive\.openshift|hiveinternal|agent-install|hypershift"
+    CRD_PATTERN="${CRD_PATTERN}|agentserviceconfig|multicluster|open-cluster-management|hive\.openshift|hiveinternal|agent-install|hypershift|cluster\.x-k8s|addon\.open-cluster"
 fi
 
 echo "Final CRD cleanup (retries until all gone)..."

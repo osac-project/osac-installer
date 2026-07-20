@@ -22,17 +22,6 @@ data:
 {{ .Files.Get "files/access.conf" | indent 4 }}
 ---
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: keycloak-realm
-  namespace: keycloak
-  labels:
-    {{- include "osac-prereqs.labels" . | nindent 4 }}
-data:
-  realm.json: |
-{{ .Files.Get "files/realm.json" | indent 4 }}
----
-apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: keycloak-database
@@ -340,9 +329,11 @@ data:
     #!/bin/bash
     set -euo pipefail
 
+    KC_URL="https://keycloak:443"
+
     echo "Waiting for Keycloak to be ready..."
     for i in $(seq 1 120); do
-      if curl -k -sf https://keycloak:443/realms/osac; then
+      if curl -k -sf "${KC_URL}/realms/osac"; then
         echo "Keycloak is ready!"
         break
       fi
@@ -350,23 +341,67 @@ data:
       sleep 5
     done
 
-    set_password() {
-      local username=$1
-      local password=$2
-
-      TOKEN=$(curl -k -sf -X POST https://keycloak:443/realms/master/protocol/openid-connect/token \
+    get_admin_token() {
+      curl -k -sf -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
         -H 'Content-Type: application/x-www-form-urlencoded' \
         -d 'grant_type=password' \
         -d 'client_id=admin-cli' \
         -d "username=${KEYCLOAK_ADMIN}" \
-        -d "password=${KEYCLOAK_ADMIN_PASSWORD}" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+        -d "password=${KEYCLOAK_ADMIN_PASSWORD}" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])"
+    }
+
+    TOKEN=$(get_admin_token)
+    [[ -n "${TOKEN}" ]] || { echo "ERROR: Could not get admin token"; exit 1; }
+
+    echo "Creating admin/admin user in master realm..."
+    EXISTING=$(curl -k -sf "${KC_URL}/admin/realms/master/users?username=admin&exact=true" \
+      -H "Authorization: Bearer ${TOKEN}" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+    if [[ "${EXISTING}" == "0" ]]; then
+      curl -k -sf -X POST "${KC_URL}/admin/realms/master/users" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"username":"admin","enabled":true,"credentials":[{"type":"password","value":"admin","temporary":false}]}'
+      ADMIN_ID=$(curl -k -sf "${KC_URL}/admin/realms/master/users?username=admin&exact=true" \
+        -H "Authorization: Bearer ${TOKEN}" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+      ADMIN_ROLE=$(curl -k -sf "${KC_URL}/admin/realms/master/roles/admin" \
+        -H "Authorization: Bearer ${TOKEN}")
+      curl -k -sf -X POST "${KC_URL}/admin/realms/master/users/${ADMIN_ID}/role-mappings/realm" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "[${ADMIN_ROLE}]"
+      echo "  Created admin user with admin role"
+    else
+      echo "  admin user already exists, skipping"
+    fi
+
+    echo "Creating test organizations in osac realm..."
+    for ORG in shared system tenant1 tenant2; do
+      HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" -X POST \
+        "${KC_URL}/admin/realms/osac/organizations" \
+        -H "Authorization: Bearer ${TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"${ORG}\",\"enabled\":true}")
+      if [[ "${HTTP_CODE}" == "201" ]]; then
+        echo "  Created organization: ${ORG}"
+      elif [[ "${HTTP_CODE}" == "409" ]]; then
+        echo "  Organization ${ORG} already exists, skipping"
+      else
+        echo "  WARNING: Unexpected response ${HTTP_CODE} creating ${ORG}"
+      fi
+    done
+
+    set_password() {
+      local username=$1
+      local password=$2
+
+      TOKEN=$(get_admin_token)
       [[ -n "${TOKEN}" ]] || { echo "ERROR: Could not get admin token"; return 1; }
 
-      USER_ID=$(curl -k -sf -X GET "https://keycloak:443/admin/realms/osac/users?username=$username" \
+      USER_ID=$(curl -k -sf -X GET "${KC_URL}/admin/realms/osac/users?username=$username" \
         -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
       [[ -n "${USER_ID}" ]] || { echo "ERROR: Could not find user: $username"; return 1; }
 
-      curl -k -sf -X PUT "https://keycloak:443/admin/realms/osac/users/$USER_ID/reset-password" \
+      curl -k -sf -X PUT "${KC_URL}/admin/realms/osac/users/$USER_ID/reset-password" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"type\":\"password\",\"value\":\"$password\",\"temporary\":false}"

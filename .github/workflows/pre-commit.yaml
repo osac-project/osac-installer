@@ -11,9 +11,36 @@ on:
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-    - uses: actions/checkout@v7.0.0
-    - uses: actions/setup-python@v6
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
       with:
         python-version: "3.13"
-    - uses: pre-commit/action@v3.0.1
+    - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
+
+    - name: Load gitleaks config from base branch
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -euo pipefail
+        git show "${BASE_SHA}:.gitleaks.toml" > /tmp/gitleaks-base.toml
+
+    - name: Scan PR diff for secrets (gitleaks)
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        set -euo pipefail
+        docker run --rm \
+          -v "${PWD}:/repo" \
+          -v /tmp/gitleaks-base.toml:/config/.gitleaks.toml:ro \
+          ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+          git --config=/config/.gitleaks.toml \
+          --log-opts="${BASE_SHA}..${HEAD_SHA}" \
+          --ignore-gitleaks-allow \
+          --redact --verbose --exit-code 1 /repo

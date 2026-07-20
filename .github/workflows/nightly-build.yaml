@@ -163,7 +163,7 @@ jobs:
     needs: prepare
     permissions:
       contents: read
-    uses: osac-project/osac-test-infra/.github/workflows/e2e-vmaas-full-install.yml@cf738faa86961fd8509697d2caa9613310a921a6  # main
+    uses: osac-project/osac-test-infra/.github/workflows/e2e-vmaas-full-install.yml@9e2772a61f24acfac8397002d883e5bb77edbaa0  # main
     with:
       test-suite: vmaas
       installer-repo: ${{ github.repository }}

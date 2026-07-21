@@ -5,7 +5,10 @@ All OSAC pods are at zero replicas. This script:
   1. Starts slow operators (AAP) early + fixes cluster identity
   2. Prepares the environment (Keycloak, secrets, CA bundle, DB)
   3. Deploys via helm upgrade + waits with health monitoring
-  4. Runs post-flight configuration (AAP token, hub, tenants)
+
+Hub registration, template publishing, and AAP token creation are handled by
+Helm hooks that fire during the Phase 3 upgrade -- no separate post-flight
+step needed.
 
 Fail fast: any error aborts immediately. CrashLoopBackOff/ImagePullBackOff
 detected during rollout waits.
@@ -15,7 +18,6 @@ from __future__ import annotations
 
 import base64
 import json
-import re
 import os
 import subprocess
 import sys
@@ -47,8 +49,6 @@ class RefreshConfig:
     values_file: str
     namespace: str
     cluster_domain: str
-    vm_template: str = ""
-    cluster_template: str = ""
     keycloak_ns: str = "keycloak"
     realm_json: str = "prerequisites/keycloak/service/files/realm.json"
     aap_stale_ts: str = field(default="", init=False)
@@ -474,9 +474,15 @@ def create_secrets(config: RefreshConfig) -> None:
     if not fc_client:
         raise RuntimeError("No client with serviceAccountsEnabled in realm.json")
     fc_id: str = fc_client["clientId"]
-    fc_secret: str = fc_client.get("secret", "")
+
+    # realm.json ships with an __OSAC_CONTROLLER_CLIENT_SECRET__-style placeholder;
+    # the real value lives in keycloak-client-secrets (see resolve-realm-secrets.sh,
+    # which substitutes this same secret into the realm Keycloak actually imports).
+    secret_result = oc("get", "secret", "keycloak-client-secrets", "-n", config.keycloak_ns,
+                       "-o", f"jsonpath={{.data.{fc_id}}}", capture=True)
+    fc_secret = base64.b64decode(secret_result.stdout.strip()).decode()
     if not fc_secret:
-        raise RuntimeError(f"No secret for client {fc_id} in realm.json")
+        raise RuntimeError(f"No key '{fc_id}' in keycloak-client-secrets -n {config.keycloak_ns}")
 
     oc_apply_secret("fulfillment-controller-credentials", config.namespace,
                     f"--from-literal=client-id={fc_id}",
@@ -500,8 +506,59 @@ def create_secrets(config: RefreshConfig) -> None:
 
 
 def ensure_ca_bundle(config: RefreshConfig) -> None:
-    """Ensure the cluster CA bundle ConfigMap exists in the install namespace."""
-    run([str(SCRIPT_DIR / "ensure-ca-bundle.sh"), config.namespace])
+    """Ensure the cluster CA bundle Bundle exists and covers the install namespace.
+
+    The Bundle is cluster-scoped and shared across deployments, but
+    osac-prereqs' own ca-issuer.yaml template only ever sets a single static
+    namespace (.Values.osacNamespace) at chart-install time -- it doesn't
+    additively cover a snapshot refresh into a differently-named namespace.
+    Reimplements the old scripts/ensure-ca-bundle.sh (deleted by PR #404,
+    which left this function's only caller pointed at a nonexistent file).
+    """
+    namespace = config.namespace
+    if oc_exists("bundle/ca-bundle"):
+        bundle = oc_json("get", "bundle", "ca-bundle")
+        values = bundle["spec"]["target"]["namespaceSelector"]["matchExpressions"][0]["values"]
+        if namespace not in values:
+            print(f"  Adding {namespace} to ca-bundle namespace selector...")
+            patch = [{
+                "op": "add",
+                "path": "/spec/target/namespaceSelector/matchExpressions/0/values/-",
+                "value": namespace,
+            }]
+            oc("patch", "bundle", "ca-bundle", "--type=json", "-p", json.dumps(patch))
+    else:
+        print(f"  Creating ca-bundle Bundle targeting {namespace}...")
+        manifest = f"""apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: ca-bundle
+spec:
+  sources:
+  - secret:
+      name: "default-ca"
+      key: "ca.crt"
+  target:
+    configMap:
+      key: bundle.pem
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        - {namespace}
+"""
+        result = subprocess.run(
+            ["oc", "apply", "-f", "-"],
+            input=manifest, text=True, capture_output=True, cwd=str(REPO_ROOT),
+        )
+        if result.returncode != 0:
+            print("ERROR: oc apply bundle/ca-bundle failed", file=sys.stderr)
+            if result.stderr:
+                print(f"  stderr: {result.stderr.rstrip()}", file=sys.stderr)
+            raise subprocess.CalledProcessError(
+                result.returncode, ["oc", "apply", "-f", "-"],
+                output=result.stdout, stderr=result.stderr)
 
 
 def wait_tls_certs(config: RefreshConfig) -> None:
@@ -545,131 +602,29 @@ def find_csv(*, namespace: str, deploy_name: str) -> str:
     raise RuntimeError(f"CSV not found for deployment {deploy_name} in {namespace}")
 
 
-# Postgres target resolution for vmaas snapshot refresh (CI-only test chart path).
-# Production install uses the Bash helpers in scripts/lib.sh
-# (check_postgres_prerequisites and related functions). Keep both in sync when
-# changing URL parsing or endpoint checks.
-
-def _bundled_postgres_enabled(values_file: str) -> bool:
-    """Return True when bundledPostgres.enabled is true in the Helm values file."""
-    in_section = False
-    path = REPO_ROOT / values_file
-    for line in path.read_text().splitlines():
-        if line.startswith("bundledPostgres:"):
-            in_section = True
-            continue
-        if in_section and line and not line[0].isspace() and not line.lstrip().startswith("#"):
-            in_section = False
-        if in_section and re.match(r"^\s+enabled:\s*true\s*$", line.split("#", 1)[0]):
-            return True
-    return False
-
-
-def _parse_db_host_from_url(url: str) -> str:
-    """Extract the hostname from a postgres:// or postgresql:// URL."""
-    if url.startswith("postgresql://"):
-        url = "postgres://" + url.removeprefix("postgresql://")
-    elif not url.startswith("postgres://"):
-        raise ValueError("invalid PostgreSQL URL scheme")
-    hostport = url.removeprefix("postgres://")
-    if "@" in hostport:
-        hostport = hostport.split("@", 1)[1]
-    hostport = hostport.split("/", 1)[0].split("?", 1)[0]
-    return hostport.split(":", 1)[0]
-
-
-def _resolve_postgres_service(host: str, install_namespace: str) -> tuple[str, str] | None:
-    """Map a DB hostname to a Kubernetes Service name and namespace."""
-    if not host:
-        return None
-    if "." not in host:
-        return host, install_namespace
-    parts = host.split(".")
-    for i, part in enumerate(parts):
-        if part == "svc" and i >= 2:
-            return parts[0], parts[1]
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return None
-
-
-def _service_has_ready_endpoints(service: str, namespace: str) -> bool:
-    """Return True when the Service has at least one ready endpoint address."""
-    result = oc(
-        "get", "endpoints", service, "-n", namespace,
-        "-o", "jsonpath={.subsets[0].addresses[0].ip}",
-        capture=True, check=False,
-    )
-    return result.returncode == 0 and bool(result.stdout.strip())
-
-
-def _postgres_target(config: RefreshConfig) -> tuple[str, str]:
-    """Resolve the PostgreSQL Service and namespace for snapshot refresh."""
-    if _bundled_postgres_enabled(config.values_file):
-        return "postgres", config.namespace
-    result = oc(
-        "get", "secret", "fulfillment-db", "-n", config.namespace,
-        "-o", "jsonpath={.data.url}",
-        capture=True, check=False,
-    )
-    if result.returncode == 0 and result.stdout.strip():
-        try:
-            url = base64.b64decode(result.stdout.strip()).decode()
-            resolved = _resolve_postgres_service(
-                _parse_db_host_from_url(url), config.namespace,
-            )
-        except (ValueError, UnicodeDecodeError):
-            resolved = None
-        if resolved:
-            return resolved
-    return "postgres", config.namespace
-
-
-def upgrade_fulfillment_db(config: RefreshConfig) -> None:
-    """Deploy the integration-test postgres chart for vmaas snapshot refresh.
-
-    Production installs use operator-managed Postgres (see setup.sh). This path
-    exists only for CI clusters booted from snapshots that expect postgres:5432.
-    """
-    print("  Upgrading fulfillment-db...")
-    run(["helm", "upgrade", "--install", "fulfillment-db",
-         "base/osac-fulfillment-service/it/charts/postgres/",
-         "--namespace", config.namespace,
-         "--set", "certs.issuerRef.name=default-ca",
-         "--set", "certs.caBundle.configMap=ca-bundle",
-         "--set", "databases[0].name=service",
-         "--set", "databases[0].user=service",
-         "--timeout", "5m", "--wait"])
-
-
-def maybe_upgrade_fulfillment_db(config: RefreshConfig) -> None:
-    """Deploy the test postgres chart when no ready DB endpoints are present."""
-    service, target_namespace = _postgres_target(config)
-    if _service_has_ready_endpoints(service, target_namespace):
-        print("  PostgreSQL already available, skipping fulfillment-db upgrade")
-        return
-    upgrade_fulfillment_db(config)
-
 
 def adopt_resources_for_helm(config: RefreshConfig) -> None:
-    """Annotate existing namespace resources so Helm can manage them."""
-    print("  Adopting existing resources for Helm...")
-    result = oc("get", "all,configmap,secret,route", "-n", config.namespace,
-                "-o", "name", capture=True, check=False)
-    resources = [r for r in result.stdout.strip().splitlines() if r]
+    """Adopt vast-tenant-config-* secrets for Helm.
 
-    def _adopt(resource: str) -> None:
-        """Add Helm release metadata annotations to a single resource."""
-        r = oc("annotate", resource, "-n", config.namespace,
-               "meta.helm.sh/release-name=osac",
-               f"meta.helm.sh/release-namespace={config.namespace}",
-               "--overwrite", check=False, capture=True)
-        if r.returncode != 0:
-            print(f"  WARN: failed to adopt {resource}: {r.stderr or r.stdout}", file=sys.stderr)
-
-    with ThreadPoolExecutor(max_workers=20) as pool:
-        list(pool.map(_adopt, resources))
-    print(f"  Adopted {len(resources)} resources")
+    The osac-operator chart creates these as empty shells (tenants.yaml
+    template), then AAP's storage_provider role deletes and recreates them
+    with real credentials -- wiping Helm's ownership metadata in the
+    process. Without re-adopting them, the next helm upgrade refuses to
+    import them back into the release.
+    """
+    result = oc("get", "secret", "-n", config.namespace, "-o", "name", capture=True)
+    resources = [r for r in result.stdout.strip().splitlines()
+                 if r.startswith("secret/vast-tenant-config-")]
+    if not resources:
+        return
+    print(f"  Adopting {len(resources)} tenant secret(s) for Helm...")
+    for resource in resources:
+        oc("label", resource, "-n", config.namespace,
+           "app.kubernetes.io/managed-by=Helm", "--overwrite")
+        oc("annotate", resource, "-n", config.namespace,
+           "meta.helm.sh/release-name=osac",
+           f"meta.helm.sh/release-namespace={config.namespace}",
+           "--overwrite")
 
 
 def upgrade_osac(config: RefreshConfig) -> None:
@@ -788,42 +743,6 @@ def fix_assisted_service() -> None:
         oc("rollout", "restart", "statefulset/assisted-image-service", "-n", "multicluster-engine")
 
 
-# ─── Phase 4: Post-flight ───────────────────────────────────────────────────
-
-
-def post_flight(config: RefreshConfig) -> None:
-    """Run post-deploy prepare scripts and wait for fulfillment rollouts."""
-    oc("config", "set-context", "--current", f"--namespace={config.namespace}")
-
-    os.environ["INSTALLER_NAMESPACE"] = config.namespace
-    os.environ["SKIP_TOKEN_CONFIG_PATCH"] = "1"
-    if config.vm_template:
-        os.environ["INSTALLER_VM_TEMPLATE"] = config.vm_template
-    if config.cluster_template:
-        os.environ["INSTALLER_CLUSTER_TEMPLATE"] = config.cluster_template
-
-    print("  Running prepare-aap.sh...")
-    run([str(SCRIPT_DIR / "prepare-aap.sh")])
-
-    # publish-templates must run because the fulfillment database is recreated
-    # on every refresh (bare Pod with emptyDir — data lost on scale-to-zero).
-    print("  Running prepare-fulfillment-service.sh...")
-    run([str(SCRIPT_DIR / "prepare-fulfillment-service.sh")])
-
-    print("  Waiting for fulfillment rollouts after env update...")
-    deploys = oc_json("get", "deploy", "-n", config.namespace,
-                      "-l", "app=fulfillment-service")
-    for d in deploys["items"]:
-        name: str = d["metadata"]["name"]
-        wait_rollout_healthy(name, config.namespace, timeout=300)
-
-    print("  Running prepare-tenant.sh...")
-    run([str(SCRIPT_DIR / "prepare-tenant.sh")])
-
-    for key in ["INSTALLER_NAMESPACE", "SKIP_TOKEN_CONFIG_PATCH",
-                "INSTALLER_VM_TEMPLATE", "INSTALLER_CLUSTER_TEMPLATE"]:
-        os.environ.pop(key, None)
-
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
@@ -843,8 +762,6 @@ def main() -> None:
         values_file=values_file,
         namespace=namespace,
         cluster_domain=cluster_domain,
-        vm_template=os.environ.get("INSTALLER_VM_TEMPLATE", ""),
-        cluster_template=os.environ.get("INSTALLER_CLUSTER_TEMPLATE", ""),
     )
 
     start_time = time.time()
@@ -875,22 +792,34 @@ def main() -> None:
         ("create secrets", lambda: create_secrets(config)),
         ("ensure CA bundle", lambda: ensure_ca_bundle(config)),
         ("wait TLS certs", lambda: wait_tls_certs(config)),
-        ("upgrade fulfillment-db", lambda: maybe_upgrade_fulfillment_db(config)),
     ])
     print(f"[Phase 2] Done ({time.time() - phase_start:.0f}s)\n")
 
     # Phase 3: Deploy + health check
     phase_start = time.time()
     print("[Phase 3] Deploying + waiting...")
+    # wait_aap_ready() must run BEFORE upgrade_osac(): the osac chart's
+    # publish-templates post-upgrade hook (charts/osac/templates/hooks/
+    # publish-templates.yaml) launches an AAP job template as part of
+    # `helm upgrade` itself (Helm blocks on hook completion) -- calling
+    # wait_aap_ready() only *after* upgrade_osac() returns is too late to
+    # help that hook, since by then it has already run (and can already
+    # have failed). Confirmed via a real dispatch on a fresh EC2 instance:
+    # AAP's operators (scaled up in Phase 1, but still needing a full,
+    # from-scratch image pull + CSV install on a box that's never run them
+    # before -- unlike a long-lived, pre-warmed debug box) were still mid-
+    # install (automation-controller-operator not yet available) when the
+    # hook tried to launch a job against it, so the job errored instantly
+    # (empty stdout) on every one of its 3 attempts until the hook's own
+    # backoffLimit was exhausted, failing `helm upgrade` outright.
+    wait_aap_ready(config)
     upgrade_osac(config)
-    run_parallel([
-        ("wait fulfillment", lambda: wait_fulfillment(config)),
-        ("wait AAP", lambda: wait_aap_ready(config)),
-    ])
+    wait_fulfillment(config)
     # Console-proxy hard-exits if its initial JWKS fetch returns non-200.
     # It CrashLoopBackOff's until grpc-server is serving. Normally recovers
-    # within ~70s (before the AAP wait above completes), so this adds ~0s.
-    # The 360s timeout covers worst-case backoff (300s cap) if timing is bad.
+    # within ~70s (before the fulfillment wait above completes), so this
+    # adds ~0s. The 360s timeout covers worst-case backoff (300s cap) if
+    # timing is bad.
     if oc_exists("deploy/fulfillment-console-proxy", config.namespace):
         print("  Waiting for console-proxy (depends on grpc-server)...")
         oc("rollout", "status", "deploy/fulfillment-console-proxy",
@@ -899,15 +828,6 @@ def main() -> None:
     print("  Running final pod health check...")
     check_all_pods(config.namespace)
     print(f"[Phase 3] Done ({time.time() - phase_start:.0f}s)\n")
-
-    # Phase 4: Post-flight (sequential)
-    # Snapshot restart counts now. Post-flight takes ~3 min — any pod whose
-    phase_start = time.time()
-    print("[Phase 4] Post-flight configuration...")
-    post_flight(config)
-    print("  Running final pod health check...")
-    check_all_pods(config.namespace)
-    print(f"[Phase 4] Done ({time.time() - phase_start:.0f}s)\n")
 
     total = time.time() - start_time
     print()

@@ -7,3 +7,9 @@ updates:
   schedule:
     # Check for updates to GitHub Actions every week
     interval: "weekly"
+  groups:
+    github-actions:
+      patterns:
+        - "*"
+  commit-message:
+    prefix: "NO-ISSUE"

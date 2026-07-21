@@ -1,3 +1,23 @@
+# --- Prerequisites ---
+certManager:
+  enabled: true
+trustManager:
+  enabled: true
+caIssuer:
+  enabled: true
+keycloak:
+  enabled: true
+aapOperator:
+  enabled: true
+lvms:
+  enabled: true
+metallb:
+  enabled: true
+cnv:
+  enabled: true
+mce:
+  enabled: false
+
 # OSAC VMaaS (VM-as-a-Service) CI Environment Values
 # VMaaS CI values
 
@@ -5,7 +25,7 @@
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-d6398e8
+    tag: sha-3bc1a78
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -22,7 +42,12 @@ operator:
     computeInstance: true
     tenant: true
     networking: true
-    storageController: true
+    storage: true
+  hubAccess:
+    enabled: true
+  tenants:
+  - name: shared
+  - name: osac-e2e-ci
 
 # --- Fulfillment Service ---
 service:
@@ -30,7 +55,7 @@ service:
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   variant: openshift
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-da39c1d
+    service: ghcr.io/osac-project/fulfillment-service:sha-ba8d567
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -87,7 +112,7 @@ service:
 ui:
   enabled: true
   images:
-    ui: ghcr.io/osac-project/osac-ui:sha-c116f2e
+    ui: ghcr.io/osac-project/osac-ui:sha-e5c4256
   api:
     fulfillment:
       certs:
@@ -106,15 +131,15 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-85c079e
+    image: ghcr.io/osac-project/osac-aap:sha-31666f2
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-85c079e"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-31666f2"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "85c079e5d254d93f8fca0f7ddd912b0c15899ab9"
+    projectGitBranch: "31666f2d09efc987d4ccd01b2c53ae4aa069bc23"
 
 # --- Validation ---
 validation:
@@ -124,13 +149,14 @@ validation:
 bmf:
   enabled: false
 
-# --- Database migration ---
-dbMigrate:
-  enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:sha-da39c1d
+# --- CI/dev only ---
+# Hub access: registers local cluster as a hub. Only for environments
+# where the fulfillment service and hub cluster are the same.
+hubAccess:
+  enabled: true
 
-# CI full-install: chart-managed DB secrets; setup.sh deploys the integration-test
-# postgres chart when the postgres Service has no ready endpoints (see lib.sh).
+# Bundled PostgreSQL: single-pod ephemeral database for testing.
+# Uses fsync=off — data is lost on restart. Not for production.
 bundledPostgres:
   enabled: true
   database:

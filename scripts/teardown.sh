@@ -86,13 +86,24 @@ uninstall_operator() {
 # Webhook services may be down (partial setup, crashed operator). The API server
 # hangs on every delete call that triggers a dead webhook. Remove them first so
 # all subsequent oc commands are safe.
+VWH_PATTERN='trust-manager|authorino|cert-manager'
+MWH_PATTERN='authorino'
+if [[ "${VIRT_SERVICE}" == "true" ]]; then
+    VWH_PATTERN="${VWH_PATTERN}|virt|hco|hostpath|ssp"
+    MWH_PATTERN="${MWH_PATTERN}|virt|hco"
+fi
+if [[ "${MCE_SERVICE}" == "true" ]]; then
+    VWH_PATTERN="${VWH_PATTERN}|multicluster|open-cluster-management|managedcluster"
+    MWH_PATTERN="${MWH_PATTERN}|multicluster|open-cluster-management|managedcluster"
+fi
+
 echo "Removing webhooks..."
 for wh in $(timeout 10 oc get validatingwebhookconfiguration --no-headers 2>/dev/null \
-    | awk '/virt|hco|trust-manager|cert-manager|hostpath|ssp|multicluster|open-cluster-management|managedcluster/ {print $1}'); do
+    | awk "/${VWH_PATTERN}/ {print \$1}"); do
     timeout 30 oc delete validatingwebhookconfiguration "${wh}" --ignore-not-found
 done
 for wh in $(timeout 10 oc get mutatingwebhookconfiguration --no-headers 2>/dev/null \
-    | awk '/virt|hco|multicluster|open-cluster-management|managedcluster/ {print $1}'); do
+    | awk "/${MWH_PATTERN}/ {print \$1}"); do
     timeout 30 oc delete mutatingwebhookconfiguration "${wh}" --ignore-not-found
 done
 # Phase 1: Delete OSAC CRs while the operator is still running
@@ -233,26 +244,51 @@ timeout 300 oc delete namespace cert-manager --ignore-not-found --timeout=300s
 # create additional CRDs that OLM doesn't track. CSIDriver topolvm.io has a
 # controller that recreates CRDs, so it must be removed before the CRD sweep.
 echo ""
-if timeout 10 oc get crd networkattachmentdefinitions.k8s.cni.cncf.io &>/dev/null; then
-    timeout 30 oc delete networkattachmentdefinition default -n openshift-ovn-kubernetes --ignore-not-found
+if [[ "${VIRT_SERVICE}" == "true" ]]; then
+    if timeout 10 oc get crd networkattachmentdefinitions.k8s.cni.cncf.io &>/dev/null; then
+        timeout 30 oc delete networkattachmentdefinition default -n openshift-ovn-kubernetes --ignore-not-found
+    fi
 fi
 rm -f /tmp/kubeconfig.hub-access*
 
 echo "Cleaning up stale API services..."
-for api in $(timeout 10 oc get apiservice --no-headers 2>/dev/null | awk '/False/ {print $1}'); do
+STALE_API_PATTERN='cert-manager'
+if [[ "${VIRT_SERVICE}" == "true" ]]; then
+    STALE_API_PATTERN="${STALE_API_PATTERN}|kubevirt|virt|cdi"
+fi
+if [[ "${MCE_SERVICE}" == "true" ]]; then
+    STALE_API_PATTERN="${STALE_API_PATTERN}|hive|cluster\.x-k8s|multicluster|agent-install"
+fi
+for api in $(timeout 10 oc get apiservice --no-headers 2>/dev/null | awk "/False/ && /${STALE_API_PATTERN}/ {print \$1}"); do
     echo "  Deleting stale apiservice ${api}..."
     timeout 30 oc delete apiservice "${api}" --ignore-not-found
 done
 
-echo "Cleaning up MCE-managed namespaces..."
-for ns in hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory; do
-    if timeout 10 oc get namespace "${ns}" &>/dev/null; then
-        timeout 30 oc delete namespace "${ns}" --ignore-not-found --wait=false
-    fi
-done
+if [[ "${MCE_SERVICE}" == "true" ]]; then
+    echo "Cleaning up MCE-managed namespaces..."
+    for ns in hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory; do
+        if timeout 10 oc get namespace "${ns}" &>/dev/null; then
+            timeout 30 oc delete namespace "${ns}" --ignore-not-found --wait=false
+        fi
+    done
+fi
+
+NS_WAIT_LIST=("${INSTALLER_NAMESPACE}" keycloak ansible-aap cert-manager cert-manager-operator)
+if [[ "${MCE_SERVICE}" == "true" ]]; then
+    NS_WAIT_LIST+=(multicluster-engine hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory)
+fi
+if [[ "${VIRT_SERVICE}" == "true" ]]; then
+    NS_WAIT_LIST+=(openshift-cnv)
+fi
+if [[ "${STORAGE_SERVICE}" == "true" ]]; then
+    NS_WAIT_LIST+=(openshift-storage)
+fi
+if [[ "${INGRESS_SERVICE}" == "true" ]]; then
+    NS_WAIT_LIST+=(metallb-system)
+fi
 
 echo "Waiting for all namespaces to be fully deleted..."
-for ns in "${INSTALLER_NAMESPACE}" keycloak ansible-aap multicluster-engine openshift-storage openshift-cnv metallb-system cert-manager cert-manager-operator hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory; do
+for ns in "${NS_WAIT_LIST[@]}"; do
     if timeout 10 oc get namespace "${ns}" &>/dev/null; then
         echo "  Waiting for namespace ${ns}..."
         if ! timeout 120 oc wait --for=delete "namespace/${ns}" --timeout=120s 2>/dev/null; then
@@ -263,10 +299,24 @@ for ns in "${INSTALLER_NAMESPACE}" keycloak ansible-aap multicluster-engine open
 done
 
 echo "Cleaning up cluster-scoped resources..."
-timeout 30 oc delete sc lvms-vg1 --ignore-not-found
-timeout 30 oc delete csidriver topolvm.io --ignore-not-found
+if [[ "${STORAGE_SERVICE}" == "true" ]]; then
+    timeout 30 oc delete sc lvms-vg1 --ignore-not-found
+    timeout 30 oc delete csidriver topolvm.io --ignore-not-found
+fi
 
-CRD_PATTERN='cert-manager\.io|certmanagers\.operator|ansible\.com|kubevirt\.io|networkaddonsoperator|hostpathprovisioner|metallb\.io|topolvm\.io|agentserviceconfig|multicluster|open-cluster-management|hive\.openshift|hiveinternal|agent-install|cluster\.x-k8s|hypershift|metal3\.io'
+CRD_PATTERN='cert-manager\.io|certmanagers\.operator|authorino|ansible\.com'
+if [[ "${VIRT_SERVICE}" == "true" ]]; then
+    CRD_PATTERN="${CRD_PATTERN}|kubevirt\.io|networkaddonsoperator|hostpathprovisioner"
+fi
+if [[ "${STORAGE_SERVICE}" == "true" ]]; then
+    CRD_PATTERN="${CRD_PATTERN}|topolvm\.io"
+fi
+if [[ "${INGRESS_SERVICE}" == "true" ]]; then
+    CRD_PATTERN="${CRD_PATTERN}|metallb\.io"
+fi
+if [[ "${MCE_SERVICE}" == "true" ]]; then
+    CRD_PATTERN="${CRD_PATTERN}|agentserviceconfig|multicluster|open-cluster-management|hive\.openshift|hiveinternal|agent-install|hypershift"
+fi
 
 echo "Final CRD cleanup (retries until all gone)..."
 for attempt in 1 2 3 4 5 6 7; do

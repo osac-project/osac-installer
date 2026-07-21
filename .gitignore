@@ -49,3 +49,4 @@ images-raw.txt
 
 # Implementation artifacts
 .artifacts/
+.claude/

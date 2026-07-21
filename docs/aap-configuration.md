@@ -11,17 +11,9 @@ This will be expanded to additional instance groups in the future as more automa
 
 ## How It Works
 
-The `scripts/aap-configuration.sh` script patches the `cluster-fulfillment-ig`
-ConfigMap and Secret on the cluster using environment variables. The setup script
-(`setup.sh`) calls this automatically after the Helm deployment.
-
-For manual deployments, run the script standalone after `helm upgrade --install`:
-
-```bash
-INSTALLER_NAMESPACE=<project-name> ./scripts/aap-configuration.sh
-```
-
-All configuration is passed via shell environment variables.
+Instance group ConfigMaps and Secrets are managed by the osac-aap subchart
+via Helm values under `aap.instanceGroups.*`. Configure them in your values
+file and they are applied during `make install-osac`.
 
 ## ConfigMap Variables
 

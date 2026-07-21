@@ -4,6 +4,11 @@ name: E2E VMaaS Full Install
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'OWNERS'
+      - 'LICENSE'
+      - '*.md'
+      - 'docs/**'
   schedule:
     - cron: "0 */2 * * *"
   workflow_dispatch:

@@ -1,15 +1,17 @@
-name: Bump submodules
+name: Bump submodules and pinned refs
 
 on:
   schedule:
     - cron: '17 */3 * * *'
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.0
         with:
           submodules: true
           fetch-depth: 0
@@ -89,8 +91,47 @@ jobs:
         if: steps.update.outputs.changed == 'true'
         run: ./scripts/sync-image-tags.sh --fix
 
+      - name: Bump pinned osac-test-infra reusable-workflow SHA(s)
+        id: pins
+        env:
+          GH_TOKEN: ${{ secrets.OSAC_BOT_PAT }}
+        run: |
+          set -euo pipefail
+
+          LATEST=$(gh api repos/osac-project/osac-test-infra/commits?sha=main\&per_page=1 --jq '.[0].sha')
+          echo "Latest osac-test-infra main: ${LATEST}"
+
+          if ! [[ "${LATEST}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: could not resolve a valid osac-test-infra main SHA (got: '${LATEST}')" >&2
+            exit 1
+          fi
+
+          # osac-test-infra publishes no tags/releases, so Dependabot's github-actions
+          # ecosystem has nothing to track — these SHA pins (used for supply-chain
+          # hardening) need bumping here instead, or they silently go stale.
+          # Matches: osac-project/osac-test-infra/.github/workflows/<name>.yml@<40-char-sha>
+          PIN_RE='osac-test-infra/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}'
+          FILES=$(grep -lRE "${PIN_RE}" .github/workflows/ || true)
+
+          changed=false
+          summary=""
+          for f in ${FILES}; do
+            # Check every distinct pin in the file, not just the first, so a
+            # file with multiple references gets fully updated in one pass.
+            while read -r CURRENT; do
+              [[ -z "${CURRENT}" || "${CURRENT}" == "${LATEST}" ]] && continue
+              sed -i -E "s#(osac-test-infra/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@)${CURRENT}#\1${LATEST}#g" "${f}"
+              changed=true
+              summary="${summary}- **osac-test-infra pin** (\`${f}\`): ${CURRENT:0:7} → ${LATEST:0:7}\n"
+              echo "${f}: ${CURRENT:0:7} -> ${LATEST:0:7}"
+            done < <(grep -oE "${PIN_RE}" "${f}" | grep -oE '[0-9a-f]{40}' | sort -u)
+          done
+
+          echo "changed=${changed}" >> "$GITHUB_OUTPUT"
+          echo -e "${summary}" >> /tmp/bump-summary.txt
+
       - name: Create or update PR
-        if: steps.update.outputs.changed == 'true'
+        if: steps.update.outputs.changed == 'true' || steps.pins.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.OSAC_BOT_PAT }}
         run: |
@@ -108,15 +149,17 @@ jobs:
             exit 0
           fi
 
-          git commit -m "bump submodules to latest with published images"
+          git commit -m "bump submodules and pinned osac-test-infra refs"
           git push origin "HEAD:${BRANCH}" --force
 
           BODY=$(cat <<BODY_EOF
-          ## Automated submodule bump
+          ## Automated submodule and pinned-ref bump
 
           $(cat /tmp/bump-summary.txt)
 
-          Only bumps to commits that have a published container image in GHCR.
+          Submodule bumps only move to commits that have a published container
+          image in GHCR. \`osac-test-infra\` pin bumps track its \`main\` branch
+          directly, since that repo publishes no tags for Dependabot to track.
           Runs every 3 hours via [bump-submodules workflow](../actions/workflows/bump-submodules.yaml).
           BODY_EOF
           )
@@ -127,7 +170,7 @@ jobs:
             echo "Updated existing PR #${EXISTING}"
           else
             gh pr create \
-              --title "bump submodules" \
+              --title "bump submodules and pinned refs" \
               --body "${BODY}" \
               --base main \
               --head "${BRANCH}"

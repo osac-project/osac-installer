@@ -1,3 +1,23 @@
+# --- Prerequisites ---
+certManager:
+  enabled: true
+trustManager:
+  enabled: true
+caIssuer:
+  enabled: true
+keycloak:
+  enabled: true
+aapOperator:
+  enabled: true
+lvms:
+  enabled: false
+metallb:
+  enabled: false
+cnv:
+  enabled: false
+mce:
+  enabled: false
+
 # OSAC Development Environment Values
 # Development values
 
@@ -10,7 +30,7 @@ operator:
   provisioning:
     provider: "aap"
   aap:
-    url: ""  # Set to https://osac-aap.<namespace>.apps.<cluster>.<domain>/api/controller
+    url: ""
     insecureSkipVerify: "true"
     statusPollInterval: "30s"
     templatePrefix: "osac"
@@ -108,33 +128,27 @@ aap:
     image: ghcr.io/osac-project/osac-aap:latest
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
+  instanceGroups:
+    clusterFulfillment:
+      enabled: true
+      config:
+        NETWORK_CLASS: "esi"
+        NETWORK_STEPS_COLLECTION: "osac.steps"
+        EXTERNAL_ACCESS_BASE_DOMAIN: "box.massopen.cloud"
+        EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: "box.massopen.cloud"
+        EXTERNAL_ACCESS_API_INTERNAL_NETWORK: "hypershift"
+        HOSTED_CLUSTER_BASE_DOMAIN: "box.massopen.cloud"
+        HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "HighlyAvailable"
+        HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "HighlyAvailable"
+    networkFulfillment:
+      enabled: true
+      config:
+        NETRIS_CONTROLLER_URL: "https://redhat-ctl.netris.io"
+        NETRIS_USERNAME: "netris"
+        NETRIS_SITE_ID: "5"
+        NETRIS_TENANT_ID: "1"
+        NETRIS_TENANT_NAME: "Admin"
 
 # --- Validation ---
 validation:
   enabled: true
-
-# --- Database migration ---
-dbMigrate:
-  enabled: false
-  image: ghcr.io/osac-project/fulfillment-service:latest
-
-clusterFulfillment:
-  enabled: true
-  config:
-    NETWORK_CLASS: "esi"
-    NETWORK_STEPS_COLLECTION: "osac.steps"
-    EXTERNAL_ACCESS_BASE_DOMAIN: "box.massopen.cloud"
-    EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: "box.massopen.cloud"
-    EXTERNAL_ACCESS_API_INTERNAL_NETWORK: "hypershift"
-    HOSTED_CLUSTER_BASE_DOMAIN: "box.massopen.cloud"
-    HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "HighlyAvailable"
-    HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "HighlyAvailable"
-
-networkFulfillment:
-  enabled: true
-  config:
-    NETRIS_CONTROLLER_URL: "https://redhat-ctl.netris.io"
-    NETRIS_USERNAME: "netris"
-    NETRIS_SITE_ID: "5"
-    NETRIS_TENANT_ID: "1"
-    NETRIS_TENANT_NAME: "Admin"

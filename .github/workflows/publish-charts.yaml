@@ -46,8 +46,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
-      with:
-        persist-credentials: false
 
     - name: Set up Helm
       uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310  # v5.0.1
@@ -180,6 +178,15 @@ jobs:
         echo "--- Updated values.yaml image references ---"
         grep -E "tag:|image:" charts/osac/values.yaml
 
+    - name: Pin overlay values to released versions
+      env:
+        OPERATOR_VER: ${{ steps.versions.outputs.operator_ver }}
+        SERVICE_VER: ${{ steps.versions.outputs.service_ver }}
+        AAP_VER: ${{ steps.versions.outputs.aap_ver }}
+        BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
+        UI_VER: ${{ steps.versions.outputs.ui_ver }}
+      run: ./scripts/pin-release-tags.sh "${OPERATOR_VER}" "${SERVICE_VER}" "${AAP_VER}" "${BMF_VER}" "${UI_VER}"
+
     - name: Package chart
       env:
         VERSION: ${{ steps.versions.outputs.version }}
@@ -238,3 +245,40 @@ jobs:
           --repo "${{ github.repository }}" \
           --notes-file "$BODY"
         rm -f "$BODY"
+
+    - name: Create PR for overlay value pins
+      env:
+        VERSION: ${{ steps.versions.outputs.version }}
+        GH_TOKEN: ${{ secrets.OSAC_BOT_PAT }}
+        OPERATOR_VER: ${{ steps.versions.outputs.operator_ver }}
+        SERVICE_VER: ${{ steps.versions.outputs.service_ver }}
+        AAP_VER: ${{ steps.versions.outputs.aap_ver }}
+        BMF_VER: ${{ steps.versions.outputs.bmf_ver }}
+        UI_VER: ${{ steps.versions.outputs.ui_ver }}
+      run: |
+        BRANCH="auto/pin-release-v${VERSION}"
+        git config user.name "osac-dev-bot"
+        git config user.email "osac-dev-bot@users.noreply.github.com"
+        # Start fresh from latest main to avoid dirty tree from earlier steps
+        git fetch origin main
+        git checkout -f -B "${BRANCH}" origin/main
+        # Pin overlay values to released versions
+        ./scripts/pin-release-tags.sh "${OPERATOR_VER}" "${SERVICE_VER}" "${AAP_VER}" "${BMF_VER}" "${UI_VER}"
+        git add values/
+        if git diff --cached --quiet; then
+          echo "No overlay changes needed"
+          exit 0
+        fi
+        git commit -m "pin overlay values to v${VERSION} release"
+        git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+        git push origin "${BRANCH}" --force
+        EXISTING=$(gh pr list --head "${BRANCH}" --json number --jq '.[0].number // empty')
+        if [[ -n "${EXISTING}" ]]; then
+          echo "Updated existing PR #${EXISTING}"
+        else
+          gh pr create \
+            --title "pin overlay values to v${VERSION} release" \
+            --body "Automated overlay reconciliation after osac v${VERSION} chart release. Pins all values/*/values.yaml image tags to released versions." \
+            --base main \
+            --head "${BRANCH}"
+        fi

@@ -131,15 +131,15 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-ebd60f5
+    image: ghcr.io/osac-project/osac-aap:sha-31666f2
     cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-ebd60f5"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-31666f2"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "ebd60f5a98c2a22f1fed8c06a56017e3c6c89a7b"
+    projectGitBranch: "31666f2d09efc987d4ccd01b2c53ae4aa069bc23"
 
 # --- Validation ---
 validation:

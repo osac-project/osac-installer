@@ -25,7 +25,7 @@ mce:
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-651f9a1
+    tag: sha-3bc1a78
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -55,7 +55,7 @@ service:
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   variant: openshift
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-59d6286
+    service: ghcr.io/osac-project/fulfillment-service:sha-ba8d567
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -112,7 +112,7 @@ service:
 ui:
   enabled: true
   images:
-    ui: ghcr.io/osac-project/osac-ui:sha-b3afe8a
+    ui: ghcr.io/osac-project/osac-ui:sha-e5c4256
   api:
     fulfillment:
       certs:

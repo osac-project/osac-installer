@@ -51,7 +51,17 @@ for i in $(seq 1 60); do
   STATUS=$(oc get keycloakrealmimport osac-realm-import -n "${NAMESPACE}" \
       -o jsonpath='{.status.conditions[?(@.type=="Done")].status}' 2>/dev/null || true)
   if [[ "${STATUS}" == "True" ]]; then
-    echo "Realm import completed successfully."
+    echo "Realm import CR reports Done. Verifying realm exists in Keycloak..."
+    KC_SVC="https://${KC_CR_NAME}-service.${NAMESPACE}.svc.cluster.local:8443"
+    for v in $(seq 1 12); do
+      if curl -k -sf "${KC_SVC}/realms/osac" > /dev/null 2>&1; then
+        echo "Realm import completed and verified."
+        exit 0
+      fi
+      echo "  Waiting for realm to become accessible (attempt ${v}/12)..."
+      sleep 5
+    done
+    echo "WARNING: CR reports Done but realm not accessible yet (Keycloak may be restarting). Continuing."
     exit 0
   fi
   ERROR=$(oc get keycloakrealmimport osac-realm-import -n "${NAMESPACE}" \

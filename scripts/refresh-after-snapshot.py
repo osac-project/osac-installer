@@ -508,7 +508,7 @@ def create_secrets(config: RefreshConfig) -> None:
         raise RuntimeError(f"No key '{fc_id}' in keycloak-client-secrets -n {config.keycloak_ns}")
 
     oc_apply_secret("fulfillment-controller-credentials", config.namespace,
-                    "--from-literal=client-id=osac-controller",
+                    f"--from-literal=client-id={fc_id}",
                     f"--from-literal=client-secret={fc_secret}")
 
     license_path = Path(config.values_dir) / "license.zip"

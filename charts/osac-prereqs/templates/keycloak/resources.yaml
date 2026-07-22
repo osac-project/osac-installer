@@ -397,7 +397,7 @@ data:
       TOKEN=$(get_admin_token)
       [[ -n "${TOKEN}" ]] || { echo "ERROR: Could not get admin token"; return 1; }
 
-      USER_ID=$(curl -k -sf -X GET "${KC_URL}/admin/realms/osac/users?username=$username" \
+      USER_ID=$(curl -k -sf -X GET "${KC_URL}/admin/realms/osac/users?username=$username&exact=true" \
         -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
       [[ -n "${USER_ID}" ]] || { echo "ERROR: Could not find user: $username"; return 1; }
 
@@ -418,7 +418,7 @@ data:
     set_password "my_user" "foobar"
     set_password "your_user" "foobar"
 
-    echo "All passwords set to 'foobar'"
+    echo "All passwords set successfully"
 ---
 apiVersion: batch/v1
 kind: Job

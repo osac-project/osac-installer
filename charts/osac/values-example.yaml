@@ -240,8 +240,6 @@ aap:
     enabled: true
     # Bootstrap job container image.
     image: ghcr.io/osac-project/osac-aap:latest
-    # CLI image for oc/kubectl commands during bootstrap.
-    cliImage: quay.io/openshift/origin-cli:4.20.0
     # Number of retries for the bootstrap job. AAP takes time to start,
     # so a high backoff limit is normal.
     backoffLimit: 15
@@ -445,7 +443,6 @@ validation:
   # Run pre-install checks (cert-manager CRDs, default StorageClass).
   # Catches missing prerequisites before deployment starts.
   enabled: true
-  image: quay.io/openshift/origin-cli:4.20.0
 
 # ---------------------
 # Database Migration

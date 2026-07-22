@@ -20,7 +20,7 @@ spec:
       serviceAccountName: {{ include "osac.fullname" . }}-validate
       containers:
       - name: validate
-        image: {{ .Values.validation.image }}
+        image: {{ .Values.cliImage }}
         command:
         - /bin/sh
         - -c

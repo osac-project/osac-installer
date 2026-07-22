@@ -1,6 +1,8 @@
 # Open Sovereign AI Cloud - Unified Helm Values
 # This values file configures all OSAC components via the umbrella chart.
 
+cliImage: quay.io/openshift/origin-cli:4.20.0
+
 # --- Operator CRDs ---
 operatorCrds:
   install: true
@@ -99,7 +101,6 @@ aap:
   bootstrap:
     enabled: true
     image: ghcr.io/osac-project/osac-aap:latest
-    cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
     gateway:
       hostname: ""
@@ -236,7 +237,6 @@ bmf:
 # --- Validation hooks ---
 validation:
   enabled: true
-  image: quay.io/openshift/origin-cli:4.20.0
 
 # --- MetalLB Address Pool ---
 metallb:
@@ -258,3 +258,15 @@ bundledPostgres:
     requests:
       cpu: 50m
       memory: 128Mi
+
+clusterVersions:
+  enabled: false
+  versions: []
+  # Example:
+  # enabled: true
+  # versions:
+  # - version: "4.20.0"
+  #   image: "quay.io/openshift-release-dev/ocp-release:4.20.0-multi"
+  # - version: "4.22.0"
+  #   image: "quay.io/openshift-release-dev/ocp-release:4.22.0-multi"
+  #   default: true

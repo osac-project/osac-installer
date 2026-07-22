@@ -132,7 +132,6 @@ aap:
   bootstrap:
     enabled: true
     image: ghcr.io/osac-project/osac-aap:sha-775461f
-    cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"

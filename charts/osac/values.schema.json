@@ -4,6 +4,10 @@
   "description": "Configuration values for Open Sovereign AI Cloud deployment",
   "type": "object",
   "properties": {
+    "cliImage": {
+      "type": "string",
+      "description": "Default OpenShift CLI image used by hook jobs"
+    },
     "operatorCrds": {
       "type": "object",
       "description": "OSAC Operator CRDs configuration",
@@ -452,10 +456,6 @@
             "image": {
               "type": "string",
               "description": "Bootstrap job container image"
-            },
-            "cliImage": {
-              "type": "string",
-              "description": "OpenShift CLI image used by bootstrap jobs"
             },
             "backoffLimit": {
               "type": "integer",
@@ -1153,10 +1153,6 @@
           "type": "boolean",
           "description": "Run pre-install validation checks",
           "default": true
-        },
-        "image": {
-          "type": "string",
-          "description": "Container image for the validation hook job"
         }
       }
     },
@@ -1236,6 +1232,40 @@
                   "type": "string",
                   "description": "Memory request"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "clusterVersions": {
+      "type": "object",
+      "description": "Seed ClusterVersion records in the fulfillment-service after install",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Run the seed-cluster-versions hook job",
+          "default": false
+        },
+        "versions": {
+          "type": "array",
+          "description": "ClusterVersion records to seed",
+          "items": {
+            "type": "object",
+            "required": ["version", "image"],
+            "properties": {
+              "version": {
+                "type": "string",
+                "description": "SemVer version string (e.g. 4.20.8)"
+              },
+              "image": {
+                "type": "string",
+                "description": "OCI release image pullspec"
+              },
+              "default": {
+                "type": "boolean",
+                "description": "Mark as the default cluster version",
+                "default": false
               }
             }
           }

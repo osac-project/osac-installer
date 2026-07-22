@@ -122,7 +122,6 @@ aap:
   bootstrap:
     enabled: true
     image: ghcr.io/osac-project/osac-aap:sha-775461f
-    cliImage: quay.io/openshift/origin-cli:4.20.0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
@@ -151,6 +150,16 @@ bmf:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
     tag: sha-d28b3ca
     pullPolicy: Always
+
+# --- Cluster Versions ---
+clusterVersions:
+  enabled: true
+  versions:
+  - version: "4.20.0"
+    image: "quay.io/openshift-release-dev/ocp-release:4.20.0-multi"
+  - version: "4.22.0"
+    image: "quay.io/openshift-release-dev/ocp-release:4.22.0-multi"
+    default: true
 
 # --- CI/dev only ---
 # Hub access: registers local cluster as a hub. Only for environments

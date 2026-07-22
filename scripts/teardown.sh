@@ -171,10 +171,7 @@ if [[ "${MCE_SERVICE}" == "true" ]]; then
         fi
     fi
     echo "Deleting ClusterManager CR..."
-    if resource_type_exists clustermanager; then
-        timeout 30 oc patch clustermanager cluster-manager --type=merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
-        timeout 30 oc delete clustermanager cluster-manager --ignore-not-found --wait=false
-    fi
+    delete_cr clustermanager cluster-manager
 fi
 
 if [[ "${VIRT_SERVICE}" == "true" ]]; then
@@ -289,9 +286,16 @@ for api in $(timeout 10 oc get apiservice --no-headers 2>/dev/null | awk "/False
     timeout 30 oc delete apiservice "${api}" --ignore-not-found
 done
 
+echo "Cleaning up OSAC helm namespaces..."
+for ns in osac-prereqs osac-operators; do
+    if timeout 10 oc get namespace "${ns}" &>/dev/null; then
+        timeout 30 oc delete namespace "${ns}" --ignore-not-found --wait=false
+    fi
+done
+
 if [[ "${MCE_SERVICE}" == "true" ]]; then
-    echo "Cleaning up MCE-managed and OSAC helm namespaces..."
-    for ns in osac-prereqs osac-operators hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory; do
+    echo "Cleaning up MCE-managed namespaces..."
+    for ns in hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory; do
         if timeout 10 oc get namespace "${ns}" &>/dev/null; then
             timeout 30 oc delete namespace "${ns}" --ignore-not-found --wait=false
         fi

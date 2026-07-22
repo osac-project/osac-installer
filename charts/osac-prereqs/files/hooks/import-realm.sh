@@ -7,7 +7,7 @@ KC_CR_NAME="${KEYCLOAK_CR_NAME:-osac-keycloak}"
 
 echo "Resolving Keycloak realm secrets..."
 
-if ! oc get secret "${SECRET_NAME}" -n "${NAMESPACE}" 2>/dev/null; then
+if ! oc get secret "${SECRET_NAME}" -n "${NAMESPACE}" > /dev/null 2>&1; then
     echo "Generating osac-controller/osac-admin client secrets..."
     oc create secret generic "${SECRET_NAME}" -n "${NAMESPACE}" \
         --from-literal=osac-controller="$(openssl rand -base64 18)" \
@@ -29,17 +29,19 @@ RESOLVED=$(sed \
 
 echo "Creating KeycloakRealmImport CR..."
 echo "${RESOLVED}" | python3 -c "
-import json, os, sys
+import json, sys
 realm = json.load(sys.stdin)
+ns = '${NAMESPACE}'
+cr_name = '${KC_CR_NAME}'
 cr = {
     'apiVersion': 'k8s.keycloak.org/v2alpha1',
     'kind': 'KeycloakRealmImport',
     'metadata': {
         'name': 'osac-realm-import',
-        'namespace': os.environ['KEYCLOAK_NAMESPACE']
+        'namespace': ns
     },
     'spec': {
-        'keycloakCRName': os.environ['KEYCLOAK_CR_NAME'],
+        'keycloakCRName': cr_name,
         'realm': realm
     }
 }

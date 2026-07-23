@@ -466,6 +466,30 @@ def keycloak_sync(config: RefreshConfig) -> None:
             apply_result.returncode, ["oc", "apply", "-f", "-"],
             output=apply_result.stdout, stderr=apply_result.stderr)
 
+    print("  Waiting for KeycloakRealmImport to complete...")
+    retry_until(
+        description="KeycloakRealmImport done",
+        timeout=300, interval=5,
+        condition=lambda: oc(
+            "get", "keycloakrealmimport", "osac-realm-import", "-n", config.keycloak_ns,
+            "-o", "jsonpath={.status.conditions[?(@.type==\"Done\")].status}",
+            capture=True, check=False,
+        ).stdout.strip() == "True",
+    )
+    # Check for import errors
+    has_errors = oc(
+        "get", "keycloakrealmimport", "osac-realm-import", "-n", config.keycloak_ns,
+        "-o", "jsonpath={.status.conditions[?(@.type==\"HasErrors\")].status}",
+        capture=True, check=False,
+    ).stdout.strip()
+    if has_errors == "True":
+        msg = oc(
+            "get", "keycloakrealmimport", "osac-realm-import", "-n", config.keycloak_ns,
+            "-o", "jsonpath={.status.conditions[?(@.type==\"HasErrors\")].message}",
+            capture=True, check=False,
+        ).stdout.strip()
+        raise RuntimeError(f"KeycloakRealmImport failed: {msg}")
+
     print("  Waiting for Keycloak CR to be ready...")
     retry_until(
         description="Keycloak CR ready",

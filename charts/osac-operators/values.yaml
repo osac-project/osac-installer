@@ -7,6 +7,11 @@ certManager:
 trustManager:
   enabled: true
 
+keycloakOperator:
+  enabled: true
+  channel: fast
+  startingCSV: keycloak-operator.v26.6.4
+
 aapOperator:
   enabled: true
   channel: stable-2.6-cluster-scoped

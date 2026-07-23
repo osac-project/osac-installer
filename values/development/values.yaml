@@ -5,6 +5,8 @@ trustManager:
   enabled: true
 caIssuer:
   enabled: true
+keycloakOperator:
+  enabled: true
 keycloak:
   enabled: true
 aapOperator:
@@ -16,7 +18,7 @@ metallb:
 cnv:
   enabled: false
 mce:
-  enabled: false
+  enabled: true
 
 # OSAC Development Environment Values
 # Development values
@@ -148,6 +150,13 @@ aap:
         NETRIS_SITE_ID: "5"
         NETRIS_TENANT_ID: "1"
         NETRIS_TENANT_NAME: "Admin"
+
+# --- Bundled PostgreSQL ---
+bundledPostgres:
+  enabled: true
+  database:
+    name: service
+    user: service
 
 # --- Validation ---
 validation:

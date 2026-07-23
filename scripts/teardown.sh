@@ -93,8 +93,8 @@ if [[ "${VIRT_SERVICE}" == "true" ]]; then
     MWH_PATTERN="${MWH_PATTERN}|virt|hco"
 fi
 if [[ "${MCE_SERVICE}" == "true" ]]; then
-    VWH_PATTERN="${VWH_PATTERN}|multicluster|open-cluster-management|managedcluster"
-    MWH_PATTERN="${MWH_PATTERN}|multicluster|open-cluster-management|managedcluster"
+    VWH_PATTERN="${VWH_PATTERN}|multicluster|open-cluster-management|managedcluster|cluster-manager|hive|discovery|agent"
+    MWH_PATTERN="${MWH_PATTERN}|multicluster|open-cluster-management|managedcluster|cluster-manager|agent"
 fi
 
 echo "Removing webhooks..."
@@ -118,17 +118,36 @@ for resource in computeinstance virtualnetwork subnet securitygroup publicippool
     fi
 done
 # Phase 2: Delete application-level resources via Helm
-echo "Uninstalling OSAC Helm release..."
-if helm status osac -n "${INSTALLER_NAMESPACE}" &>/dev/null; then
-    helm uninstall osac -n "${INSTALLER_NAMESPACE}" --wait --timeout 20m
-else
-    echo "  No Helm release found, skipping"
-fi
+# Note: osac-operators is uninstalled AFTER Phase 4 (operator cleanup) so that
+# OLM Subscriptions still exist when uninstall_operator discovers CSVs.
+echo "Uninstalling Helm releases..."
+for release_info in "osac:${INSTALLER_NAMESPACE}" "osac-prereqs:osac-prereqs"; do
+    IFS=: read -r name ns <<< "${release_info}"
+    if helm status "${name}" -n "${ns}" &>/dev/null; then
+        echo "  Uninstalling ${name}..."
+        helm uninstall "${name}" -n "${ns}" --no-hooks --wait --timeout 20m
+    else
+        echo "  No Helm release ${name} found, skipping"
+    fi
+done
 
 echo "Deleting namespace ${INSTALLER_NAMESPACE}..."
 timeout 30 oc delete namespace "${INSTALLER_NAMESPACE}" --ignore-not-found --wait=false
 
-echo "Deleting Keycloak resources..."
+echo "Deleting PVCs in OSAC namespaces..."
+for ns in "${INSTALLER_NAMESPACE}" keycloak osac-prereqs; do
+    if timeout 10 oc get namespace "${ns}" &>/dev/null; then
+        timeout 30 oc delete pvc --all -n "${ns}" --ignore-not-found --wait=false
+    fi
+done
+
+echo "Deleting Keycloak CRs..."
+if resource_type_exists keycloakrealmimport; then
+    timeout 30 oc delete keycloakrealmimport --all -n keycloak --ignore-not-found --wait=false
+fi
+if resource_type_exists keycloak; then
+    delete_cr keycloak osac-keycloak keycloak
+fi
 timeout 30 oc delete namespace keycloak --ignore-not-found --wait=false
 # Phase 3: Delete operator CRs while operators are still running
 #
@@ -153,6 +172,8 @@ if [[ "${MCE_SERVICE}" == "true" ]]; then
             done
         fi
     fi
+    echo "Deleting ClusterManager CR..."
+    delete_cr clustermanager cluster-manager
 fi
 
 if [[ "${VIRT_SERVICE}" == "true" ]]; then
@@ -208,6 +229,9 @@ done
 echo ""
 echo "Uninstalling operators..."
 
+echo "  Keycloak operator..."
+uninstall_operator keycloak keycloak-operator
+
 echo "  AAP operator..."
 uninstall_operator ansible-aap dev-ansible-automation-platform
 
@@ -238,6 +262,15 @@ if timeout 10 oc get certmanager cluster &>/dev/null; then
     timeout 10 oc patch certmanager cluster --type=merge -p '{"metadata":{"finalizers":null}}'
 fi
 timeout 300 oc delete namespace cert-manager --ignore-not-found --timeout=300s
+
+# Phase 4b: Remove osac-operators Helm release
+# Done after operator cleanup so Subscriptions existed when CSVs were discovered.
+if helm status osac-operators -n osac-operators &>/dev/null; then
+    echo "  Uninstalling osac-operators..."
+    helm uninstall osac-operators -n osac-operators --no-hooks --wait --timeout 20m
+else
+    echo "  No Helm release osac-operators found, skipping"
+fi
 # Phase 5: Final cleanup of cluster-scoped resources
 #
 # OLM removes CRDs it directly owns, but sub-operators (CDI, kubevirt, topolvm)
@@ -264,6 +297,13 @@ for api in $(timeout 10 oc get apiservice --no-headers 2>/dev/null | awk "/False
     timeout 30 oc delete apiservice "${api}" --ignore-not-found
 done
 
+echo "Cleaning up OSAC helm namespaces..."
+for ns in osac-prereqs osac-operators; do
+    if timeout 10 oc get namespace "${ns}" &>/dev/null; then
+        timeout 30 oc delete namespace "${ns}" --ignore-not-found --wait=false
+    fi
+done
+
 if [[ "${MCE_SERVICE}" == "true" ]]; then
     echo "Cleaning up MCE-managed namespaces..."
     for ns in hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory; do
@@ -273,7 +313,7 @@ if [[ "${MCE_SERVICE}" == "true" ]]; then
     done
 fi
 
-NS_WAIT_LIST=("${INSTALLER_NAMESPACE}" keycloak ansible-aap cert-manager cert-manager-operator)
+NS_WAIT_LIST=("${INSTALLER_NAMESPACE}" keycloak ansible-aap cert-manager cert-manager-operator osac-prereqs osac-operators)
 if [[ "${MCE_SERVICE}" == "true" ]]; then
     NS_WAIT_LIST+=(multicluster-engine hive hypershift local-cluster open-cluster-management-agent open-cluster-management-agent-addon open-cluster-management-global-set open-cluster-management-hub hardware-inventory)
 fi
@@ -304,7 +344,7 @@ if [[ "${STORAGE_SERVICE}" == "true" ]]; then
     timeout 30 oc delete csidriver topolvm.io --ignore-not-found
 fi
 
-CRD_PATTERN='cert-manager\.io|certmanagers\.operator|authorino|ansible\.com'
+CRD_PATTERN='cert-manager\.io|certmanagers\.operator|authorino|ansible\.com|keycloak\.org'
 if [[ "${VIRT_SERVICE}" == "true" ]]; then
     CRD_PATTERN="${CRD_PATTERN}|kubevirt\.io|networkaddonsoperator|hostpathprovisioner"
 fi
@@ -315,7 +355,7 @@ if [[ "${INGRESS_SERVICE}" == "true" ]]; then
     CRD_PATTERN="${CRD_PATTERN}|metallb\.io"
 fi
 if [[ "${MCE_SERVICE}" == "true" ]]; then
-    CRD_PATTERN="${CRD_PATTERN}|agentserviceconfig|multicluster|open-cluster-management|hive\.openshift|hiveinternal|agent-install|hypershift"
+    CRD_PATTERN="${CRD_PATTERN}|agentserviceconfig|multicluster|open-cluster-management|hive\.openshift|hiveinternal|agent-install|hypershift|cluster\.x-k8s|addon\.open-cluster"
 fi
 
 echo "Final CRD cleanup (retries until all gone)..."

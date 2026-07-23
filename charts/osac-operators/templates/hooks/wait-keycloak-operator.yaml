@@ -1,62 +1,65 @@
-{{- if .Values.keycloak.enabled }}
+{{- if .Values.keycloakOperator.enabled }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: osac-prereqs-wait-keycloak
+  name: osac-operators-wait-keycloak
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "osac-prereqs.hookLabels" . | nindent 4 }}
+    {{- include "osac-operators.hookLabels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
-    "helm.sh/hook-weight": "14"
+    "helm.sh/hook-weight": "5"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: osac-prereqs-wait-keycloak
+  name: osac-operators-wait-keycloak
   labels:
-    {{- include "osac-prereqs.hookLabels" . | nindent 4 }}
+    {{- include "osac-operators.hookLabels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
-    "helm.sh/hook-weight": "14"
+    "helm.sh/hook-weight": "5"
 rules:
-  - apiGroups: ["k8s.keycloak.org"]
-    resources: ["keycloaks"]
-    verbs: ["get", "list", "watch"]
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["subscriptions", "clusterserviceversions", "installplans"]
+    verbs: ["get", "list", "patch"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: osac-prereqs-wait-keycloak
+  name: osac-operators-wait-keycloak
   labels:
-    {{- include "osac-prereqs.hookLabels" . | nindent 4 }}
+    {{- include "osac-operators.hookLabels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
-    "helm.sh/hook-weight": "14"
+    "helm.sh/hook-weight": "5"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: osac-prereqs-wait-keycloak
+  name: osac-operators-wait-keycloak
 subjects:
   - kind: ServiceAccount
-    name: osac-prereqs-wait-keycloak
+    name: osac-operators-wait-keycloak
     namespace: {{ .Release.Namespace }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: osac-prereqs-wait-keycloak
+  name: osac-operators-wait-keycloak
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "osac-prereqs.hookLabels" . | nindent 4 }}
+    {{- include "osac-operators.hookLabels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
-    "helm.sh/hook-weight": "14"
+    "helm.sh/hook-weight": "5"
 spec:
   backoffLimit: 5
   activeDeadlineSeconds: 1800
@@ -64,16 +67,16 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "osac-prereqs.hookLabels" . | nindent 8 }}
+        {{- include "osac-operators.hookLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: osac-prereqs-wait-keycloak
+      serviceAccountName: osac-operators-wait-keycloak
       restartPolicy: OnFailure
       volumes:
         - name: tmp
           emptyDir: {}
         - name: scripts
           configMap:
-            name: osac-prereqs-hook-scripts
+            name: osac-operators-hook-scripts
       containers:
         - name: wait-keycloak
           image: {{ .Values.cliImage }}
@@ -88,6 +91,9 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
             capabilities:
               drop:
                 - ALL
@@ -100,5 +106,5 @@ spec:
               memory: 256Mi
           command:
             - /bin/bash
-            - /scripts/wait-keycloak.sh
+            - /scripts/wait-keycloak-operator.sh
 {{- end }}

@@ -25,7 +25,7 @@ mce:
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-3515100
+    tag: sha-0c4a76a
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -55,7 +55,7 @@ service:
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   variant: openshift
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-5e7a7a5
+    service: ghcr.io/osac-project/fulfillment-service:sha-2151630
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -112,7 +112,7 @@ service:
 ui:
   enabled: true
   images:
-    ui: ghcr.io/osac-project/osac-ui:sha-811f945
+    ui: ghcr.io/osac-project/osac-ui:sha-51dccc5
   api:
     fulfillment:
       certs:
@@ -131,14 +131,14 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-775461f
+    image: ghcr.io/osac-project/osac-aap:sha-eb0e6ae
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-775461f"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-eb0e6ae"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "775461f31c7633d3ecde804f11279e9ebc2bfc93"
+    projectGitBranch: "eb0e6ae884e4860d5b380d6923a06811e4c129b7"
 
 # --- Validation ---
 validation:

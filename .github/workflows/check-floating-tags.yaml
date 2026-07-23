@@ -1,0 +1,51 @@
+name: Check Floating Image Tags
+
+on:
+  pull_request:
+    paths:
+      - 'charts/**/values.yaml'
+      - '.github/scripts/check-floating-tags.sh'
+      - '.github/workflows/check-floating-tags.yaml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-floating-tags-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-floating-tags:
+    name: Reject unmarked floating tags
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout trusted base branch script
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      with:
+        ref: ${{ github.event.pull_request.base.sha }}
+        persist-credentials: false
+        sparse-checkout: .github/scripts/check-floating-tags.sh
+        sparse-checkout-cone-mode: false
+        path: trusted
+
+    - name: Checkout PR
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      with:
+        persist-credentials: false
+        path: pr
+
+    - name: Check for unmarked floating image tags
+      env:
+        TRUSTED_SCRIPT: ../trusted/.github/scripts/check-floating-tags.sh
+        PR_SCRIPT: .github/scripts/check-floating-tags.sh
+      run: |
+        if [ -f "$TRUSTED_SCRIPT" ]; then
+          bash "$TRUSTED_SCRIPT"
+        elif [ -f "$PR_SCRIPT" ]; then
+          echo "::warning::Base branch has no check-floating-tags.sh; falling back to PR copy"
+          bash "$PR_SCRIPT"
+        else
+          echo "::error::No check-floating-tags.sh found in base or PR"
+          exit 1
+        fi
+      working-directory: pr

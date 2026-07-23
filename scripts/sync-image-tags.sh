@@ -19,7 +19,7 @@ ui_tag="sha-$(git -C "${REPO_ROOT}" submodule status base/osac-ui | awk '{print 
 for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
   [[ ! -f "${values_file}" ]] && continue
   name=$(basename "$(dirname "${values_file}")")
-  grep -q "sha-" "${values_file}" || continue
+  grep -q "sha-\|ghcr.io/osac-project/" "${values_file}" || continue
 
   for pair in \
     "osac-operator:tag ${operator_tag}" \
@@ -42,21 +42,25 @@ for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
       elif [[ "${1:-}" == "--fix" ]]; then
         sed -i "/repository: ghcr.io\/osac-project\/${component}$/{n;s|tag: .*|tag: ${expected}|}" "${values_file}"
         echo "${name} ${component}: FIXED ${current} -> ${expected}"
-      else
+      elif [[ "${current}" == sha-* ]]; then
         echo "${name} ${component}: MISMATCH current=${current} expected=${expected}"
         errors=$((errors + 1))
+      else
+        echo "${name} ${component}: SKIP (pinned to ${current}, not a sha- tag)"
       fi
     else
-      current=$(grep -o "${component}:sha-[a-f0-9]\{7\}" "${values_file}" | head -1 | sed "s/${component}://" || true)
+      current=$(grep -oE "osac-project/${component}:(sha-[a-f0-9]{7}|v[0-9][0-9.]*|latest)" "${values_file}" | head -1 | sed "s#osac-project/${component}:##" || true)
       [[ -z "${current}" ]] && continue
       if [[ "${current}" == "${expected}" ]]; then
         echo "${name} ${component}: OK (${expected})"
       elif [[ "${1:-}" == "--fix" ]]; then
-        sed -i "s|${component}:sha-[a-f0-9]\{7\}|${component}:${expected}|g" "${values_file}"
+        sed -i -E "s#(osac-project/${component}):(sha-[a-f0-9]{7}|v[0-9][0-9.]*|latest)#\1:${expected}#g" "${values_file}"
         echo "${name} ${component}: FIXED ${current} -> ${expected}"
-      else
+      elif [[ "${current}" == sha-* ]]; then
         echo "${name} ${component}: MISMATCH current=${current} expected=${expected}"
         errors=$((errors + 1))
+      else
+        echo "${name} ${component}: SKIP (pinned to ${current}, not a sha- tag)"
       fi
     fi
   done
@@ -71,9 +75,11 @@ for values_file in "${REPO_ROOT}"/values/*/values.yaml; do
   elif [[ "${1:-}" == "--fix" ]]; then
     sed -i "s|projectGitBranch: .*|projectGitBranch: \"${aap_full_commit}\"|" "${values_file}"
     echo "${name} projectGitBranch: FIXED ${current_branch} -> ${aap_full_commit}"
-  else
+  elif [[ "${current_branch}" =~ ^[0-9a-f]{40}$ ]]; then
     echo "${name} projectGitBranch: MISMATCH current=${current_branch} expected=${aap_full_commit}"
     errors=$((errors + 1))
+  else
+    echo "${name} projectGitBranch: SKIP (pinned to ${current_branch}, not a commit SHA)"
   fi
 done
 

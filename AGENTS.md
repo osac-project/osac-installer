@@ -48,7 +48,18 @@ values/
 
 ### Submodules
 
-Submodules under `base/` (osac-operator, osac-fulfillment-service, osac-aap, bare-metal-fulfillment-operator, osac-ui) are pinned snapshots used for version tracking. Image tags in `values/*/values.yaml` must match submodule commit SHAs. CI enforces this via `scripts/sync-image-tags.sh`.
+Submodules under `base/` (osac-operator, osac-fulfillment-service, osac-aap, bare-metal-fulfillment-operator, osac-ui) are pinned snapshots used for version tracking. `scripts/sync-image-tags.sh` syncs image tags in `values/*/values.yaml` to match submodule commit SHAs (replacing any existing tag format: `sha-`, `v`-prefixed, or `latest`).
+
+### Image Tag Lifecycle
+
+Two automated workflows manage image tags in overlay values files (`values/*/values.yaml`):
+
+1. **Between releases** -- `bump-submodules.yaml` (every 3 hours) advances overlays to `sha-` tags tracking each component's latest main commit. `sync-image-tags.sh` handles any existing tag format (`sha-`, `v`-prefixed, or `latest`). This keeps CI/dev environments testing the newest code.
+2. **At release time** -- `publish-charts.yaml` calls `scripts/pin-release-tags.sh` to replace all image tags (including `latest`) with versioned tags (e.g. `v0.0.8`), then opens a PR to merge the pins into main. This reconciles overlays with the official chart release.
+
+After a release PR is merged, overlays match the released versions exactly. As new commits land on component repos, `bump-submodules.yaml` advances them again until the next release pins them.
+
+**To check drift:** compare image tags in `values/*/values.yaml` against the latest [GitHub release](https://github.com/osac-project/osac-installer/releases). If tags are `sha-` prefixed, the environment is running ahead of the last release. If tags are `v`-prefixed, compare each component's exact version against the release notes to confirm alignment. If tags are `latest`, the overlay is tracking an unpinned moving tag — check the release PR or the last GitHub release to determine the expected pinned version.
 
 ### Prerequisites
 
@@ -58,6 +69,7 @@ Prerequisites are installed automatically by Phase 1 (`make install-operators`) 
 
 - **teardown.sh** -- Full teardown: uninstalls Helm release, removes operators and CRDs.
 - **sync-image-tags.sh** -- Syncs image tags in Helm values files to match submodule commits.
+- **pin-release-tags.sh** -- Pins overlay values files to released versioned image tags (called by `publish-charts.yaml` at release time).
 - **setup-remote-cluster.sh** -- CI-only script for preparing a remote cluster (LVMS, CNV, service accounts).
 - **create-hub-access-kubeconfig.sh** -- Generates `kubeconfig.hub-access` from the hub-access ServiceAccount token.
 - **lib.sh** -- Shared shell functions: `retry_until` (retry with timeout) and `wait_for_resource` (wait for k8s resource condition).

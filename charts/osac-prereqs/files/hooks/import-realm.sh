@@ -2,25 +2,25 @@
 set -euo pipefail
 
 NAMESPACE="${KEYCLOAK_NAMESPACE:-keycloak}"
-SECRET_NAME="keycloak-client-secrets"
+CLIENT_SECRET_NAME="keycloak-client-secrets"
 KC_CR_NAME="${KEYCLOAK_CR_NAME:-osac-keycloak}"
 
 echo "Resolving Keycloak realm secrets..."
 
-if ! oc get secret "${SECRET_NAME}" -n "${NAMESPACE}" > /dev/null 2>&1; then
+if ! oc get secret "${CLIENT_SECRET_NAME}" -n "${NAMESPACE}" > /dev/null 2>&1; then
     echo "Generating osac-controller/osac-admin client secrets..."
-    oc create secret generic "${SECRET_NAME}" -n "${NAMESPACE}" \
+    oc create secret generic "${CLIENT_SECRET_NAME}" -n "${NAMESPACE}" \
         --from-literal=osac-controller="$(openssl rand -base64 18)" \
         --from-literal=osac-admin="$(openssl rand -base64 18)"
 fi
 
-CONTROLLER_SECRET=$(oc get secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+CONTROLLER_SECRET=$(oc get secret "${CLIENT_SECRET_NAME}" -n "${NAMESPACE}" \
     -o jsonpath='{.data.osac-controller}' | base64 -d)
-ADMIN_SECRET=$(oc get secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+ADMIN_SECRET=$(oc get secret "${CLIENT_SECRET_NAME}" -n "${NAMESPACE}" \
     -o jsonpath='{.data.osac-admin}' | base64 -d)
 
-[[ -n "${CONTROLLER_SECRET}" ]] || { echo "ERROR: ${SECRET_NAME} missing osac-controller key" >&2; exit 1; }
-[[ -n "${ADMIN_SECRET}" ]] || { echo "ERROR: ${SECRET_NAME} missing osac-admin key" >&2; exit 1; }
+[[ -n "${CONTROLLER_SECRET}" ]] || { echo "ERROR: ${CLIENT_SECRET_NAME} missing osac-controller key" >&2; exit 1; }
+[[ -n "${ADMIN_SECRET}" ]] || { echo "ERROR: ${CLIENT_SECRET_NAME} missing osac-admin key" >&2; exit 1; }
 
 RESOLVED=$(sed \
     -e "s#__OSAC_CONTROLLER_CLIENT_SECRET__#${CONTROLLER_SECRET}#" \

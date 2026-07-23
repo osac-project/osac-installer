@@ -118,8 +118,10 @@ for resource in computeinstance virtualnetwork subnet securitygroup publicippool
     fi
 done
 # Phase 2: Delete application-level resources via Helm
+# Note: osac-operators is uninstalled AFTER Phase 4 (operator cleanup) so that
+# OLM Subscriptions still exist when uninstall_operator discovers CSVs.
 echo "Uninstalling Helm releases..."
-for release_info in "osac:${INSTALLER_NAMESPACE}" "osac-prereqs:osac-prereqs" "osac-operators:osac-operators"; do
+for release_info in "osac:${INSTALLER_NAMESPACE}" "osac-prereqs:osac-prereqs"; do
     IFS=: read -r name ns <<< "${release_info}"
     if helm status "${name}" -n "${ns}" &>/dev/null; then
         echo "  Uninstalling ${name}..."
@@ -260,6 +262,15 @@ if timeout 10 oc get certmanager cluster &>/dev/null; then
     timeout 10 oc patch certmanager cluster --type=merge -p '{"metadata":{"finalizers":null}}'
 fi
 timeout 300 oc delete namespace cert-manager --ignore-not-found --timeout=300s
+
+# Phase 4b: Remove osac-operators Helm release
+# Done after operator cleanup so Subscriptions existed when CSVs were discovered.
+if helm status osac-operators -n osac-operators &>/dev/null; then
+    echo "  Uninstalling osac-operators..."
+    helm uninstall osac-operators -n osac-operators --no-hooks --wait --timeout 20m
+else
+    echo "  No Helm release osac-operators found, skipping"
+fi
 # Phase 5: Final cleanup of cluster-scoped resources
 #
 # OLM removes CRDs it directly owns, but sub-operators (CDI, kubevirt, topolvm)

@@ -3,6 +3,33 @@
   "title": "OSAC Helm Chart Values",
   "description": "Configuration values for Open Sovereign AI Cloud deployment",
   "type": "object",
+  "$defs": {
+    "networkManagerEntry": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy this manager's ConfigMap",
+          "default": true
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the manager"
+        },
+        "capabilities": {
+          "type": "array",
+          "description": "List of capabilities supported by this manager",
+          "items": {
+            "type": "string",
+            "enum": ["ipv4", "ipv6", "dualStack", "dpuSupport"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": ["capabilities"]
+    }
+  },
   "properties": {
     "cliImage": {
       "type": "string",
@@ -1180,6 +1207,37 @@
           "type": "boolean",
           "description": "Create hub-access resources and register local cluster as hub",
           "default": false
+        }
+      }
+    },
+    "networkManagers": {
+      "type": "object",
+      "description": "Network manager registration ConfigMaps for the two-manager model (fabric + k8s)",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy network manager registration ConfigMaps",
+          "default": false
+        },
+        "fabricManagers": {
+          "type": "object",
+          "description": "Fabric managers handle physical networking: segments, ACLs, IPs, NAT",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/networkManagerEntry"
+          }
+        },
+        "k8sManagers": {
+          "type": "object",
+          "description": "K8s managers bridge the Kubernetes OVN overlay to the physical fabric",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/networkManagerEntry"
+          }
         }
       }
     },

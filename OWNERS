@@ -15,6 +15,7 @@ filters:
     - eliorerz
     - sk-ilya
     - ybettan
+    - vladikr
     reviewers:
     - jhernand
     - adriengentil
@@ -30,3 +31,4 @@ filters:
     - eliorerz
     - sk-ilya
     - ybettan
+    - vladikr

@@ -181,13 +181,13 @@ echo "Downloading discovery ISO..."
 curl -k -L --fail-with-body -o '${ISO_FILE}' '${ISO_URL}'
 
 # Create agent VM
-virsh destroy '${AGENT_VM_NAME}' 2>/dev/null || true
-virsh undefine '${AGENT_VM_NAME}' 2>/dev/null || true
+virsh --connect qemu:///system destroy '${AGENT_VM_NAME}' 2>/dev/null || true
+virsh --connect qemu:///system undefine '${AGENT_VM_NAME}' 2>/dev/null || true
 rm -f '${AGENT_VM_STORAGE_DIR}/${AGENT_VM_NAME}.qcow2'
 
 qemu-img create -f qcow2 '${AGENT_VM_STORAGE_DIR}/${AGENT_VM_NAME}.qcow2' '${AGENT_VM_DISK_SIZE}'
 
-virt-install \
+virt-install --connect qemu:///system \
   --name '${AGENT_VM_NAME}' \
   --memory '${AGENT_VM_MEMORY}' \
   --vcpus '${AGENT_VM_VCPUS}' \

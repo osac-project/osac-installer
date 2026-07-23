@@ -9,6 +9,7 @@ on:
       - 'LICENSE'
       - '*.md'
       - 'docs/**'
+  merge_group:
   schedule:
     - cron: "0 */2 * * *"
   workflow_dispatch:

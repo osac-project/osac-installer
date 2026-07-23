@@ -12,6 +12,11 @@ repos:
     - id: check-symlinks
     - id: detect-private-key
 
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.30.1
+  hooks:
+    - id: gitleaks
+
 - repo: https://github.com/adrienverge/yamllint.git
   rev: v1.35.1
   hooks:

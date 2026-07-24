@@ -30,7 +30,7 @@ mce:
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-0c4a76a
+    tag: sha-6f95938
     pullPolicy: Always
   provisioning:
     provider: "aap"

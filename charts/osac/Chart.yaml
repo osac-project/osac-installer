@@ -35,3 +35,13 @@ dependencies:
     repository: "file://../../base/osac-ui/charts/ui"
     alias: ui
     condition: ui.enabled
+  - name: csi-driver
+    version: ">=0.0.0"
+    repository: "file://../../base/osac-csi-driver/charts/csi-driver"
+    alias: csiDriver
+    condition: csiDriver.enabled
+  - name: csi-backends
+    version: ">=0.0.0"
+    repository: "file://../../base/osac-csi-driver/charts/csi-backends"
+    alias: csiBackends
+    condition: csiBackends.enabled

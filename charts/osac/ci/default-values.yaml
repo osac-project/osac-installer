@@ -1,6 +1,12 @@
 # Default scenario: validates that the chart renders with minimal overrides.
 # Only sets values that subcharts mark as required.
 
+csiDriver:
+  enabled: false
+
+csiBackends:
+  enabled: false
+
 ui:
   enabled: true
   api:

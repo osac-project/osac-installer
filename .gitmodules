@@ -13,3 +13,6 @@
 [submodule "base/osac-ui"]
 	path = base/osac-ui
 	url = https://github.com/osac-project/osac-ui.git
+[submodule "base/osac-csi-driver"]
+	path = base/osac-csi-driver
+	url = https://github.com/osac-project/osac-csi-driver.git

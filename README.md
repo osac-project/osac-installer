@@ -56,6 +56,12 @@ The OSAC platform relies on four core components to deliver governed self-servic
    Ironic. It watches **BareMetalInstance** CRs (defined by the Bare Metal Fulfillment Operator)
    and reconciles power state with Ironic.
 
+6. **CSI Driver:**
+   An aggregating CSI meta-driver that presents a single CSI identity
+   (`csi.osac.openshift.io`) and routes storage requests to vendor-specific CSI
+   drivers (NetApp Trident, VAST, Pure Storage) based on storage tier resolution.
+   Deployed alongside a `csi-backends` chart that runs the vendor CSI controllers.
+
 ### Prerequisites & Setup
 
 > **System Requirements** This solution requires the following platforms to be installed

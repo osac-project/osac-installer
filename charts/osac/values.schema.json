@@ -1241,6 +1241,120 @@
           }
         }
       }
+    },
+    "csiDriver": {
+      "type": "object",
+      "description": "OSAC CSI meta-driver configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable or disable the CSI driver subchart",
+          "default": false
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "default": "ghcr.io/osac-project/osac-csi-driver"
+            },
+            "tag": {
+              "type": "string",
+              "default": "latest"
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": ["Always", "IfNotPresent", "Never"],
+              "default": "IfNotPresent"
+            }
+          }
+        },
+        "controller": {
+          "type": "object",
+          "properties": {
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "fulfillmentEndpoint": {
+              "type": "string",
+              "description": "gRPC endpoint for the fulfillment service Volume API"
+            },
+            "vendorSockets": {
+              "type": "string",
+              "description": "Comma-separated backend=endpoint pairs for vendor CSI controllers"
+            },
+            "leaderElection": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        },
+        "node": {
+          "type": "object",
+          "properties": {
+            "vendorSockets": {
+              "type": "string",
+              "description": "Comma-separated backend=socketpath pairs for vendor CSI node plugins"
+            }
+          }
+        }
+      }
+    },
+    "csiBackends": {
+      "type": "object",
+      "description": "Vendor CSI backend controllers configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable or disable the CSI backends subchart",
+          "default": false
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Namespace for vendor CSI controller deployments",
+          "default": "osac-csi-backends"
+        },
+        "imagePullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "trident": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "vast": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "pure": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -233,6 +233,33 @@ bmf:
   env:
     aapInsecureSkipVerify: "true"
 
+# --- CSI Driver ---
+csiDriver:
+  enabled: false
+  image:
+    repository: ghcr.io/osac-project/osac-csi-driver
+    tag: latest
+    pullPolicy: IfNotPresent
+  controller:
+    replicas: 1
+    fulfillmentEndpoint: ""
+    vendorSockets: ""
+    leaderElection: true
+  node:
+    vendorSockets: ""
+
+# --- CSI Backends ---
+csiBackends:
+  enabled: false
+  namespace: osac-csi-backends
+  imagePullSecrets: []
+  trident:
+    enabled: false
+  vast:
+    enabled: false
+  pure:
+    enabled: false
+
 # --- Validation hooks ---
 validation:
   enabled: true

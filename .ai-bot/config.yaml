@@ -17,7 +17,7 @@ validation_commands:
   - bash scripts/sync-image-tags.sh
 
 pr:
-  draft: true
+  draft: false
   title_prefix: "[AI]"
   labels:
     - ai-pr

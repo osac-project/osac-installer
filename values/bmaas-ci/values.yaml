@@ -147,7 +147,7 @@ bmf:
   enabled: true
   image:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
-    tag: sha-d28b3ca
+    tag: sha-0d40c92
     pullPolicy: Always
   env:
     aapUrl: "http://osac-aap/api/controller"

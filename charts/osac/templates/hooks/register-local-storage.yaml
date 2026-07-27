@@ -51,20 +51,10 @@ spec:
                 ;;
               409)
                 echo "StorageBackend 'local' already exists, fetching ID..."
-                LIST_RESP=$(mktemp)
-                curl -skS --connect-timeout 5 --max-time 30 \
-                  -o "${LIST_RESP}" \
+                BACKEND_ID=$(curl -skS --connect-timeout 5 --max-time 30 \
                   "${API}/storage_backends" \
-                  -H "Authorization: Bearer ${AUTH_TOKEN}"
-                BACKEND_ID=$(python3 -c "
-import sys, json
-items = json.load(open('${LIST_RESP}')).get('items', [])
-match = next((i for i in items if i.get('metadata', {}).get('name') == 'local'), None)
-if not match:
-    sys.exit('StorageBackend \"local\" not found in list after 409')
-print(match['id'])
-")
-                rm -f "${LIST_RESP}"
+                  -H "Authorization: Bearer ${AUTH_TOKEN}" | \
+                  python3 -c "import sys,json; items=json.load(sys.stdin).get('items',[]); m=next((i for i in items if i.get('metadata',{}).get('name')=='local'),None); sys.exit('local backend not found') if not m else print(m['id'])")
                 echo "StorageBackend 'local' already registered (id: ${BACKEND_ID})."
                 ;;
               *)

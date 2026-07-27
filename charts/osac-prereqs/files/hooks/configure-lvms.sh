@@ -15,13 +15,17 @@ done
 echo "Waiting for lvms-operator deployment..."
 oc wait --for=condition=Available deploy/lvms-operator -n openshift-storage --timeout=900s
 
-echo "Applying LVMCluster configuration..."
-oc apply -f /config/config.yaml
+if oc get sc lvms-vg1 --ignore-not-found -o name | grep -q lvms-vg1; then
+  echo "lvms-vg1 already exists, skipping LVMCluster creation."
+else
+  echo "Applying LVMCluster configuration..."
+  oc apply -f /config/config.yaml
 
-echo "Waiting for lvms-vg1 StorageClass..."
-until [[ -n "$(oc get sc --ignore-not-found lvms-vg1 -o name)" ]]; do
-  sleep 5
-done
+  echo "Waiting for lvms-vg1 StorageClass..."
+  until [[ -n "$(oc get sc --ignore-not-found lvms-vg1 -o name)" ]]; do
+    sleep 5
+  done
+fi
 
 echo "Setting lvms-vg1 as default StorageClass..."
 oc annotate sc lvms-vg1 storageclass.kubernetes.io/is-default-class=true --overwrite

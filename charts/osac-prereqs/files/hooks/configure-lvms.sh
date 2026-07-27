@@ -25,9 +25,9 @@ else
   until [[ -n "$(oc get sc --ignore-not-found lvms-vg1 -o name)" ]]; do
     sleep 5
   done
-fi
 
-echo "Setting lvms-vg1 as default StorageClass..."
-oc annotate sc lvms-vg1 storageclass.kubernetes.io/is-default-class=true --overwrite
+  echo "Setting lvms-vg1 as default StorageClass..."
+  oc annotate sc lvms-vg1 storageclass.kubernetes.io/is-default-class=true --overwrite
+fi
 
 echo "LVMS configuration complete."

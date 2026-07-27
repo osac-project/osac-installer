@@ -30,7 +30,7 @@ mce:
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-6f95938
+    tag: sha-93e9301
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -60,7 +60,7 @@ service:
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-2151630
+    service: ghcr.io/osac-project/fulfillment-service:sha-d869692
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -121,14 +121,14 @@ aap:
       name: "osac-aap"
   bootstrap:
     enabled: true
-    image: ghcr.io/osac-project/osac-aap:sha-26399b5
+    image: ghcr.io/osac-project/osac-aap:sha-86791c0
     backoffLimit: 15
   configAsCode:
     manifestSecret: "config-as-code-manifest-ig"
     secret: "config-as-code-ig"
-    eeImage: "ghcr.io/osac-project/osac-aap:sha-26399b5"
+    eeImage: "ghcr.io/osac-project/osac-aap:sha-86791c0"
     projectGitUri: "https://github.com/osac-project/osac-aap"
-    projectGitBranch: "26399b50f9e63077eb6b80083328197eed4b880c"
+    projectGitBranch: "86791c01913337e1b06a665805637daebce35a3e"
   instanceGroups:
     clusterFulfillment:
       enabled: true
@@ -148,7 +148,7 @@ bmf:
   enabled: false
   image:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
-    tag: sha-d28b3ca
+    tag: sha-0d40c92
     pullPolicy: Always
 
 # --- Cluster Versions ---

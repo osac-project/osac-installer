@@ -15,7 +15,7 @@ done
 echo "Waiting for lvms-operator deployment..."
 oc wait --for=condition=Available deploy/lvms-operator -n openshift-storage --timeout=900s
 
-if oc get sc lvms-vg1 --ignore-not-found -o name | grep -q lvms-vg1; then
+if [[ -n "$(oc get sc lvms-vg1 --ignore-not-found -o name 2>/dev/null)" ]]; then
   echo "lvms-vg1 already exists, skipping LVMCluster creation."
 else
   echo "Applying LVMCluster configuration..."

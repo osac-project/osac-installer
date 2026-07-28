@@ -1223,6 +1223,17 @@
         }
       }
     },
+    "lvms": {
+      "type": "object",
+      "description": "LVMS local storage registration (dev/CI/Beaker only — not for production)",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Register a local StorageBackend and StorageTier backed by LVMS on the hub cluster",
+          "default": false
+        }
+      }
+    },
     "bundledPostgres": {
       "type": "object",
       "description": "Bundled PostgreSQL for CI/dev (ephemeral, not for production)",

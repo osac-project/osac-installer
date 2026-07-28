@@ -257,6 +257,13 @@ metallb:
 hubAccess:
   enabled: false
 
+# --- LVMS (local storage) ---
+# When enabled, a post-install hook registers a local StorageBackend and
+# StorageTier in the fulfillment service, backed by LVMS on the hub cluster.
+# Set to true only on clusters where LVMS is pre-installed (dev/CI/Beaker).
+lvms:
+  enabled: false
+
 bundledPostgres:
   enabled: false
   database:

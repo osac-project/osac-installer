@@ -82,22 +82,17 @@ oc wait clusterissuer/default-ca --for=condition=Ready --timeout=300s
 
 ### Step 4: Keycloak
 
-Identity provider for OIDC authentication.
+Identity provider for OIDC authentication. Deployed via the Keycloak operator
+(OLM subscription in `charts/osac-operators/`, instance CR in `charts/osac-prereqs/`).
 
 ```bash
-oc apply -f prerequisites/keycloak/namespace.yaml
-oc create configmap keycloak-db-server-config \
-    --from-file=server.conf=prerequisites/keycloak/database/files/server.conf \
-    -n keycloak --dry-run=client -o yaml | oc apply -f -
-oc create configmap keycloak-db-access-config \
-    --from-file=access.conf=prerequisites/keycloak/database/files/access.conf \
-    -n keycloak --dry-run=client -o yaml | oc apply -f -
-oc create configmap keycloak-realm \
-    --from-file=realm.json=prerequisites/keycloak/service/files/realm.json \
-    -n keycloak --dry-run=client -o yaml | oc apply -f -
-oc apply -f prerequisites/keycloak/database/ -n keycloak
-oc apply -f prerequisites/keycloak/service/ -n keycloak
-oc wait --for=condition=Available deployment/keycloak-service -n keycloak --timeout=600s
+# Install via Helm charts (recommended):
+helm install osac-operators charts/osac-operators/
+helm install osac-prereqs charts/osac-prereqs/
+
+# The Keycloak operator manages the instance lifecycle. Wait for readiness:
+oc wait keycloak/osac-keycloak -n keycloak \
+    --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True --timeout=600s
 ```
 
 ### Step 5: Red Hat AAP Operator

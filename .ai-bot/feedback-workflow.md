@@ -1,3 +1,5 @@
+# Feedback Workflow
+
 Read and execute .ai-workflows/bugfix/skills/feedback.md with
 the following repo-specific context.
 
@@ -9,10 +11,9 @@ to understand the prior session's decisions and changes.
 ## Feedback Handling Rules
 
 1. **Submodule boundaries**: If feedback asks you to change a file inside
-   `base/osac-operator/`, `base/osac-fulfillment-service/`, or
-   `base/osac-aap/`, explain that these are submodules and the change
-   belongs in the component repo. Suggest what the reviewer should do
-   instead.
+   any `base/*/` directory (discover submodules with: `git submodule status`),
+   explain that these are submodules and the change belongs in the component
+   repo. Suggest what the reviewer should do instead.
 
 2. **Values consistency**: If feedback applies to one values file, check
    whether other values files (development, vmaas-ci, caas-ci)
@@ -20,15 +21,16 @@ to understand the prior session's decisions and changes.
 
 ## Post-Change Validation
 
-After addressing all review comments, run the full validation suite:
+After addressing all review comments, run the full validation suite from the installer root:
 
-```
+```bash
 yamllint --strict .
 pre-commit run --all-files
-helm lint charts/osac/
-for f in values/*/values.yaml; do helm template osac charts/osac/ --values "$f" > /dev/null; done
-bash scripts/sync-image-tags.sh
+make helm-lint
+make helm-validate
 ```
+
+See `Makefile` for the underlying helm lint/template commands these targets execute.
 
 ## Session Artifacts
 

@@ -49,11 +49,14 @@ wait-for-prereqs-namespaces: ## Wait for the keycloak namespace left Terminating
 .PHONY: install-prereqs
 install-prereqs: wait-for-prereqs-namespaces ## Phase 2: Configure prerequisites (certificates, keycloak, operator CRs)
 	$(eval OCP_VERSION := $(shell oc get clusterversion version -o jsonpath='{.status.desired.version}' | cut -d. -f1,2))
+	$(eval DOMAIN := $(shell oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'))
 	helm upgrade --install osac-prereqs charts/osac-prereqs/ \
 		--namespace osac-prereqs --create-namespace \
 		--values $(VALUES_FILE) \
 		--set osacNamespace=$(INSTALLER_NAMESPACE) \
 		--set lvms.channel=stable-$(OCP_VERSION) \
+		$(if $(DOMAIN),--set keycloak.hostname=https://keycloak-keycloak.$(DOMAIN)) \
+		$(if $(DOMAIN),--set keycloak.route.hostname=keycloak-keycloak.$(DOMAIN)) \
 		--timeout 30m --wait-for-jobs
 
 AAP_LICENSE_FILE ?= $(dir $(VALUES_FILE))license.zip
@@ -85,6 +88,7 @@ install-osac: helm-deps install-secrets check-postgres ## Phase 3: Install OSAC
 		--values $(VALUES_FILE) \
 		--set service.externalHostname=fulfillment-api-$(INSTALLER_NAMESPACE).$(DOMAIN) \
 		--set service.internalHostname=fulfillment-internal-api-$(INSTALLER_NAMESPACE).$(DOMAIN) \
+		--set service.auth.issuerUrl=https://keycloak-keycloak.$(DOMAIN)/realms/osac \
 		--timeout 40m --wait
 
 .PHONY: uninstall

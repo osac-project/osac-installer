@@ -202,6 +202,9 @@ spec:
   dnsNames:
   - keycloak
   - keycloak.keycloak.svc.cluster.local
+  {{- if .Values.keycloak.route.hostname }}
+  - {{ .Values.keycloak.route.hostname }}
+  {{- end }}
   secretName: keycloak-tls-cert
   privateKey:
     rotationPolicy: Always
@@ -397,10 +400,6 @@ spec:
           value: admin
         - name: KEYCLOAK_ADMIN_PASSWORD
           value: admin
-        - name: KC_HOSTNAME_STRICT
-          value: "true"
-        - name: KC_HOSTNAME_STRICT_HTTPS
-          value: "true"
         - name: KC_HTTP_ENABLED
           value: "false"
         - name: KC_HTTPS_ENABLED
@@ -412,7 +411,7 @@ spec:
         - name: KC_HTTPS_CERTIFICATE_KEY_FILE
           value: "/secrets/tls/tls.key"
         - name: KC_HOSTNAME
-          value: "keycloak.keycloak.svc.cluster.local"
+          value: {{ .Values.keycloak.hostname | quote }}
         - name: KC_DB
           value: "postgres"
         - name: KC_DB_URL
@@ -459,6 +458,9 @@ metadata:
   labels:
     {{- include "osac-prereqs.labels" . | nindent 4 }}
 spec:
+  {{- if .Values.keycloak.route.hostname }}
+  host: {{ .Values.keycloak.route.hostname }}
+  {{- end }}
   to:
     kind: Service
     name: keycloak

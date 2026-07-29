@@ -1,8 +1,21 @@
-# AGENTS.md
+# OSAC Installer
 
-## Overview
+Helm-based deployment orchestrator for OSAC components. No Go code, no builds, no unit tests — only structural validation.
 
 Helm-based deployment system for the OSAC platform. Component repos (osac-operator, osac-fulfillment-service, osac-aap, bare-metal-fulfillment-operator, osac-ui) are aggregated as Git submodules under `base/` for version tracking. Deployment uses three Helm charts in sequence: `charts/osac-operators/` (Phase 1), `charts/osac-prereqs/` (Phase 2), `charts/osac/` (Phase 3).
+
+## Quick Start
+
+```bash
+# Initialize submodules
+git submodule update --init --recursive
+
+# Validate changes
+yamllint --strict .
+pre-commit run --all-files
+make helm-lint
+make helm-validate
+```
 
 ## Common Commands
 
@@ -29,15 +42,48 @@ make install-osac VALUES_FILE=values/<env>/values.yaml
 
 # Uninstall
 make uninstall
-
-# Run pre-commit hooks
-pre-commit run --all-files
-
-# YAML lint only
-yamllint --strict .
 ```
 
+## Critical Rules
+
+**Submodules (READ ONLY):**
+- Never modify any `base/*/` directories (discover submodules with: `git submodule status`)
+- Changes belong in component repos
+- All git commands must run from installer root — never `cd` into submodule directories or use `git -C base/...`
+
+**Helm Schema:**
+- Every value in `charts/osac/values.yaml` **must** have matching `values.schema.json` entry
+- Use `enum` for fields with known valid values
+
+**Shell Scripts:**
+- Use `set -euo pipefail` in all `scripts/*.sh`
+- Source `scripts/lib.sh` for: `retry_until`, `wait_for_resource`, `wait_for_namespace_cleanup`
+
+**Git Workflow:**
+- Push to `fork` remote, never `origin`
+- PRs: `fork/<branch>` → `origin/main`
+- Commits: DCO (`-s`) + `Assisted-by: Claude Code <noreply@anthropic.com>`
+
+**Shared Clusters:**
+- Always use `-n <namespace>` in `oc`/`kubectl` — never rely on context
+
 ## Architecture
+
+See `docs/helm-deployment-guide.md` for complete architecture details, including:
+- Helm chart structure and dependencies
+- Submodule organization and version tracking
+- Prerequisites and operator deployment patterns
+- Values file organization per environment
+
+```text
+charts/osac/           # Helm umbrella chart (Chart.yaml, values.yaml, values.schema.json)
+charts/osac-operators/ # Phase 1: OLM operator subscriptions
+charts/osac-prereqs/   # Phase 2: CRD instances, certs, Keycloak
+values/<env>/          # Environment values (development, vmaas-ci, caas-ci)
+base/                  # Git submodules — discover with: git submodule status
+prerequisites/         # Reference manifests for manual prerequisite installation
+scripts/               # Automation scripts (see README.md for full list)
+```
 
 ### Helm Charts (Three-Phase Deployment)
 
@@ -72,9 +118,17 @@ values/
   bmaas-ci/values.yaml                 # BM-as-a-Service CI: bmf + storage + bareMetalInstance
 ```
 
-### Submodules
+Pull secrets and AAP license files are stored alongside values files (e.g.,
+`values/<env>/pull-secret.json`, `values/<env>/license.zip`).
 
-Submodules under `base/` (osac-operator, osac-fulfillment-service, osac-aap, bare-metal-fulfillment-operator, osac-ui) are pinned snapshots used for version tracking. `scripts/sync-image-tags.sh` syncs image tags in `values/*/values.yaml` to match submodule commit SHAs. With `--fix`, it rewrites `sha-`, stable `vX.Y.Z`, and `latest` tags; default (check) mode reports `sha-` mismatches and skips non-SHA pins.
+Submodules are pinned snapshots for version tracking. They do not auto-sync --
+to test local changes, synchronize modified files from the working repo into
+the submodule directory, without committing. During active development the
+submodule pointers are often dirty; this is expected. `scripts/sync-image-tags.sh`
+syncs image tags in `values/*/values.yaml` to match submodule commit SHAs. With
+`--fix`, it rewrites `sha-`, stable `vX.Y.Z`, and `latest` tags; default (check)
+mode reports `sha-` mismatches and skips non-SHA pins. After updating a submodule
+pointer, run `./scripts/sync-image-tags.sh --fix`.
 
 ### Image Tag Lifecycle
 
@@ -87,11 +141,15 @@ After a release PR is merged, overlays match the released versions exactly. As n
 
 **To check drift:** compare image tags in `values/*/values.yaml` against the latest [GitHub release](https://github.com/osac-project/osac-installer/releases). If tags are `sha-` prefixed, the environment is running ahead of the last release. If tags are `v`-prefixed, compare each component's exact version against the release notes to confirm alignment. If tags are `latest`, the overlay is tracking an unpinned moving tag — check the release PR or the last GitHub release to determine the expected pinned version.
 
-### Prerequisites
+Prerequisites are installed via Phase 1 (`make install-operators`) and Phase 2
+(`make install-prereqs`), each gated by values toggles. `ca-bundle` Bundle is
+cluster-scoped and managed by the `osac-prereqs` chart via trust-manager. See
+`Makefile` for underlying commands and `docs/helm-deployment-guide.md` for
+phase details.
 
-Prerequisites are installed automatically by Phase 1 (`make install-operators`) and configured by Phase 2 (`make install-prereqs`). Each prerequisite is gated by a values toggle. `prerequisites/` contains reference manifests for manual installation if needed.
+## Key Scripts
 
-### Scripts
+See `README.md` for complete script documentation. Most commonly used:
 
 - **teardown.sh** -- Full teardown: uninstalls Helm releases, removes operators and CRDs
 - **sync-image-tags.sh** -- Syncs image tags in Helm values files to match submodule commits
@@ -124,20 +182,22 @@ Prerequisites are installed automatically by Phase 1 (`make install-operators`) 
 | `secret-scanning.yaml` | Scans for leaked secrets |
 | `slash-command.yml` | Handles PR slash commands |
 
-## Submodules and Local Development
+## Workflows
 
-Submodules under `base/` are pinned snapshots of the real working repos. They do not auto-sync -- to test local changes, synchronize modified files from the working repo into the submodule directory, without committing. During active development the submodule pointers are often dirty; this is expected.
+AI-assisted workflows reference detailed phase instructions:
 
-Do not `cd` into submodule directories and run git commands there -- you will operate on the submodule repo, not the installer. Always run git commands from the installer root.
+- **Bugfix workflow:** `.ai-bot/new-ticket-workflow.md` → phases in `.ai-workflows/bugfix/skills/`
+- **Review feedback:** `.ai-bot/feedback-workflow.md` → phases in `.ai-workflows/bugfix/skills/feedback.md`
 
-After updating a submodule pointer, update the corresponding image tag via `./scripts/sync-image-tags.sh --fix`.
+## Documentation
 
-## Helm Chart Conventions
+Detailed information moved from this file to specialized docs:
 
-- **Every new value must have a matching schema entry** -- when adding or modifying keys in `charts/osac/values.yaml`, always add the corresponding property definition to `charts/osac/values.schema.json`. Use `enum` constraints for fields with a known set of valid values (e.g., network/DNS backend classes). The schema is both validation and documentation -- incomplete schemas allow silent misconfiguration.
-
-## Key Conventions
-
-- Values files are organized per environment under `values/<env>/values.yaml`.
-- Pull secrets and AAP license files are stored alongside values files (e.g., `values/<env>/pull-secret.json`, `values/<env>/license.zip`).
-- `ca-bundle` Bundle is cluster-scoped and managed by the `osac-prereqs` chart via trust-manager.
+- **Bugfix workflow orchestrator:** `.ai-bot/new-ticket-workflow.md` (phases: assess → diagnose → fix → validate → review → pr)
+- **Review feedback workflow:** `.ai-bot/feedback-workflow.md`
+- **Validation commands & conventions:** `.ai-bot/instructions.md`
+- **Architecture & deployment:** `docs/helm-deployment-guide.md`
+- **Script reference:** `README.md`
+- **CLI usage:** `OSAC-CLI-HOWTO.md`
+- **Component repos:** `base/*/AGENTS.md` (discover with: `git submodule status`)
+- **Design docs:** [osac-project/docs/architecture](https://github.com/osac-project/docs/tree/main/architecture)

@@ -73,6 +73,10 @@ Uses .Values.cliImage for the container image.
   securityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1001
+    seccompProfile:
+      type: RuntimeDefault
     capabilities:
       drop: ["ALL"]
 {{- end }}

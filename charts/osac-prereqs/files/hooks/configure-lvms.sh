@@ -28,7 +28,9 @@ else
   oc apply -f /config/config.yaml
 
   echo "Waiting for lvms-vg1 StorageClass..."
-  until [[ -n "$(oc get sc --ignore-not-found lvms-vg1 -o name)" ]]; do
+  for _attempt in $(seq 1 120); do
+    [[ -n "$(oc get sc --ignore-not-found lvms-vg1 -o name 2>/dev/null)" ]] && break
+    (( _attempt < 120 )) || { echo "ERROR: timed out waiting for lvms-vg1 StorageClass" >&2; exit 1; }
     sleep 5
   done
 

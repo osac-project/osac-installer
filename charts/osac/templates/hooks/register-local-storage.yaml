@@ -12,7 +12,9 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 5
-  activeDeadlineSeconds: 900
+  # waitForFulfillment polls up to 60 × (30s curl + 10s sleep) = 2400s worst case.
+  # This deadline must exceed that to avoid premature termination.
+  activeDeadlineSeconds: 3000
   template:
     metadata:
       labels:
@@ -68,6 +70,7 @@ spec:
 
             # Step 2: Create the local StorageTier referencing the backend by ID.
             # Protocol 2 = STORAGE_PROTOCOL_BLOCK (LVMS provides block volumes).
+            TIER_BODY=$(printf '{"metadata":{"name":"local"},"spec":{"backends":[{"backend_id":"%s","protocol":2}]}}' "${BACKEND_ID}")
             TIER_RESP=$(mktemp)
             TIER_CODE=$(curl -skS \
               --connect-timeout 5 --max-time 30 \
@@ -75,7 +78,7 @@ spec:
               -X POST "${API}/storage_tiers" \
               -H "Authorization: Bearer ${AUTH_TOKEN}" \
               -H "Content-Type: application/json" \
-              -d "{\"metadata\":{\"name\":\"local\"},\"spec\":{\"backends\":[{\"backend_id\":\"${BACKEND_ID}\",\"protocol\":2}]}}")
+              -d "${TIER_BODY}")
 
             case "${TIER_CODE}" in
               2??) echo "StorageTier 'local' created." ;;

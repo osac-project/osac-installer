@@ -18,7 +18,11 @@ oc wait --for=condition=Available deploy/lvms-operator -n openshift-storage --ti
 _sc_output=$(oc get sc lvms-vg1 --ignore-not-found -o name 2>&1) \
   || { echo "ERROR: failed to query StorageClasses: ${_sc_output}" >&2; exit 1; }
 if [[ -n "${_sc_output}" ]]; then
-  echo "lvms-vg1 already exists, skipping LVMCluster creation."
+  # lvms-vg1 pre-exists (e.g. MOC, where it was installed by cluster admins).
+  # Skip both LVMCluster creation AND the default-class annotation: on shared clusters
+  # another StorageClass (e.g. Ceph) is already the intended default, and annotating
+  # lvms-vg1 here would silently override that.
+  echo "lvms-vg1 already exists, skipping LVMCluster creation and annotation."
 else
   echo "Applying LVMCluster configuration..."
   oc apply -f /config/config.yaml

@@ -83,6 +83,7 @@ jobs:
           update_submodule base/osac-fulfillment-service fulfillment-service "${{ steps.find.outputs.fulfillment }}"
           update_submodule base/osac-aap osac-aap "${{ steps.find.outputs.aap }}"
           update_submodule base/osac-ui osac-ui "${{ steps.find.outputs.ui }}"
+          update_submodule base/bare-metal-fulfillment-operator bare-metal-fulfillment-operator "${{ steps.find.outputs.ui }}"
 
           echo "changed=${changed}" >> "$GITHUB_OUTPUT"
           echo -e "${summary}" > /tmp/bump-summary.txt

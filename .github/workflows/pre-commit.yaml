@@ -5,15 +5,110 @@ on:
     paths-ignore:
       - 'OWNERS'
       - 'LICENSE'
-      - '*.md'
-      - 'docs/**'
 
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # createComment/updateComment below use the Issues API even though this
+      # targets a PR (PRs and issues share that endpoint), so issues: write
+      # is needed — pull-requests: write grants no additional capability
+      # here since no pulls.* endpoint is called. Fork PRs still get a
+      # read-only GITHUB_TOKEN regardless, per GitHub's fork security model,
+      # so the comment step will fail there — that's an accepted gap; the
+      # gitleaks scan itself (contents: read) still runs and blocks the PR.
+      issues: write
     steps:
-    - uses: actions/checkout@v7.0.0
-    - uses: actions/setup-python@v6
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
       with:
         python-version: "3.13"
-    - uses: pre-commit/action@v3.0.1
+    # gitleaks hook is --staged only (no-op with empty index). CI secret gate is
+    # the docker PR-diff steps below (base-branch config + --ignore-gitleaks-allow).
+    - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
+      env:
+        SKIP: gitleaks
+
+    # Run even when pre-commit fails so a lint break cannot mask a secret leak.
+    - name: Load gitleaks config from base branch
+      id: gitleaks-config
+      if: always()
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -euo pipefail
+        git show "${BASE_SHA}:.gitleaks.toml" > /tmp/gitleaks-base.toml
+
+    - name: Scan PR diff for secrets (gitleaks)
+      id: gitleaks
+      if: always() && steps.gitleaks-config.outcome == 'success'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        set -euo pipefail
+        docker run --rm \
+          -v "${PWD}:/repo" \
+          -v /tmp/gitleaks-base.toml:/config/.gitleaks.toml:ro \
+          ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+          git --config=/config/.gitleaks.toml \
+          --log-opts="${BASE_SHA}..${HEAD_SHA}" \
+          --ignore-gitleaks-allow \
+          --redact --verbose --exit-code 1 /repo
+
+    # Detection alone doesn't fix anything — leave a clear, hard-to-miss
+    # reminder so a real finding gets rotated instead of just removed from
+    # the diff or silently allowlisted.
+    - name: Comment on PR with rotation reminder
+      if: failure() && steps.gitleaks.outcome == 'failure'
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+      with:
+        script: |
+          const marker = '<!-- secret-scanning-rotation-reminder -->';
+          const body = [
+            marker,
+            '**gitleaks detected a potential secret in this PR diff.**',
+            '',
+            'If this is a real credential, rotate it immediately at its source (e.g. regenerate it via ' +
+              'the issuing system\'s admin API/console) — detection is not remediation. A leaked secret ' +
+              'must be treated as compromised even if this PR never merges, since removing it from the ' +
+              'diff or history does not invalidate the value itself.',
+            '',
+            'Red Hat employees: if this involves a Red Hat corporate account or credential, also contact ' +
+              'the Red Hat Information Security team immediately.',
+            '',
+            'If this is a false positive, open a separate PR that adds a narrowly-scoped entry to ' +
+              '`.gitleaks.toml`\'s allowlist (with a description of why it is safe). That change must ' +
+              'merge to the base branch first — CI loads `.gitleaks.toml` from the base revision, not ' +
+              'the PR checkout, and ignores inline `# gitleaks:allow` comments.',
+          ].join('\n');
+
+          const comments = await github.paginate(github.rest.issues.listComments, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            per_page: 100,
+          });
+          const existing = comments.find(
+            (c) => c.user?.login === 'github-actions[bot]' && c.body?.includes(marker),
+          );
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }

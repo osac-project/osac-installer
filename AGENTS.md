@@ -12,7 +12,7 @@ git submodule update --init --recursive
 
 # Validate changes
 yamllint --strict .
-pre-commit run --all-files
+pre-commit run --all-files   # gitleaks hook is staged-only; use `git commit` or CI for secrets
 make helm-lint
 make helm-validate
 ```
@@ -165,9 +165,8 @@ See `README.md` for complete script documentation. Most commonly used:
 | `mirror-envoy.yaml` | Mirrors Envoy images |
 | `nightly-build.yaml` | Nightly chart build and publish |
 | `ok-to-test-label-cleanup.yml` | Removes ok-to-test label on new pushes |
-| `pre-commit.yaml` | Pre-commit hook checks |
+| `pre-commit.yaml` | Pre-commit hook checks + gitleaks PR-diff secret scan |
 | `publish-charts.yaml` | Publishes Helm charts on release |
-| `secret-scanning.yaml` | Scans for leaked secrets |
 | `slash-command.yml` | Handles PR slash commands |
 
 ## Workflows

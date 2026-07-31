@@ -41,3 +41,11 @@ mce:
   enabled: false
   channel: "stable-2.17"
   osImages: []
+
+kafka:
+  enabled: false
+  replicas: 3
+  storage:
+    size: 100Gi
+  version: "4.2.0"
+  metadataVersion: "4.2-IV0"

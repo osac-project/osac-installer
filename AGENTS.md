@@ -124,11 +124,22 @@ Pull secrets and AAP license files are stored alongside values files (e.g.,
 Submodules are pinned snapshots for version tracking. They do not auto-sync --
 to test local changes, synchronize modified files from the working repo into
 the submodule directory, without committing. During active development the
-submodule pointers are often dirty; this is expected. Image tags in
-`values/*/values.yaml` must match submodule commits — CI enforces this via
-`scripts/sync-image-tags.sh`. Image tags follow the `sha-XXXXXXX` format
-(first 7 characters of the submodule commit SHA). After updating a submodule
+submodule pointers are often dirty; this is expected. `scripts/sync-image-tags.sh`
+syncs image tags in `values/*/values.yaml` to match submodule commit SHAs. With
+`--fix`, it rewrites `sha-`, stable `vX.Y.Z`, and `latest` tags; default (check)
+mode reports `sha-` mismatches and skips non-SHA pins. After updating a submodule
 pointer, run `./scripts/sync-image-tags.sh --fix`.
+
+### Image Tag Lifecycle
+
+Two automated workflows manage image tags in overlay values files (`values/*/values.yaml`):
+
+1. **Between releases** -- `bump-submodules.yaml` (every 3 hours) advances overlays to `sha-` tags tracking each component's latest main commit. It runs `sync-image-tags.sh --fix`, which rewrites `sha-`, stable `vX.Y.Z`, and `latest` (not digests, prerelease tags, or arbitrary strings). This keeps CI/dev environments testing the newest code.
+2. **At release time** -- `publish-charts.yaml` calls `scripts/pin-release-tags.sh` to replace `sha-`, stable `vX.Y.Z`, and `latest` with released version tags (e.g. `v0.0.8`), then opens a PR to merge the pins into main. This reconciles overlays with the official chart release.
+
+After a release PR is merged, overlays match the released versions exactly. As new commits land on component repos, `bump-submodules.yaml` advances them again until the next release pins them.
+
+**To check drift:** compare image tags in `values/*/values.yaml` against the latest [GitHub release](https://github.com/osac-project/osac-installer/releases). If tags are `sha-` prefixed, the environment is running ahead of the last release. If tags are `v`-prefixed, compare each component's exact version against the release notes to confirm alignment. If tags are `latest`, the overlay is tracking an unpinned moving tag — check the release PR or the last GitHub release to determine the expected pinned version.
 
 Prerequisites are installed via Phase 1 (`make install-operators`) and Phase 2
 (`make install-prereqs`), each gated by values toggles. `ca-bundle` Bundle is
@@ -142,6 +153,7 @@ See `README.md` for complete script documentation. Most commonly used:
 
 - **teardown.sh** -- Full teardown: uninstalls Helm releases, removes operators and CRDs
 - **sync-image-tags.sh** -- Syncs image tags in Helm values files to match submodule commits
+- **pin-release-tags.sh** -- Pins overlay values files to released versioned image tags (called by `publish-charts.yaml` at release time)
 - **setup-remote-cluster.sh** -- CI-only: prepares a fresh remote cluster (LVMS, CNV, service accounts)
 - **create-hub-access-kubeconfig.sh** -- Generates `kubeconfig.hub-access` from the hub-access ServiceAccount token
 - **generate-chart-versions.sh** -- Computes nightly chart versions from latest release tags

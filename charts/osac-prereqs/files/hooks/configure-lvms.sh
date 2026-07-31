@@ -29,7 +29,9 @@ else
 
   echo "Waiting for lvms-vg1 StorageClass..."
   for _attempt in $(seq 1 120); do
-    [[ -n "$(oc get sc --ignore-not-found lvms-vg1 -o name 2>/dev/null)" ]] && break
+    _sc_query=$(oc get sc --ignore-not-found lvms-vg1 -o name 2>&1) \
+      || { echo "ERROR: oc get StorageClass failed: ${_sc_query}" >&2; exit 1; }
+    [[ -n "${_sc_query}" ]] && break
     (( _attempt < 120 )) || { echo "ERROR: timed out waiting for lvms-vg1 StorageClass" >&2; exit 1; }
     sleep 5
   done

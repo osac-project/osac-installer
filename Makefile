@@ -47,7 +47,7 @@ wait-for-prereqs-namespaces: ## Wait for the keycloak namespace left Terminating
 	@bash -c 'source scripts/lib.sh && wait_for_namespace_cleanup keycloak'
 
 .PHONY: install-prereqs
-install-prereqs: wait-for-prereqs-namespaces ## Phase 2: Configure prerequisites (certificates, keycloak, operator CRs)
+install-prereqs: wait-for-api wait-for-prereqs-namespaces ## Phase 2: Configure prerequisites (certificates, keycloak, operator CRs)
 	$(eval OCP_VERSION := $(shell oc get clusterversion version -o jsonpath='{.status.desired.version}' | cut -d. -f1,2))
 	$(eval DOMAIN := $(shell oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'))
 	helm upgrade --install osac-prereqs charts/osac-prereqs/ \
@@ -80,7 +80,7 @@ check-postgres: ## Verify in-cluster PostgreSQL is reachable before installing O
 	@bash -c 'source scripts/lib.sh && check_postgres_prerequisites "$(INSTALLER_NAMESPACE)" "$(VALUES_FILE)"'
 
 .PHONY: install-osac
-install-osac: helm-deps install-secrets check-postgres ## Phase 3: Install OSAC
+install-osac: wait-for-api helm-deps install-secrets check-postgres ## Phase 3: Install OSAC
 	$(eval DOMAIN := $(shell oc get ingresses.config/cluster -o jsonpath='{.spec.domain}'))
 	@[[ -n "$(DOMAIN)" ]] || { echo "ERROR: Could not determine cluster domain. Is oc logged in?"; exit 1; }
 	helm upgrade --install osac charts/osac/ \

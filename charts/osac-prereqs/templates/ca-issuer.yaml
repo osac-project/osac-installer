@@ -37,25 +37,4 @@ metadata:
 spec:
   ca:
     secretName: default-ca
----
-apiVersion: trust.cert-manager.io/v1alpha1
-kind: Bundle
-metadata:
-  name: ca-bundle
-  labels:
-    {{- include "osac-prereqs.labels" . | nindent 4 }}
-spec:
-  sources:
-  - secret:
-      name: "default-ca"
-      key: "ca.crt"
-  target:
-    configMap:
-      key: bundle.pem
-    namespaceSelector:
-      matchExpressions:
-      - key: kubernetes.io/metadata.name
-        operator: In
-        values:
-        - {{ .Values.osacNamespace }}
 {{- end }}

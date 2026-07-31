@@ -24,11 +24,22 @@ jobs:
         run: |
           set -euo pipefail
 
+          # A single component's repo becoming unreachable (renamed, archived
+          # off its expected name, or deleted as part of the mono-repo
+          # cutover) must only skip that component's bump, not abort the
+          # whole job -- this used to be a bare, unguarded call under
+          # `set -e`, so one 404 here killed every other component's bump
+          # too, every 3 hours, until someone noticed. `|| return 1` on the
+          # repo lookup plus `|| VAR=""` at each call site (below) keeps
+          # set -e from propagating past a single component's failure.
           check_image() {
             local repo=$1
             local image=$2
             local sha
-            sha=$(gh api "repos/osac-project/${repo}/commits?sha=main&per_page=1" --jq '.[0].sha')
+            sha=$(gh api "repos/osac-project/${repo}/commits?sha=main&per_page=1" --jq '.[0].sha') || {
+              echo "::warning::${repo}: could not resolve latest main commit (repo missing/renamed/archived?) -- skipping this component's bump" >&2
+              return 1
+            }
             local tag="sha-${sha:0:7}"
             local token
             token=$(curl -sf "https://ghcr.io/token?scope=repository:osac-project/${image}:pull" | jq -r .token)
@@ -38,17 +49,17 @@ jobs:
               -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
               "https://ghcr.io/v2/osac-project/${image}/manifests/${tag}")
             if [[ "${code}" != "200" ]]; then
-              echo "ERROR: ${repo} latest main commit ${sha:0:7} has no published image (tag ${tag})" >&2
+              echo "::warning::${repo} latest main commit ${sha:0:7} has no published image (tag ${tag}) -- skipping this component's bump" >&2
               return 1
             fi
             echo "${sha}"
           }
 
-          OPERATOR=$(check_image osac-operator osac-operator)
-          FULFILLMENT=$(check_image fulfillment-service fulfillment-service)
-          AAP=$(check_image osac-aap osac-aap)
-          UI=$(check_image osac-ui osac-ui)
-          BMFO=$(check_image bare-metal-fulfillment-operator bare-metal-fulfillment-operator)
+          OPERATOR=$(check_image osac-operator osac-operator) || OPERATOR=""
+          FULFILLMENT=$(check_image fulfillment-service fulfillment-service) || FULFILLMENT=""
+          AAP=$(check_image osac-aap osac-aap) || AAP=""
+          UI=$(check_image osac-ui osac-ui) || UI=""
+          BMFO=$(check_image bare-metal-fulfillment-operator bare-metal-fulfillment-operator) || BMFO=""
 
           echo "operator=${OPERATOR}" >> "$GITHUB_OUTPUT"
           echo "fulfillment=${FULFILLMENT}" >> "$GITHUB_OUTPUT"
@@ -66,6 +77,10 @@ jobs:
             local path=$1
             local name=$2
             local target=$3
+            if [[ -z "${target}" ]]; then
+              echo "${name}: skipping (no eligible commit found this run -- see check_image warning above)"
+              return
+            fi
             local current
             current=$(git -C "${path}" rev-parse HEAD)
             if [[ "${current}" == "${target}" ]]; then

@@ -62,6 +62,19 @@ jobs:
           local sha
           sha=$(git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=10 \
             ls-remote "https://github.com/osac-project/${repo}.git" refs/heads/main | cut -f1)
+          # A repo that's been renamed, archived off this name, or deleted
+          # as part of the mono-repo cutover resolves to an empty sha here
+          # (ls-remote against a 404 prints nothing) rather than failing
+          # loudly -- without this check that silently produced tag
+          # "sha-" below, which then just as silently 404s against ghcr and
+          # gets misreported as "no published image" instead of "repo is
+          # gone", making a real cutover event indistinguishable from the
+          # routine every-day case where a component simply hasn't
+          # published a new image yet.
+          if [[ -z "${sha}" ]]; then
+            echo "::warning::${repo}: could not resolve main HEAD (repo missing/renamed/archived?) -- keeping pinned submodule" >&2
+            return 1
+          fi
           local tag="sha-${sha:0:7}"
           local token
           token=$(curl -sf --max-time 15 "https://ghcr.io/token?scope=repository:osac-project/${image}:pull" | jq -r .token)
@@ -71,7 +84,7 @@ jobs:
             -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
             "https://ghcr.io/v2/osac-project/${image}/manifests/${tag}")
           if [[ "${code}" != "200" ]]; then
-            echo "WARN: ${repo} main HEAD ${sha:0:7} has no published image (tag ${tag}), keeping pinned submodule" >&2
+            echo "::warning::${repo} main HEAD ${sha:0:7} has no published image (tag ${tag}) -- keeping pinned submodule" >&2
             return 1
           fi
           echo "${sha}"

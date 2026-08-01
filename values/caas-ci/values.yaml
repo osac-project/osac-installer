@@ -30,7 +30,7 @@ mce:
 operator:
   image:
     repository: ghcr.io/osac-project/osac-operator
-    tag: sha-48f1e47
+    tag: sha-0d91105
     pullPolicy: Always
   provisioning:
     provider: "aap"
@@ -60,7 +60,7 @@ service:
   externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
   internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   images:
-    service: ghcr.io/osac-project/fulfillment-service:sha-049b1d0
+    service: ghcr.io/osac-project/fulfillment-service:sha-cf567d4
     envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
@@ -148,7 +148,7 @@ bmf:
   enabled: false
   image:
     repository: ghcr.io/osac-project/bare-metal-fulfillment-operator
-    tag: sha-b1abc39
+    tag: sha-c085340
     pullPolicy: Always
 
 # --- Cluster Versions ---

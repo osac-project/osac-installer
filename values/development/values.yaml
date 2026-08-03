@@ -10,7 +10,7 @@ keycloak:
 aapOperator:
   enabled: true
 lvms:
-  enabled: false
+  enabled: true
 metallb:
   enabled: false
 cnv:
